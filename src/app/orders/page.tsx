@@ -15,8 +15,7 @@ import { EmptyState } from '@/components/dashboard/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
+import { Card } from '@/components/ui/card';
 import { 
   Dialog, 
   DialogContent, 
@@ -36,14 +35,14 @@ import {
   Trash2, 
   Loader2,
   FileText,
-  Save,
-  CheckCircle
+  AlertCircle
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
-// Schema relaxado para agilidade operacional
+// Schema ultra-flexível: Apenas o cliente é obrigatório
 const orderItemSchema = z.object({
   desc: z.string().optional().default(''),
   size: z.string().optional().default(''),
@@ -52,7 +51,7 @@ const orderItemSchema = z.object({
 });
 
 const orderSchema = z.object({
-  client: z.string().min(1, 'Nome do cliente é obrigatório'),
+  client: z.string().min(1, 'O nome do cliente é obrigatório'),
   emissionDate: z.string().optional().default(() => new Date().toISOString().split('T')[0]),
   deliveryDate: z.string().optional().default(''),
   seller: z.string().optional().default('Carlos'),
@@ -71,10 +70,9 @@ export default function OrdersManagementPage() {
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
   
   const { firestore } = useFirestore();
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const { toast } = useToast();
   
-  // Utiliza o hook unificado para sincronia total
   const { orders, isLoading: ordersLoading } = useOrders();
 
   const clientsQuery = useMemoFirebase(() => {
@@ -111,6 +109,7 @@ export default function OrdersManagementPage() {
     name: "items"
   });
 
+  // Reatividade em tempo real para os cálculos
   const watchedItems = useWatch({ control, name: 'items' });
   const watchedPaymentMethod = useWatch({ control, name: 'paymentMethod' });
   
@@ -143,42 +142,50 @@ export default function OrdersManagementPage() {
     }
   }, [editingOrder, reset]);
 
-  const generatePDF = (data: OrderFormValues, docId: string, orderTotal: number) => {
-    const doc = new jsPDF();
-    const primaryColor = [255, 95, 31];
-    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.rect(0, 0, 210, 40, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22).setFont('helvetica', 'bold').text('VISCOMM COMMAND CENTER', 15, 20);
-    doc.setFontSize(12).text(`ORDEM DE SERVIÇO #${docId.slice(-6).toUpperCase()}`, 15, 30);
-    
-    doc.setTextColor(0, 0, 0).setFontSize(10).text('DADOS DO CLIENTE', 15, 50);
-    doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]).line(15, 52, 60, 52);
-    doc.text(`Cliente: ${data.client}`, 15, 60);
-    doc.text(`Vendedor: ${data.seller}`, 15, 65);
-    doc.text(`Pagamento: ${data.paymentMethod}`, 15, 70);
-    
-    const tableBody = data.items.map(item => [
-      item.desc,
-      item.size,
-      item.quantity,
-      new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitValue),
-      new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.quantity * item.unitValue),
-    ]);
+  const generatePDF = (data: OrderFormValues, docId: string) => {
+    try {
+      const doc = new jsPDF();
+      const primaryColor = [255, 95, 31];
+      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.rect(0, 0, 210, 40, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(22).setFont('helvetica', 'bold').text('VISCOMM COMMAND CENTER', 15, 20);
+      doc.setFontSize(12).text(`ORDEM DE SERVIÇO #${docId.slice(-6).toUpperCase()}`, 15, 30);
+      
+      doc.setTextColor(0, 0, 0).setFontSize(10).text('DADOS DO CLIENTE', 15, 50);
+      doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]).line(15, 52, 60, 52);
+      doc.text(`Cliente: ${data.client}`, 15, 60);
+      doc.text(`Vendedor: ${data.seller}`, 15, 65);
+      doc.text(`Pagamento: ${data.paymentMethod}`, 15, 70);
+      
+      const tableBody = data.items.map(item => [
+        item.desc,
+        item.size,
+        item.quantity,
+        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitValue || 0),
+        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((item.quantity || 0) * (item.unitValue || 0)),
+      ]);
 
-    autoTable(doc, {
-      startY: 80,
-      head: [['DESCRIÇÃO', 'MEDIDA', 'QTD', 'UNIT.', 'SUB']],
-      body: tableBody,
-      headStyles: { fillColor: primaryColor },
-    });
-    
-    doc.save(`OS_${data.client.replace(/\s+/g, '_')}.pdf`);
+      autoTable(doc, {
+        startY: 80,
+        head: [['DESCRIÇÃO', 'MEDIDA', 'QTD', 'UNIT.', 'SUB']],
+        body: tableBody,
+        headStyles: { fillColor: primaryColor },
+      });
+      
+      doc.save(`OS_${data.client.replace(/\s+/g, '_')}.pdf`);
+    } catch (e) {
+      console.error("Erro ao gerar PDF:", e);
+    }
   };
 
   const onSubmit = (data: OrderFormValues) => {
-    if (!firestore || !user) return;
+    if (!firestore || !user) {
+      toast({ variant: "destructive", title: "Erro de Conexão", description: "Firebase não inicializado ou usuário offline." });
+      return;
+    }
     
+    // Payload unificado e sanitizado
     const orderData = {
       ...data,
       totalValue,
@@ -192,61 +199,86 @@ export default function OrdersManagementPage() {
     if (editingOrder) {
       const orderRef = doc(firestore, 'orders', editingOrder.id);
       updateDocumentNonBlocking(orderRef, { ...orderData, id: editingOrder.id });
-      toast({ title: "Protocolo Atualizado", description: "Sincronização concluída." });
+      toast({ title: "Protocolo Atualizado", description: "Sincronização Cloud concluída." });
     } else {
       const orderRef = doc(collection(firestore, 'orders'));
       const newOrder = { ...orderData, createdAt: serverTimestamp(), id: orderRef.id };
       setDocumentNonBlocking(orderRef, newOrder, { merge: true });
-      toast({ title: "OS Criada", description: "Protocolo registrado com sucesso." });
-      setTimeout(() => generatePDF(data, orderRef.id, totalValue), 500);
+      toast({ title: "Ordem Criada", description: "Novo protocolo registrado no monitor." });
+      // Download do PDF em background
+      setTimeout(() => generatePDF(data, orderRef.id), 500);
     }
 
     setEditingOrder(null);
     reset();
   };
 
+  const onError = (formErrors: any) => {
+    console.error('Falha na validação:', formErrors);
+    toast({
+      variant: "destructive",
+      title: "Campos Pendentes",
+      description: "Verifique o nome do cliente antes de finalizar.",
+    });
+  };
+
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col md:flex-row overflow-x-hidden">
       <DashboardSidebar />
-      <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-8 mt-16 md:mt-0">
+      <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-8 mt-16 md:mt-0 max-w-full">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-1">
             <h2 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase flex items-center gap-2">
               <FileText className="text-primary" /> Gestão de Protocolos
             </h2>
-            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em]">Fluxo de Dados Realtime</p>
+            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em]">Fluxo Realtime Ativo</p>
           </div>
 
-          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <Dialog open={isModalOpen} onOpenChange={(open) => {
+            if(!open) {
+              setEditingOrder(null);
+              reset();
+            }
+            setIsModalOpen(open);
+          }}>
             <DialogTrigger asChild>
-              <Button className="bg-primary text-black font-black uppercase tracking-widest px-8 h-14 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.6)]">
+              <Button disabled={isUserLoading} className="bg-primary text-black font-black uppercase tracking-widest px-8 h-14 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.6)]">
                 <Plus className="w-5 h-5 mr-2" /> Nova OS
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-5xl bg-zinc-950 border-white/10 text-white p-0 rounded-3xl overflow-hidden">
+            <DialogContent className="max-w-5xl bg-zinc-950 border-white/10 text-white p-0 rounded-3xl overflow-hidden shadow-2xl">
               <DialogHeader className="p-6 border-b border-white/5 bg-white/[0.02]">
-                <DialogTitle className="text-xl font-black uppercase text-primary">Terminal VisComm</DialogTitle>
+                <DialogTitle className="text-xl font-black uppercase text-primary tracking-tighter">Terminal VisComm - Nova Ordem</DialogTitle>
               </DialogHeader>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 max-h-[70vh] overflow-y-auto">
-                <div className="lg:col-span-8 space-y-6">
+              <form onSubmit={handleSubmit(onSubmit, onError)} className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 max-h-[75vh] overflow-y-auto custom-scrollbar">
+                <div className="lg:col-span-8 space-y-8">
+                  {/* Bloco Cliente e Vendedor */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label className="text-[10px] uppercase">Cliente *</Label>
-                      <Input {...register('client')} list="clients-list" className="bg-black/40 h-12 border-white/10" />
+                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Cliente (Obrigatório)</Label>
+                      <div className="relative">
+                        <Input 
+                          {...register('client')} 
+                          list="clients-list" 
+                          placeholder="Nome ou Razão Social"
+                          className={cn("bg-black/40 h-12 border-white/10", errors.client && "border-destructive ring-1 ring-destructive")} 
+                        />
+                        {errors.client && <AlertCircle className="w-4 h-4 text-destructive absolute right-3 top-4" />}
+                      </div>
                       <datalist id="clients-list">
                         {clientsList?.map(c => <option key={c.id} value={c.name} />)}
                       </datalist>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-[10px] uppercase">Vendedor</Label>
+                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Responsável pela Venda</Label>
                       <Controller
                         name="seller"
                         control={control}
                         render={({ field }) => (
                           <Select onValueChange={field.onChange} value={field.value}>
                             <SelectTrigger className="bg-black/40 h-12 border-white/10">
-                              <SelectValue />
+                              <SelectValue placeholder="Selecione..." />
                             </SelectTrigger>
                             <SelectContent className="bg-zinc-900 border-white/10 text-white">
                               <SelectItem value="Carlos">Carlos Eduardo</SelectItem>
@@ -259,82 +291,148 @@ export default function OrdersManagementPage() {
                     </div>
                   </div>
 
+                  {/* Bloco Itens */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-[10px] font-bold text-primary uppercase">Itens do Escopo</h3>
-                      <Button type="button" size="sm" onClick={() => append({ desc: '', size: '', quantity: 1, unitValue: 0 })} className="border-primary/50 text-primary" variant="outline">
-                        + Item
+                      <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Escopo da Ordem</h3>
+                      <Button type="button" size="sm" onClick={() => append({ desc: '', size: '', quantity: 1, unitValue: 0 })} className="border-primary/50 text-primary hover:bg-primary/10" variant="outline">
+                        + Adicionar Item
                       </Button>
                     </div>
-                    {fields.map((field, index) => (
-                      <div key={field.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 bg-black/40 border border-white/5 rounded-xl relative">
-                        <Input {...register(`items.${index}.desc`)} placeholder="Descrição" className="md:col-span-2 bg-transparent" />
-                        <Input {...register(`items.${index}.size`)} placeholder="Medidas" className="bg-transparent" />
-                        <div className="flex gap-2">
-                          <Input type="number" {...register(`items.${index}.quantity`)} className="bg-transparent" />
-                          <Input type="number" step="0.01" {...register(`items.${index}.unitValue`)} className="bg-transparent" />
+                    
+                    <div className="space-y-3">
+                      {fields.map((field, index) => (
+                        <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 p-4 bg-white/[0.02] border border-white/5 rounded-2xl relative group">
+                          <div className="md:col-span-5 space-y-1">
+                            <Label className="text-[8px] uppercase opacity-50">Descrição do Material</Label>
+                            <Input {...register(`items.${index}.desc`)} placeholder="Ex: Lona 440g c/ Ilhós" className="bg-transparent border-white/5 h-10" />
+                          </div>
+                          <div className="md:col-span-3 space-y-1">
+                            <Label className="text-[8px] uppercase opacity-50">Medidas (LxA)</Label>
+                            <Input {...register(`items.${index}.size`)} placeholder="2.00x1.50m" className="bg-transparent border-white/5 h-10" />
+                          </div>
+                          <div className="md:col-span-2 space-y-1">
+                            <Label className="text-[8px] uppercase opacity-50">Qtd</Label>
+                            <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-10" />
+                          </div>
+                          <div className="md:col-span-2 space-y-1">
+                            <Label className="text-[8px] uppercase opacity-50">R$ Unit.</Label>
+                            <Input type="number" step="0.01" {...register(`items.${index}.unitValue`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-10" />
+                          </div>
+                          {fields.length > 1 && (
+                            <Button type="button" onClick={() => remove(index)} className="absolute -right-2 -top-2 opacity-0 group-hover:opacity-100 transition-opacity bg-destructive text-white h-6 w-6 rounded-full p-0 flex items-center justify-center shadow-lg" variant="ghost">
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          )}
                         </div>
-                        {fields.length > 1 && (
-                          <Button type="button" onClick={() => remove(index)} className="absolute -right-2 -top-2 text-destructive" variant="ghost">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
 
                 <div className="lg:col-span-4 space-y-6">
-                  <Card className="bg-white/5 border-none p-4 space-y-4">
-                    <div className="space-y-2">
-                      <Label className="text-[10px] uppercase">Forma de Pagamento</Label>
-                      <Controller
-                        name="paymentMethod"
-                        control={control}
-                        render={({ field }) => (
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <SelectTrigger className="bg-black/40 h-12 border-white/10">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="bg-zinc-900 text-white">
-                              <SelectItem value="Pix">Pix</SelectItem>
-                              <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-                              <SelectItem value="Cartão Crédito">Cartão Crédito</SelectItem>
-                              <SelectItem value="Boleto">Boleto</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        )}
-                      />
-                    </div>
-
-                    {isCardPayment && (
-                      <div className="p-4 border border-primary/30 rounded-xl space-y-4 bg-primary/5">
+                  <Card className="bg-white/5 border-none p-5 space-y-6 rounded-2xl">
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Status Inicial</Label>
                         <Controller
-                          name="machine"
+                          name="status"
                           control={control}
                           render={({ field }) => (
                             <Select onValueChange={field.onChange} value={field.value}>
-                              <SelectTrigger className="bg-black/20 h-10 border-white/5">
-                                <SelectValue placeholder="Maquininha" />
+                              <SelectTrigger className="bg-black/40 h-12 border-white/10">
+                                <SelectValue />
                               </SelectTrigger>
-                              <SelectContent className="bg-zinc-900 text-white">
-                                <SelectItem value="PagBank">PagBank</SelectItem>
-                                <SelectItem value="SIPAG">SIPAG</SelectItem>
+                              <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                <SelectItem value="Arte">Arte Final</SelectItem>
+                                <SelectItem value="Impressão">Impressão</SelectItem>
+                                <SelectItem value="Acabamento">Acabamento</SelectItem>
+                                <SelectItem value="Serralheria">Serralheria</SelectItem>
                               </SelectContent>
                             </Select>
                           )}
                         />
                       </div>
-                    )}
 
-                    <div className="pt-4 border-t border-white/5">
-                      <div className="flex justify-between items-center mb-6">
-                        <span className="text-xs uppercase text-muted-foreground font-black">Total</span>
-                        <span className="text-2xl font-black text-white">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Data de Entrega</Label>
+                        <Input type="date" {...register('deliveryDate')} className="bg-black/40 h-12 border-white/10" />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Forma de Pagamento</Label>
+                        <Controller
+                          name="paymentMethod"
+                          control={control}
+                          render={({ field }) => (
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <SelectTrigger className="bg-black/40 h-12 border-white/10">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                <SelectItem value="Pix">Pix / Transferência</SelectItem>
+                                <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                                <SelectItem value="Cartão Crédito">Cartão Crédito</SelectItem>
+                                <SelectItem value="Cartão Débito">Cartão Débito</SelectItem>
+                                <SelectItem value="Boleto">Boleto Bancário</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </div>
+
+                      {isCardPayment && (
+                        <div className="p-4 border border-primary/30 rounded-2xl space-y-4 bg-primary/5 animate-in fade-in zoom-in-95">
+                          <div className="space-y-2">
+                            <Label className="text-[8px] uppercase opacity-70">Operadora/Maquininha</Label>
+                            <Controller
+                              name="machine"
+                              control={control}
+                              render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                  <SelectTrigger className="bg-black/20 h-10 border-white/5">
+                                    <SelectValue placeholder="Selecione..." />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-zinc-900 text-white">
+                                    <SelectItem value="PagBank">PagBank</SelectItem>
+                                    <SelectItem value="SIPAG">SIPAG / SICOOB</SelectItem>
+                                    <SelectItem value="Stone">Stone</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-[8px] uppercase opacity-70">Parcelas</Label>
+                            <Controller
+                              name="installments"
+                              control={control}
+                              render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                  <SelectTrigger className="bg-black/20 h-10 border-white/5">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-zinc-900 text-white">
+                                    {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
+                                      <SelectItem key={n} value={`${n}x`}>{n}x</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-6 border-t border-white/5 space-y-4">
+                      <div className="flex flex-col gap-1 text-right">
+                        <span className="text-[9px] uppercase text-muted-foreground font-black tracking-widest">Total do Protocolo</span>
+                        <span className="text-3xl font-black text-white tracking-tighter">
                           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}
                         </span>
                       </div>
-                      <Button type="submit" className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl">
+                      <Button type="submit" className="w-full h-16 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.4)] hover:shadow-[0_0_35px_rgba(255,95,31,0.6)] active:scale-95 transition-all">
                         Finalizar OS
                       </Button>
                     </div>
@@ -348,12 +446,18 @@ export default function OrdersManagementPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <AnimatePresence mode="popLayout">
             {orders.map((order) => (
-              <motion.div key={order.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <motion.div 
+                key={order.id} 
+                layout 
+                initial={{ opacity: 0, scale: 0.95 }} 
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+              >
                 <OrderCard 
                   order={{
                     id: order.id,
                     client: order.client,
-                    description: order.items[0]?.desc || 'Sem descrição',
+                    description: order.items[0]?.desc || 'Protocolo sem itens',
                     status: order.status,
                     deliveryDate: order.deliveryDate,
                     value: order.totalValue
@@ -363,7 +467,12 @@ export default function OrdersManagementPage() {
               </motion.div>
             ))}
           </AnimatePresence>
-          {ordersLoading && <div className="col-span-full flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>}
+          {ordersLoading && (
+            <div className="col-span-full flex flex-col items-center justify-center py-20 gap-4 opacity-50">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <p className="text-[10px] uppercase tracking-widest">Sincronizando Banco Cloud...</p>
+            </div>
+          )}
           {!ordersLoading && orders.length === 0 && <div className="col-span-full"><EmptyState /></div>}
         </div>
       </main>
