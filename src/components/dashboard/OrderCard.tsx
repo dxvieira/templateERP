@@ -63,10 +63,13 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
         isCompleted ? "bg-[#00FF00]" : "bg-primary"
       )} />
 
-      {/* Cabeçalho: ID e Botão Check */}
+      {/* Cabeçalho: ID Sequencial e Botão Check */}
       <div className="flex items-center justify-between mb-4">
-        <span className="text-[10px] font-black tracking-[0.2em] text-zinc-500 uppercase">
-          ID #{order.id.slice(-4).toUpperCase()}
+        <span className={cn(
+          "text-[10px] font-black tracking-[0.2em] uppercase",
+          isCompleted ? "text-[#00FF00]" : "text-primary"
+        )}>
+          ID #{order.id}
         </span>
         
         {!isCompleted ? (
@@ -121,7 +124,7 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
               <ChevronDown className="w-3 h-3 opacity-60" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="bg-zinc-900 border-zinc-800 text-white min-w-[140px] rounded-xl shadow-2xl">
+          <DropdownMenuContent className="bg-zinc-900 border-zinc-800 text-white min-w-[140px] rounded-xl shadow-2xl z-[100]">
             {statusOptions.map((s) => (
               <DropdownMenuItem 
                 key={s} 
