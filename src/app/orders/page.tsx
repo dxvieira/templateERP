@@ -1,13 +1,13 @@
 
 'use client';
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, doc, setDoc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, doc, serverTimestamp, query, orderBy, setDoc, updateDoc } from 'firebase/firestore';
+import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { EmptyState } from '@/components/dashboard/EmptyState';
@@ -35,10 +35,7 @@ import {
   FileDown, 
   Loader2,
   FileText,
-  Search,
-  Filter,
-  Save,
-  X as CloseIcon
+  Save
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -59,7 +56,7 @@ const orderSchema = z.object({
   deliveryDate: z.string().min(1, 'Data de entrega é obrigatória'),
   seller: z.string().min(1, 'Selecione um vendedor'),
   observations: z.string().optional(),
-  status: z.enum(['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação']),
+  status: z.enum(['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Entregue']),
   paymentMethod: z.enum(['Dinheiro', 'Pix', 'Cartão', 'Boleto']),
   items: z.array(orderItemSchema).min(1, 'Adicione pelo menos um item'),
 });
@@ -68,20 +65,19 @@ type OrderFormValues = z.infer<typeof orderSchema>;
 
 export default function OrdersManagementPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
   const firestore = useFirestore();
+  const { user, isUserLoading } = useUser();
   const { toast } = useToast();
 
-  // Fetch Orders - MEMOIZED CORRECTLY
+  // Fetch Real-time via useCollection
   const ordersQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user || isUserLoading) return null;
     return query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
-  }, [firestore]);
+  }, [firestore, user, isUserLoading]);
 
-  const { data: orders, loading: ordersLoading } = useCollection(ordersQuery);
+  const { data: orders, isLoading: ordersLoading } = useCollection(ordersQuery);
 
-  // Form setup
   const { 
     register, 
     control, 
@@ -111,7 +107,6 @@ export default function OrdersManagementPage() {
       acc + ((item.quantity || 0) * (item.unitValue || 0)), 0) || 0,
   [watchedItems]);
 
-  // Carrega dados para edição
   useEffect(() => {
     if (editingOrder) {
       reset({
@@ -148,11 +143,11 @@ export default function OrdersManagementPage() {
     doc.text('DADOS DO CLIENTE', 15, 50);
     doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     doc.line(15, 52, 60, 52);
-    doc.setFont('helvetica', 'normal');
     doc.text(`Cliente: ${data.client}`, 15, 60);
     doc.text(`Vendedor: ${data.seller}`, 15, 65);
     doc.text(`Emissão: ${data.emissionDate}`, 120, 60);
     doc.text(`Entrega: ${data.deliveryDate}`, 120, 65);
+    
     autoTable(doc, {
       startY: 75,
       head: [['DESCRIÇÃO', 'QTD', 'VALOR UNIT.', 'SUBTOTAL']],
@@ -164,18 +159,16 @@ export default function OrdersManagementPage() {
       ]),
       headStyles: { fillColor: primaryColor, textColor: [255, 255, 255] },
       alternateRowStyles: { fillColor: [245, 245, 245] },
-      margin: { left: 15, right: 15 },
     });
+    
     const finalY = (doc as any).lastAutoTable.finalY + 10;
     doc.setFont('helvetica', 'bold');
-    doc.text(`PAGAMENTO: ${data.paymentMethod.toUpperCase()}`, 15, finalY);
-    doc.setFontSize(14);
     doc.text(`TOTAL GERAL: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(orderTotal)}`, 130, finalY);
     doc.save(`OS_${data.client.replace(/\s+/g, '_')}_${docId.slice(-4)}.pdf`);
   };
 
-  const onSubmit = (data: OrderFormValues) => {
-    if (!firestore) return;
+  const onSubmit = async (data: OrderFormValues) => {
+    if (!firestore || !user) return;
     
     const currentTotal = total;
     const orderData = {
@@ -187,65 +180,55 @@ export default function OrdersManagementPage() {
     };
 
     if (editingOrder) {
-      // MODO EDIÇÃO - NÃO BLOQUEANTE
       const orderRef = doc(firestore, 'orders', editingOrder.id);
-      updateDoc(orderRef, orderData)
-        .catch(async (error) => {
-          const permissionError = new FirestorePermissionError({
-            path: `orders/${editingOrder.id}`,
-            operation: 'update',
-            requestResourceData: orderData,
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        });
+      updateDoc(orderRef, orderData).catch(async (e) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: orderRef.path,
+          operation: 'update',
+          requestResourceData: orderData
+        }));
+      });
       
       toast({
         title: "Protocolo Atualizado",
-        description: `A OS do cliente ${data.client} foi salva com sucesso.`,
+        description: `Alterações salvas para ${data.client}.`,
       });
     } else {
-      // MODO CRIAÇÃO - NÃO BLOQUEANTE COM ID IMEDIATO
-      const ordersCol = collection(firestore, 'orders');
-      const orderRef = doc(ordersCol);
+      const orderRef = doc(collection(firestore, 'orders'));
       const newOrderData = { 
         ...orderData, 
         createdAt: serverTimestamp(),
         id: orderRef.id 
       };
 
-      setDoc(orderRef, newOrderData)
-        .catch(async (error) => {
-          const permissionError = new FirestorePermissionError({
-            path: `orders/${orderRef.id}`,
-            operation: 'create',
-            requestResourceData: newOrderData,
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        });
+      setDoc(orderRef, newOrderData).catch(async (e) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: orderRef.path,
+          operation: 'create',
+          requestResourceData: newOrderData
+        }));
+      });
 
-      // Feedback e PDF imediato
-      generatePDF(data, orderRef.id, currentTotal);
+      // Feedback imediato e geração de PDF assíncrona
+      setTimeout(() => generatePDF(data, orderRef.id, currentTotal), 100);
       toast({
         title: "Protocolo Lançado",
-        description: `Nova OS gerada para ${data.client}. PDF em download.`,
+        description: `Nova OS gerada para ${data.client}.`,
       });
     }
 
     setIsModalOpen(false);
     setEditingOrder(null);
-    if (!editingOrder) reset();
+    reset();
   };
 
-  const handleOpenNew = () => {
-    setEditingOrder(null);
-    reset({
-      emissionDate: new Date().toISOString().split('T')[0],
-      status: 'Arte',
-      paymentMethod: 'Pix',
-      items: [{ desc: '', quantity: 1, unitValue: 0 }],
-    });
-    setIsModalOpen(true);
-  };
+  if (isUserLoading) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+        <Loader2 className="w-10 h-10 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col md:flex-row overflow-x-hidden">
@@ -260,19 +243,22 @@ export default function OrdersManagementPage() {
           >
             <div className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-primary" />
-              <h2 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase whitespace-nowrap text-ellipsis overflow-hidden">Gestão de Protocolos</h2>
+              <h2 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase truncate">Gestão de Protocolos</h2>
             </div>
-            <p className="text-muted-foreground text-[8px] md:text-[10px] uppercase tracking-[0.4em] font-medium whitespace-nowrap">Monitoramento e Arquivo Digital</p>
+            <p className="text-muted-foreground text-[8px] md:text-[10px] uppercase tracking-[0.4em] font-medium whitespace-nowrap">Persistência Cloud em Tempo Real</p>
           </motion.div>
 
           <Dialog open={isModalOpen} onOpenChange={(open) => {
             setIsModalOpen(open);
-            if (!open) setEditingOrder(null);
+            if (!open) {
+              setEditingOrder(null);
+              reset();
+            }
           }}>
             <DialogTrigger asChild>
               <Button 
-                onClick={handleOpenNew}
-                className="w-full md:w-auto bg-primary text-black font-black uppercase tracking-widest px-8 h-12 md:h-14 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.6)] hover:bg-primary transition-all gap-3 active:scale-95 whitespace-nowrap"
+                onClick={() => setIsModalOpen(true)}
+                className="w-full md:w-auto bg-primary text-black font-black uppercase tracking-widest px-8 h-12 md:h-14 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.6)] hover:bg-primary transition-all gap-3 active:scale-95"
               >
                 <Plus className="w-5 h-5" />
                 Nova Ordem de Serviço
@@ -285,7 +271,7 @@ export default function OrdersManagementPage() {
                   {editingOrder ? `Editar OS #${editingOrder.id.slice(-4).toUpperCase()}` : 'Lançar Protocolo'}
                 </DialogTitle>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
-                  {editingOrder ? 'Atualização de dados cadastrados' : 'Digitalização de nova Ordem de Serviço'}
+                  Preencha os dados para gravação permanente no banco
                 </p>
               </DialogHeader>
 
@@ -301,7 +287,7 @@ export default function OrdersManagementPage() {
                         <Input 
                           {...register('client')}
                           placeholder="Nome ou Empresa..."
-                          className="bg-black/40 border-white/10 h-12 text-base focus:ring-primary"
+                          className="bg-black/40 border-white/10 h-12"
                         />
                         {errors.client && <p className="text-[10px] text-destructive">{errors.client.message}</p>}
                       </div>
@@ -324,13 +310,13 @@ export default function OrdersManagementPage() {
 
                   <Card className="bg-white/5 border-none shadow-none">
                     <CardHeader className="flex flex-row items-center justify-between py-4">
-                      <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Escopo / Itens</CardTitle>
+                      <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Itens da OS</CardTitle>
                       <Button 
                         type="button" 
                         variant="outline" 
                         size="sm" 
                         onClick={() => append({ desc: '', quantity: 1, unitValue: 0 })}
-                        className="border-primary/50 text-primary h-10 rounded-xl px-4 hover:bg-primary hover:text-black"
+                        className="border-primary/50 text-primary rounded-xl"
                       >
                         <Plus className="w-4 h-4 mr-2" /> Adicionar
                       </Button>
@@ -338,32 +324,23 @@ export default function OrdersManagementPage() {
                     <CardContent className="space-y-4">
                       {fields.map((field, index) => (
                         <div key={field.id} className="flex flex-col gap-4 p-4 rounded-xl bg-black/40 border border-white/5 relative">
-                          <div className="space-y-2">
-                            <Label className="text-[10px] uppercase text-muted-foreground">Descrição do Item</Label>
+                          <Input 
+                            {...register(`items.${index}.desc`)}
+                            placeholder="Descrição do Item"
+                            className="bg-black/20 border-white/10 h-12"
+                          />
+                          <div className="grid grid-cols-2 gap-4">
                             <Input 
-                              {...register(`items.${index}.desc`)}
-                              placeholder="Ex: Letreiro PVC Expandido"
+                              type="number"
+                              {...register(`items.${index}.quantity`, { valueAsNumber: true })}
                               className="bg-black/20 border-white/10 h-12"
                             />
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label className="text-[10px] uppercase text-muted-foreground">Qtd</Label>
-                              <Input 
-                                type="number"
-                                {...register(`items.${index}.quantity`, { valueAsNumber: true })}
-                                className="bg-black/20 border-white/10 h-12 text-center"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-[10px] uppercase text-muted-foreground">Valor Unit.</Label>
-                              <Input 
-                                type="number"
-                                step="0.01"
-                                {...register(`items.${index}.unitValue`, { valueAsNumber: true })}
-                                className="bg-black/20 border-white/10 h-12"
-                              />
-                            </div>
+                            <Input 
+                              type="number"
+                              step="0.01"
+                              {...register(`items.${index}.unitValue`, { valueAsNumber: true })}
+                              className="bg-black/20 border-white/10 h-12"
+                            />
                           </div>
                           {fields.length > 1 && (
                             <Button 
@@ -371,7 +348,7 @@ export default function OrdersManagementPage() {
                               variant="ghost" 
                               size="icon" 
                               onClick={() => remove(index)}
-                              className="text-destructive absolute top-2 right-2 h-8 w-8"
+                              className="text-destructive absolute top-2 right-2"
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -389,11 +366,11 @@ export default function OrdersManagementPage() {
                     </CardHeader>
                     <CardContent className="space-y-6">
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Entrega</Label>
+                        <Label className="text-[10px] uppercase text-muted-foreground">Entrega Prevista</Label>
                         <Input type="date" {...register('deliveryDate')} className="bg-black/40 border-white/10 h-12" />
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Status Atual</Label>
+                        <Label className="text-[10px] uppercase text-muted-foreground">Status</Label>
                         <Select onValueChange={(v) => setValue('status', v as any)} defaultValue={editingOrder?.status || "Arte"}>
                           <SelectTrigger className="bg-black/40 border-white/10 h-12">
                             <SelectValue />
@@ -404,6 +381,7 @@ export default function OrdersManagementPage() {
                             <SelectItem value="Serralheria">Serralheria</SelectItem>
                             <SelectItem value="Acabamento">Acabamento</SelectItem>
                             <SelectItem value="Instalação">Instalação</SelectItem>
+                            <SelectItem value="Entregue">Entregue</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -417,17 +395,12 @@ export default function OrdersManagementPage() {
                         </div>
                         <Button 
                           type="submit" 
-                          disabled={isSubmitting}
-                          className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest hover:shadow-[0_0_20px_rgba(255,95,31,0.5)] rounded-2xl transition-transform active:scale-95"
+                          className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl"
                         >
-                          {isSubmitting ? (
-                            <Loader2 className="w-6 h-6 animate-spin" />
-                          ) : (
-                            <span className="flex items-center gap-2">
-                              {editingOrder ? 'Salvar Alterações' : 'Finalizar OS'} 
-                              {editingOrder ? <Save className="w-5 h-5" /> : <FileDown className="w-5 h-5" />}
-                            </span>
-                          )}
+                          <span className="flex items-center gap-2">
+                            {editingOrder ? 'Salvar Alterações' : 'Finalizar OS'} 
+                            {editingOrder ? <Save className="w-5 h-5" /> : <FileDown className="w-5 h-5" />}
+                          </span>
                         </Button>
                       </div>
                     </CardContent>
@@ -442,29 +415,20 @@ export default function OrdersManagementPage() {
           <div className="flex items-center justify-between border-b border-white/5 pb-4">
             <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.5em] flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-primary/40 animate-pulse" />
-              Histórico de Protocolos
+              Monitor de Ordens Ativas
             </h3>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white">
-                <Search className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white">
-                <Filter className="w-4 h-4" />
-              </Button>
-            </div>
           </div>
 
           <AnimatePresence mode="popLayout">
             {orders && orders.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                {orders.map((order, idx) => (
+                {orders.map((order) => (
                   <motion.div
                     key={order.id}
                     layout
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ duration: 0.2 }}
                   >
                     <OrderCard 
                       order={{
@@ -493,8 +457,8 @@ export default function OrdersManagementPage() {
         </section>
 
         <footer className="pt-8 pb-4 border-t border-white/5 opacity-30">
-          <p className="text-[7px] md:text-[9px] text-muted-foreground uppercase tracking-[0.5em] text-center whitespace-nowrap overflow-hidden">
-            VISCOMM MANAGEMENT TERMINAL v1.1 • PROTOCOL ARCHIVE
+          <p className="text-[7px] md:text-[9px] text-muted-foreground uppercase tracking-[0.5em] text-center">
+            VISCOMM MANAGEMENT TERMINAL v1.1 • CLOUD SYNC ACTIVE
           </p>
         </footer>
       </main>

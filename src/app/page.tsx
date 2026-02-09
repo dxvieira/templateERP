@@ -7,11 +7,11 @@ import { DashboardStatCard } from '@/components/dashboard/DashboardStatCard';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { EmptyState } from '@/components/dashboard/EmptyState';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Palette, Printer, Hammer, CheckCircle2, Plus, Zap } from 'lucide-react';
+import { Palette, Printer, Hammer, CheckCircle2, Plus, Zap, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { ProductionChart } from '@/components/dashboard/ProductionChart';
 import { WarRoom } from '@/components/dashboard/WarRoom';
@@ -50,13 +50,14 @@ DashboardHeader.displayName = 'DashboardHeader';
 export default function DashboardPage() {
   const router = useRouter();
   const db = useFirestore();
+  const { user, isUserLoading } = useUser();
 
   const ordersQuery = useMemoFirebase(() => {
-    if (!db) return null;
+    if (!db || !user || isUserLoading) return null;
     return query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-  }, [db]);
+  }, [db, user, isUserLoading]);
 
-  const { data: orders, loading: ordersLoading } = useCollection(ordersQuery);
+  const { data: orders, isLoading: ordersLoading } = useCollection(ordersQuery);
 
   const stats = useMemo(() => ({
     arte: orders?.filter(o => o.status === 'Arte').length || 0,
@@ -65,6 +66,14 @@ export default function DashboardPage() {
     concluido: orders?.filter(o => o.status === 'Entregue').length || 0,
   }), [orders]);
 
+  if (isUserLoading) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+        <Loader2 className="w-10 h-10 text-primary animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col md:flex-row overflow-x-hidden">
       <DashboardSidebar />
@@ -72,7 +81,6 @@ export default function DashboardPage() {
       <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-6 md:space-y-8 mt-16 md:mt-0 max-w-full overflow-hidden">
         <DashboardHeader onNewOrder={() => router.push('/orders')} />
 
-        {/* KPI Cards: Carousel Mobile / Grid Desktop */}
         <div className="flex overflow-x-auto md:grid md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 pb-4 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 no-scrollbar snap-x">
           <div className="min-w-[160px] md:min-w-0 snap-center flex-1">
             <DashboardStatCard label="Arte Final" value={stats.arte.toString()} icon={Palette} />
