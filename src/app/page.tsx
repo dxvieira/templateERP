@@ -6,7 +6,6 @@ import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { DashboardStatCard } from '@/components/dashboard/DashboardStatCard';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { EmptyState } from '@/components/dashboard/EmptyState';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Palette, Printer, Hammer, CheckCircle2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -81,46 +80,39 @@ export default function DashboardPage() {
               <CardHeader className="flex flex-row items-center justify-between border-b border-white/5 pb-6">
                 <CardTitle className="text-[10px] font-black text-primary uppercase tracking-[0.4em]">Monitor de Protocolos</CardTitle>
                 <div className="flex items-center gap-3">
-                   <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_10px_#FF5F1F]" />
-                   <span className="text-[9px] text-primary font-black uppercase tracking-widest">
-                     {ordersLoading ? 'Sincronizando...' : 'Live Sync'}
+                   <div className="w-2 h-2 rounded-full bg-primary/40 shadow-[0_0_10px_#FF5F1F]" />
+                   <span className="text-[9px] text-primary/60 font-black uppercase tracking-widest">
+                     Operacional
                    </span>
                 </div>
               </CardHeader>
               <CardContent className="pt-6">
-                {ordersLoading ? (
-                  <div className="flex flex-col items-center justify-center py-20 gap-4">
-                    <LoadingSpinner />
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Acessando rede de dados...</p>
-                  </div>
-                ) : (
-                  <AnimatePresence mode="popLayout">
-                    {orders && orders.length > 0 ? (
-                      <div className="space-y-4">
-                        {orders.map((order, idx) => (
-                          <motion.div
-                            key={order.id}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: idx * 0.02 }}
-                          >
-                            <OrderCard order={{
-                              id: order.id,
-                              client: order.client || 'Cliente não identificado',
-                              description: order.items?.[0]?.desc || 'Sem descrição',
-                              status: order.status,
-                              deliveryDate: order.deliveryDate,
-                              value: order.totalValue || 0,
-                              isDelayed: order.isDelayed || false
-                            }} />
-                          </motion.div>
-                        ))}
-                      </div>
-                    ) : (
-                      <EmptyState />
-                    )}
-                  </AnimatePresence>
-                )}
+                <AnimatePresence mode="popLayout">
+                  {orders && orders.length > 0 ? (
+                    <div className="space-y-4">
+                      {orders.map((order, idx) => (
+                        <motion.div
+                          key={order.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: idx * 0.02 }}
+                        >
+                          <OrderCard order={{
+                            id: order.id,
+                            client: order.client || 'Cliente não identificado',
+                            description: order.items?.[0]?.desc || 'Sem descrição',
+                            status: order.status,
+                            deliveryDate: order.deliveryDate,
+                            value: order.totalValue || 0,
+                            isDelayed: order.isDelayed || false
+                          }} />
+                        </motion.div>
+                      ))}
+                    </div>
+                  ) : (
+                    !ordersLoading && <EmptyState />
+                  )}
+                </AnimatePresence>
               </CardContent>
             </Card>
           </div>
