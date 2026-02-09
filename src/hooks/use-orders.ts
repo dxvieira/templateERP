@@ -39,7 +39,7 @@ export function useOrders() {
       setOrders(docs);
       setIsLoading(false);
     }, (error) => {
-      console.error("Erro crítico no Snapshot:", error);
+      console.error("Erro no Snapshot:", error);
       setIsLoading(false);
     });
 
@@ -48,28 +48,27 @@ export function useOrders() {
 
   /**
    * Cria uma nova ordem no Firestore.
-   * Garante que o ID do payload seja igual ao ID do documento para satisfazer as Security Rules.
    */
   const createOrder = useCallback(async (data: any) => {
     if (!firestore) throw new Error("Firestore não inicializado");
     
     const orderRef = doc(collection(firestore, 'orders'));
-    const payload = {
+    
+    // Filtra campos undefined que o Firestore não aceita
+    const payload: any = {
       ...data,
       id: orderRef.id,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
 
-    console.log('Tentando salvar no Firestore:', payload);
+    Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
 
     try {
       await setDoc(orderRef, payload);
-      console.log('Documento salvo com sucesso. ID:', orderRef.id);
       return payload;
     } catch (err: any) {
       console.error('Erro na gravação Firestore:', err);
-      // Emite erro contextual para o listener global
       errorEmitter.emit('permission-error', new FirestorePermissionError({
         path: orderRef.path,
         operation: 'create',

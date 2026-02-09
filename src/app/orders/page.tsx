@@ -32,7 +32,6 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useOrders } from '@/hooks/use-orders';
 
-// Schema ultra-flexível: Apenas o nome do cliente é obrigatório
 const orderSchema = z.object({
   client: z.string().min(1, 'Nome do cliente é obrigatório'),
   clientId: z.string().optional(),
@@ -98,11 +97,15 @@ export default function OrdersManagerPage() {
 
   const onSubmit = async (data: OrderFormValues) => {
     setIsSubmitting(true);
-    console.log('Dados validados para envio:', data);
+    
+    // Filtra campos undefined que o Firestore não aceita
+    const cleanedData = Object.fromEntries(
+      Object.entries(data).filter(([_, v]) => v !== undefined)
+    );
     
     try {
       await createOrder({
-        ...data,
+        ...cleanedData,
         totalValue,
       });
       
@@ -114,7 +117,6 @@ export default function OrdersManagerPage() {
       setIsModalOpen(false);
       reset();
     } catch (error: any) {
-      console.error('Falha na persistência:', error);
       toast({
         variant: "destructive",
         title: "Erro ao salvar",
@@ -126,11 +128,11 @@ export default function OrdersManagerPage() {
   };
 
   const onError = (formErrors: any) => {
-    console.error('Erros de Validação Detalhados:', formErrors);
+    console.error('Erros de Validação:', formErrors);
     toast({
       variant: "destructive",
       title: "Erro de Validação",
-      description: "Por favor, verifique o nome do cliente (campo obrigatório)."
+      description: "Verifique os campos obrigatórios (Cliente)."
     });
   };
 
@@ -158,30 +160,26 @@ export default function OrdersManagerPage() {
         <div className="space-y-6">
           <div className="flex items-center justify-between border-b border-white/5 pb-4">
             <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.5em] flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-primary/40 animate-pulse"></span>
+              <span className="w-2 h-2 rounded-full bg-primary/40"></span>
               Fila de Protocolos Cloud
             </h3>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {orders.length > 0 ? (
-              orders.map(order => (
-                <OrderCard 
-                  key={order.id} 
-                  order={{
-                    id: order.id,
-                    client: order.client,
-                    description: order.items?.[0]?.desc || 'Sem descrição',
-                    status: order.status,
-                    deliveryDate: order.deliveryDate || 'N/A',
-                    value: order.totalValue || 0
-                  }} 
-                />
-              ))
-            ) : (
-              !isLoading && <div className="col-span-full"><EmptyState /></div>
-            )}
-            {isLoading && <div className="col-span-full flex justify-center py-20"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>}
+            {orders.map(order => (
+              <OrderCard 
+                key={order.id} 
+                order={{
+                  id: order.id,
+                  client: order.client,
+                  description: order.items?.[0]?.desc || 'Sem descrição',
+                  status: order.status,
+                  deliveryDate: order.deliveryDate || 'N/A',
+                  value: order.totalValue || 0
+                }} 
+              />
+            ))}
+            {orders.length === 0 && !isLoading && <div className="col-span-full"><EmptyState /></div>}
           </div>
         </div>
 
