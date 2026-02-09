@@ -16,7 +16,9 @@ import { useUser } from '@/firebase';
 export default function DashboardPage() {
   const router = useRouter();
   const { user, isUserLoading } = useUser();
-  const { orders, stats } = useOrders();
+  
+  // Consome o mesmo hook centralizador para garantir que os KPIs atualizem sozinhos
+  const { orders, stats, isLoading } = useOrders();
 
   useEffect(() => {
     if (!isUserLoading && !user) {
@@ -35,7 +37,7 @@ export default function DashboardPage() {
               <Zap className="w-5 h-5 text-primary animate-pulse" />
               <h2 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase">Painel de Controle</h2>
             </div>
-            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em] font-medium">Monitoramento Realtime</p>
+            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em] font-medium">Monitoramento Cloud Reativo</p>
           </div>
           
           <Button 
@@ -50,7 +52,7 @@ export default function DashboardPage() {
           <DashboardStatCard label="Arte Final" value={stats.arte.toString()} icon={Palette} />
           <DashboardStatCard label="Impressão" value={stats.impressao.toString()} icon={Printer} />
           <DashboardStatCard label="Acabamento" value={stats.acabamento.toString()} icon={Hammer} />
-          <DashboardStatCard label="Entregue" value={stats.concluido.toString()} icon={CheckCircle2} />
+          <DashboardStatCard label="Concluído" value={stats.concluido.toString()} icon={CheckCircle2} />
         </div>
 
         <div className="space-y-6">
@@ -82,7 +84,7 @@ export default function DashboardPage() {
               ))}
             </AnimatePresence>
           </div>
-          {orders.length === 0 && <EmptyState />}
+          {!isLoading && orders.length === 0 && <EmptyState />}
         </div>
       </main>
     </div>
