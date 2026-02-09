@@ -1,4 +1,3 @@
-
 'use client';
 
 import { query, collection, orderBy, onSnapshot, doc, serverTimestamp, runTransaction, updateDoc, deleteDoc, Firestore } from 'firebase/firestore';
@@ -112,7 +111,6 @@ export function useOrders() {
   const deleteOrder = useCallback(async (orderId: string) => {
     if (!firestore) throw new Error("Firestore não inicializado");
     
-    // O ID da ordem é o ID do documento
     const orderRef = doc(firestore, 'orders', orderId);
     try {
       await deleteDoc(orderRef);
