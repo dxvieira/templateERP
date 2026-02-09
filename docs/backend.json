@@ -125,7 +125,7 @@
           "format": "date-time"
         }
       },
-      "required": ["id", "name", "phone"]
+      "required": ["id"]
     },
     "Kpi": {
       "title": "Kpi",

@@ -26,7 +26,6 @@ import {
   Phone, 
   Mail, 
   MapPin, 
-  Search, 
   Loader2,
   CheckCircle2
 } from 'lucide-react';
@@ -34,18 +33,18 @@ import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
-// Schema de validação
+// Schema de validação - Todos os campos opcionais
 const clientSchema = z.object({
-  name: z.string().min(3, 'Nome é obrigatório'),
-  phone: z.string().min(10, 'Telefone inválido'),
-  email: z.string().email('Email inválido'),
-  zipCode: z.string().length(8, 'CEP deve ter 8 números'),
-  street: z.string().min(1, 'Rua é obrigatória'),
-  neighborhood: z.string().min(1, 'Bairro é obrigatório'),
-  city: z.string().min(1, 'Cidade é obrigatória'),
-  state: z.string().length(2, 'UF inválida'),
-  number: z.string().min(1, 'Número é obrigatório'),
-  complement: z.string().optional(),
+  name: z.string().default(''),
+  phone: z.string().default(''),
+  email: z.string().email('Email inválido').or(z.literal('')).default(''),
+  zipCode: z.string().default(''),
+  street: z.string().default(''),
+  neighborhood: z.string().default(''),
+  city: z.string().default(''),
+  state: z.string().default(''),
+  number: z.string().default(''),
+  complement: z.string().default(''),
 });
 
 type ClientFormValues = z.infer<typeof clientSchema>;
@@ -66,9 +65,20 @@ export default function ClientsPage() {
     formState: { errors } 
   } = useForm<ClientFormValues>({
     resolver: zodResolver(clientSchema),
+    defaultValues: {
+      name: '',
+      phone: '',
+      email: '',
+      zipCode: '',
+      street: '',
+      neighborhood: '',
+      city: '',
+      state: '',
+      number: '',
+      complement: '',
+    }
   });
 
-  // Listener em tempo real dos clientes
   const clientsQuery = useMemoFirebase(() => {
     if (!firestore || !user || isUserLoading) return null;
     return query(collection(firestore, 'clients'), orderBy('createdAt', 'desc'));
@@ -76,7 +86,6 @@ export default function ClientsPage() {
 
   const { data: clients, isLoading } = useCollection(clientsQuery);
 
-  // Monitorar CEP para busca automática
   const watchedZip = watch('zipCode');
 
   useEffect(() => {
@@ -92,27 +101,17 @@ export default function ClientsPage() {
       const data = await response.json();
       
       if (!data.erro) {
-        setValue('street', data.logradouro);
-        setValue('neighborhood', data.bairro);
-        setValue('city', data.localidade);
-        setValue('state', data.uf);
+        setValue('street', data.logradouro || '');
+        setValue('neighborhood', data.bairro || '');
+        setValue('city', data.localidade || '');
+        setValue('state', data.uf || '');
         toast({
           title: "CEP Localizado",
           description: `${data.logradouro}, ${data.localidade}`,
         });
-      } else {
-        toast({
-          variant: "destructive",
-          title: "CEP não encontrado",
-          description: "Verifique o número e tente novamente.",
-        });
       }
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erro na busca",
-        description: "Não foi possível consultar o CEP.",
-      });
+      // Falha silenciosa na busca de CEP
     } finally {
       setIsSearchingCep(false);
     }
@@ -148,8 +147,8 @@ export default function ClientsPage() {
     });
 
     toast({
-      title: "Cliente Cadastrado",
-      description: `${data.name} agora está na base de dados.`,
+      title: "Cadastro Realizado",
+      description: data.name ? `${data.name} salvo no banco.` : "Cliente sem nome salvo no banco.",
     });
     
     setIsModalOpen(false);
@@ -171,7 +170,7 @@ export default function ClientsPage() {
               <Users className="w-5 h-5 text-primary" />
               <h2 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase">Meus Clientes</h2>
             </div>
-            <p className="text-muted-foreground text-[8px] md:text-[10px] uppercase tracking-[0.4em] font-medium">Base de Dados e Contatos Cloud</p>
+            <p className="text-muted-foreground text-[8px] md:text-[10px] uppercase tracking-[0.4em] font-medium">Base de Dados Cloud</p>
           </motion.div>
 
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -184,9 +183,9 @@ export default function ClientsPage() {
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-zinc-950 border-white/10 text-white p-0 rounded-3xl">
               <DialogHeader className="p-6 border-b border-white/5 bg-white/[0.02]">
                 <DialogTitle className="text-xl font-black uppercase tracking-tighter text-primary flex items-center gap-2">
-                  <Plus className="w-6 h-6" /> Lançar Cliente
+                  <Plus className="w-6 h-6" /> Novo Cadastro
                 </DialogTitle>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Preencha os dados de contato e localização</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Os campos são opcionais para preenchimento rápido</p>
               </DialogHeader>
 
               <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
@@ -194,12 +193,10 @@ export default function ClientsPage() {
                   <div className="space-y-2">
                     <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Nome Completo</Label>
                     <Input {...register('name')} placeholder="Ex: João Silva Ltda" className="bg-black/40 border-white/10 h-12" />
-                    {errors.name && <p className="text-[10px] text-destructive">{errors.name.message}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">WhatsApp / Contato</Label>
                     <Input {...register('phone')} placeholder="(00) 00000-0000" className="bg-black/40 border-white/10 h-12" />
-                    {errors.phone && <p className="text-[10px] text-destructive">{errors.phone.message}</p>}
                   </div>
                   <div className="md:col-span-2 space-y-2">
                     <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">E-mail Comercial</Label>
@@ -209,45 +206,44 @@ export default function ClientsPage() {
                 </div>
 
                 <div className="pt-4 border-t border-white/5 space-y-6">
-                  <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Localização Inteligente</h3>
+                  <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Localização</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="space-y-2">
-                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">CEP (Apenas Números)</Label>
+                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">CEP</Label>
                       <div className="relative">
                         <Input {...register('zipCode')} maxLength={8} placeholder="00000000" className="bg-black/40 border-white/10 h-12 pr-10" />
                         {isSearchingCep && <Loader2 className="w-4 h-4 text-primary animate-spin absolute right-3 top-4" />}
                       </div>
-                      {errors.zipCode && <p className="text-[10px] text-destructive">{errors.zipCode.message}</p>}
                     </div>
                     <div className="md:col-span-2 space-y-2">
                       <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Rua / Logradouro</Label>
-                      <Input {...register('street')} readOnly className="bg-black/20 border-white/5 h-12 opacity-80" />
+                      <Input {...register('street')} className="bg-black/40 border-white/10 h-12" />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Bairro</Label>
-                      <Input {...register('neighborhood')} readOnly className="bg-black/20 border-white/5 h-12 opacity-80" />
+                      <Input {...register('neighborhood')} className="bg-black/40 border-white/10 h-12" />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Cidade</Label>
-                      <Input {...register('city')} readOnly className="bg-black/20 border-white/5 h-12 opacity-80" />
+                      <Input {...register('city')} className="bg-black/40 border-white/10 h-12" />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">UF</Label>
-                      <Input {...register('state')} readOnly className="bg-black/20 border-white/5 h-12 opacity-80" />
+                      <Input {...register('state')} className="bg-black/40 border-white/10 h-12" />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Número</Label>
                       <Input {...register('number')} placeholder="123" className="bg-black/40 border-white/10 h-12" />
                     </div>
                     <div className="md:col-span-2 space-y-2">
-                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Complemento (Opcional)</Label>
+                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Complemento</Label>
                       <Input {...register('complement')} placeholder="Bloco / Sala / Andar" className="bg-black/40 border-white/10 h-12" />
                     </div>
                   </div>
                 </div>
 
                 <Button type="submit" className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl">
-                  Gravar Cliente no Cloud
+                  Gravar Cadastro
                 </Button>
               </form>
             </DialogContent>
@@ -273,23 +269,31 @@ export default function ClientsPage() {
                     </div>
                     
                     <div>
-                      <h4 className="text-lg font-black text-white uppercase tracking-tight truncate">{client.name}</h4>
+                      <h4 className="text-lg font-black text-white uppercase tracking-tight truncate">
+                        {client.name || 'Sem Nome'}
+                      </h4>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">ID: #{client.id.slice(-4)}</p>
                     </div>
 
                     <div className="space-y-2 pt-2">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Phone className="w-3 h-3 text-primary" />
-                        {client.phone}
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Mail className="w-3 h-3 text-primary" />
-                        <span className="truncate">{client.email}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground pt-1">
-                        <MapPin className="w-3 h-3 text-primary" />
-                        {client.address.city} - {client.address.state}
-                      </div>
+                      {client.phone && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Phone className="w-3 h-3 text-primary" />
+                          {client.phone}
+                        </div>
+                      )}
+                      {client.email && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Mail className="w-3 h-3 text-primary" />
+                          <span className="truncate">{client.email}</span>
+                        </div>
+                      )}
+                      {(client.address?.city || client.address?.state) && (
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground pt-1">
+                          <MapPin className="w-3 h-3 text-primary" />
+                          {client.address.city} {client.address.state && `- ${client.address.state}`}
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -306,7 +310,7 @@ export default function ClientsPage() {
           {!isLoading && (!clients || clients.length === 0) && (
             <div className="col-span-full text-center py-20 opacity-30">
               <Users className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-xs uppercase tracking-[0.3em]">Nenhum cliente cadastrado no banco</p>
+              <p className="text-xs uppercase tracking-[0.3em]">Nenhum cliente cadastrado</p>
             </div>
           )}
         </div>
