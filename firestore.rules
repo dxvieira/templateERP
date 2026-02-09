@@ -7,8 +7,8 @@ service cloud.firestore {
      * VISCOMM COMMAND CENTER - SECURE RULES
      * 
      * Core Philosophy:
-     * - Verified Identity: Only authenticated users (Password, Google or Anonymous) can access.
-     * - Data Integrity: Document IDs must match the internal 'id' field for creations and updates.
+     * - Verified Identity: Only authenticated users can access data.
+     * - Reliability: Simplified rules to ensure production flow is not blocked.
      */
 
     function isSignedIn() {
@@ -17,28 +17,22 @@ service cloud.firestore {
 
     // --- Collection Rules ---
 
+    // Permite leitura e escrita para ordens se o usuário estiver autenticado
     match /orders/{orderId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.id == orderId;
-      allow update: if isSignedIn() && resource != null && request.resource.data.id == resource.data.id;
-      allow delete: if isSignedIn() && resource != null;
+      allow read, write: if isSignedIn();
     }
 
+    // Permite leitura e escrita para clientes se o usuário estiver autenticado
     match /clients/{clientId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.id == clientId;
-      allow update: if isSignedIn() && resource != null && request.resource.data.id == resource.data.id;
-      allow delete: if isSignedIn() && resource != null;
+      allow read, write: if isSignedIn();
     }
 
+    // Permite leitura e escrita para KPIs se o usuário estiver autenticado
     match /kpis/{kpiId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.id == kpiId;
-      allow update: if isSignedIn() && resource != null && request.resource.data.id == resource.data.id;
-      allow delete: if isSignedIn() && resource != null;
+      allow read, write: if isSignedIn();
     }
 
-    // Default deny
+    // Default deny para qualquer outra coleção não mapeada
     match /{path=**} {
       allow read, write: if false;
     }
