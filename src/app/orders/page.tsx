@@ -42,7 +42,8 @@ import autoTable from 'jspdf-autotable';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
-// Schema ultra-flexível: Apenas o cliente é obrigatório
+// Schema ultra-flexível: Apenas o cliente é obrigatório. 
+// Coerce garante que campos numéricos vazios sejam tratados como 0.
 const orderItemSchema = z.object({
   desc: z.string().optional().default(''),
   size: z.string().optional().default(''),
@@ -70,9 +71,8 @@ export default function OrdersManagementPage() {
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
   
   const { firestore } = useFirestore();
-  const { user, isUserLoading } = useUser();
+  const { user } = useUser();
   const { toast } = useToast();
-  
   const { orders, isLoading: ordersLoading } = useOrders();
 
   const clientsQuery = useMemoFirebase(() => {
@@ -109,7 +109,6 @@ export default function OrdersManagementPage() {
     name: "items"
   });
 
-  // Reatividade em tempo real para os cálculos
   const watchedItems = useWatch({ control, name: 'items' });
   const watchedPaymentMethod = useWatch({ control, name: 'paymentMethod' });
   
@@ -181,11 +180,11 @@ export default function OrdersManagementPage() {
 
   const onSubmit = (data: OrderFormValues) => {
     if (!firestore || !user) {
-      toast({ variant: "destructive", title: "Erro de Conexão", description: "Firebase não inicializado ou usuário offline." });
+      toast({ variant: "destructive", title: "Erro de Sistema", description: "Conexão com banco não estabelecida." });
       return;
     }
     
-    // Payload unificado e sanitizado
+    // Payload consolidado
     const orderData = {
       ...data,
       totalValue,
@@ -197,27 +196,35 @@ export default function OrdersManagementPage() {
     setIsModalOpen(false);
 
     if (editingOrder) {
+      // Atualização de registro existente
       const orderRef = doc(firestore, 'orders', editingOrder.id);
-      updateDocumentNonBlocking(orderRef, { ...orderData, id: editingOrder.id });
-      toast({ title: "Protocolo Atualizado", description: "Sincronização Cloud concluída." });
+      const updatePayload = { ...orderData, id: editingOrder.id };
+      updateDocumentNonBlocking(orderRef, updatePayload);
+      toast({ title: "Sincronizado", description: "O protocolo foi atualizado no banco." });
     } else {
+      // Criação de novo registro - CRÍTICO: Gerar o ID antes da gravação
       const orderRef = doc(collection(firestore, 'orders'));
-      const newOrder = { ...orderData, createdAt: serverTimestamp(), id: orderRef.id };
-      setDocumentNonBlocking(orderRef, newOrder, { merge: true });
-      toast({ title: "Ordem Criada", description: "Novo protocolo registrado no monitor." });
-      // Download do PDF em background
-      setTimeout(() => generatePDF(data, orderRef.id), 500);
+      const newOrderPayload = { 
+        ...orderData, 
+        createdAt: serverTimestamp(), 
+        id: orderRef.id // O ID deve estar no payload para as Security Rules
+      };
+      setDocumentNonBlocking(orderRef, newOrderPayload, { merge: true });
+      toast({ title: "Protocolo Criado", description: "A nova ordem está ativa no monitor." });
+      
+      // PDF gerado em background
+      setTimeout(() => generatePDF(data, orderRef.id), 1000);
     }
 
     setEditingOrder(null);
     reset();
   };
 
-  const onError = (formErrors: any) => {
-    console.error('Falha na validação:', formErrors);
+  const onValidationErrors = (formErrors: any) => {
+    console.error('Falha de Validação:', formErrors);
     toast({
       variant: "destructive",
-      title: "Campos Pendentes",
+      title: "Erro de Formulário",
       description: "Verifique o nome do cliente antes de finalizar.",
     });
   };
@@ -231,7 +238,7 @@ export default function OrdersManagementPage() {
             <h2 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase flex items-center gap-2">
               <FileText className="text-primary" /> Gestão de Protocolos
             </h2>
-            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em]">Fluxo Realtime Ativo</p>
+            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em]">Fluxo Cloud Ativo</p>
           </div>
 
           <Dialog open={isModalOpen} onOpenChange={(open) => {
@@ -242,18 +249,17 @@ export default function OrdersManagementPage() {
             setIsModalOpen(open);
           }}>
             <DialogTrigger asChild>
-              <Button disabled={isUserLoading} className="bg-primary text-black font-black uppercase tracking-widest px-8 h-14 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.6)]">
+              <Button className="bg-primary text-black font-black uppercase tracking-widest px-8 h-14 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.6)]">
                 <Plus className="w-5 h-5 mr-2" /> Nova OS
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-5xl bg-zinc-950 border-white/10 text-white p-0 rounded-3xl overflow-hidden shadow-2xl">
               <DialogHeader className="p-6 border-b border-white/5 bg-white/[0.02]">
-                <DialogTitle className="text-xl font-black uppercase text-primary tracking-tighter">Terminal VisComm - Nova Ordem</DialogTitle>
+                <DialogTitle className="text-xl font-black uppercase text-primary tracking-tighter">Terminal VisComm - Registro</DialogTitle>
               </DialogHeader>
 
-              <form onSubmit={handleSubmit(onSubmit, onError)} className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 max-h-[75vh] overflow-y-auto custom-scrollbar">
+              <form onSubmit={handleSubmit(onSubmit, onValidationErrors)} className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 max-h-[75vh] overflow-y-auto custom-scrollbar">
                 <div className="lg:col-span-8 space-y-8">
-                  {/* Bloco Cliente e Vendedor */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Cliente (Obrigatório)</Label>
@@ -262,7 +268,7 @@ export default function OrdersManagementPage() {
                           {...register('client')} 
                           list="clients-list" 
                           placeholder="Nome ou Razão Social"
-                          className={cn("bg-black/40 h-12 border-white/10", errors.client && "border-destructive ring-1 ring-destructive")} 
+                          className={cn("bg-black/40 h-12 border-white/10 focus:border-primary/50 transition-colors", errors.client && "border-destructive ring-1 ring-destructive")} 
                         />
                         {errors.client && <AlertCircle className="w-4 h-4 text-destructive absolute right-3 top-4" />}
                       </div>
@@ -271,7 +277,7 @@ export default function OrdersManagementPage() {
                       </datalist>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Responsável pela Venda</Label>
+                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Responsável</Label>
                       <Controller
                         name="seller"
                         control={control}
@@ -291,12 +297,11 @@ export default function OrdersManagementPage() {
                     </div>
                   </div>
 
-                  {/* Bloco Itens */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Escopo da Ordem</h3>
+                      <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Escopo da Produção</h3>
                       <Button type="button" size="sm" onClick={() => append({ desc: '', size: '', quantity: 1, unitValue: 0 })} className="border-primary/50 text-primary hover:bg-primary/10" variant="outline">
-                        + Adicionar Item
+                        + Item
                       </Button>
                     </div>
                     
@@ -304,23 +309,23 @@ export default function OrdersManagementPage() {
                       {fields.map((field, index) => (
                         <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 p-4 bg-white/[0.02] border border-white/5 rounded-2xl relative group">
                           <div className="md:col-span-5 space-y-1">
-                            <Label className="text-[8px] uppercase opacity-50">Descrição do Material</Label>
-                            <Input {...register(`items.${index}.desc`)} placeholder="Ex: Lona 440g c/ Ilhós" className="bg-transparent border-white/5 h-10" />
+                            <Label className="text-[8px] uppercase opacity-50">Material/Serviço</Label>
+                            <Input {...register(`items.${index}.desc`)} placeholder="Lona, Adesivo..." className="bg-transparent border-white/5 h-10" />
                           </div>
                           <div className="md:col-span-3 space-y-1">
-                            <Label className="text-[8px] uppercase opacity-50">Medidas (LxA)</Label>
-                            <Input {...register(`items.${index}.size`)} placeholder="2.00x1.50m" className="bg-transparent border-white/5 h-10" />
+                            <Label className="text-[8px] uppercase opacity-50">Medidas</Label>
+                            <Input {...register(`items.${index}.size`)} placeholder="2.0x1.0m" className="bg-transparent border-white/5 h-10" />
                           </div>
                           <div className="md:col-span-2 space-y-1">
                             <Label className="text-[8px] uppercase opacity-50">Qtd</Label>
-                            <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-10" />
+                            <Input type="number" {...register(`items.${index}.quantity`)} className="bg-transparent border-white/5 h-10" />
                           </div>
                           <div className="md:col-span-2 space-y-1">
                             <Label className="text-[8px] uppercase opacity-50">R$ Unit.</Label>
-                            <Input type="number" step="0.01" {...register(`items.${index}.unitValue`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-10" />
+                            <Input type="number" step="0.01" {...register(`items.${index}.unitValue`)} className="bg-transparent border-white/5 h-10" />
                           </div>
                           {fields.length > 1 && (
-                            <Button type="button" onClick={() => remove(index)} className="absolute -right-2 -top-2 opacity-0 group-hover:opacity-100 transition-opacity bg-destructive text-white h-6 w-6 rounded-full p-0 flex items-center justify-center shadow-lg" variant="ghost">
+                            <Button type="button" onClick={() => remove(index)} className="absolute -right-2 -top-2 bg-destructive text-white h-6 w-6 rounded-full p-0 flex items-center justify-center shadow-lg" variant="ghost">
                               <Trash2 className="w-3 h-3" />
                             </Button>
                           )}
@@ -334,7 +339,7 @@ export default function OrdersManagementPage() {
                   <Card className="bg-white/5 border-none p-5 space-y-6 rounded-2xl">
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Status Inicial</Label>
+                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Status do Protocolo</Label>
                         <Controller
                           name="status"
                           control={control}
@@ -348,6 +353,7 @@ export default function OrdersManagementPage() {
                                 <SelectItem value="Impressão">Impressão</SelectItem>
                                 <SelectItem value="Acabamento">Acabamento</SelectItem>
                                 <SelectItem value="Serralheria">Serralheria</SelectItem>
+                                <SelectItem value="Entregue">Entregue</SelectItem>
                               </SelectContent>
                             </Select>
                           )}
@@ -355,12 +361,12 @@ export default function OrdersManagementPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Data de Entrega</Label>
+                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Previsão de Entrega</Label>
                         <Input type="date" {...register('deliveryDate')} className="bg-black/40 h-12 border-white/10" />
                       </div>
 
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Forma de Pagamento</Label>
+                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Pagamento</Label>
                         <Controller
                           name="paymentMethod"
                           control={control}
@@ -382,9 +388,9 @@ export default function OrdersManagementPage() {
                       </div>
 
                       {isCardPayment && (
-                        <div className="p-4 border border-primary/30 rounded-2xl space-y-4 bg-primary/5 animate-in fade-in zoom-in-95">
+                        <div className="p-4 border border-primary/30 rounded-2xl space-y-4 bg-primary/5">
                           <div className="space-y-2">
-                            <Label className="text-[8px] uppercase opacity-70">Operadora/Maquininha</Label>
+                            <Label className="text-[8px] uppercase opacity-70">Maquininha</Label>
                             <Controller
                               name="machine"
                               control={control}
@@ -427,12 +433,12 @@ export default function OrdersManagementPage() {
 
                     <div className="pt-6 border-t border-white/5 space-y-4">
                       <div className="flex flex-col gap-1 text-right">
-                        <span className="text-[9px] uppercase text-muted-foreground font-black tracking-widest">Total do Protocolo</span>
+                        <span className="text-[9px] uppercase text-muted-foreground font-black tracking-widest">Total Geral</span>
                         <span className="text-3xl font-black text-white tracking-tighter">
                           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}
                         </span>
                       </div>
-                      <Button type="submit" className="w-full h-16 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.4)] hover:shadow-[0_0_35px_rgba(255,95,31,0.6)] active:scale-95 transition-all">
+                      <Button type="submit" className="w-full h-16 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.4)]">
                         Finalizar OS
                       </Button>
                     </div>
@@ -470,7 +476,7 @@ export default function OrdersManagementPage() {
           {ordersLoading && (
             <div className="col-span-full flex flex-col items-center justify-center py-20 gap-4 opacity-50">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <p className="text-[10px] uppercase tracking-widest">Sincronizando Banco Cloud...</p>
+              <p className="text-[10px] uppercase tracking-widest">Acessando Nuvem VisComm...</p>
             </div>
           )}
           {!ordersLoading && orders.length === 0 && <div className="col-span-full"><EmptyState /></div>}

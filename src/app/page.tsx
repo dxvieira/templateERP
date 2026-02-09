@@ -16,24 +16,33 @@ import { useUser } from '@/firebase';
 export default function DashboardPage() {
   const router = useRouter();
   const { user, isUserLoading } = useUser();
-  
-  // Consome o fluxo centralizado
   const { orders, isLoading } = useOrders();
 
-  // Redireciona para login se não estiver autenticado
+  // Proteção de rota
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.replace('/login');
     }
   }, [user, isUserLoading, router]);
 
-  // KPIs calculados dinamicamente
-  const stats = useMemo(() => ({
-    arte: orders.filter(o => o.status === 'Arte').length,
-    impressao: orders.filter(o => o.status === 'Impressão').length,
-    acabamento: orders.filter(o => o.status === 'Acabamento').length,
-    concluido: orders.filter(o => o.status === 'Entregue').length,
-  }), [orders]);
+  // KPIs dinâmicos baseados nas ordens em tempo real
+  const stats = useMemo(() => {
+    const counts = {
+      arte: 0,
+      impressao: 0,
+      acabamento: 0,
+      concluido: 0
+    };
+
+    orders.forEach(order => {
+      if (order.status === 'Arte') counts.arte++;
+      else if (order.status === 'Impressão') counts.impressao++;
+      else if (order.status === 'Acabamento' || order.status === 'Serralheria') counts.acabamento++;
+      else if (order.status === 'Entregue') counts.concluido++;
+    });
+
+    return counts;
+  }, [orders]);
 
   if (isUserLoading || isLoading) {
     return (
@@ -55,12 +64,12 @@ export default function DashboardPage() {
               <Zap className="w-5 h-5 text-primary animate-pulse" />
               <h2 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase">Central de Comando</h2>
             </div>
-            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em]">Monitoramento Realtime Ativo</p>
+            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em]">Monitoramento Realtime</p>
           </div>
           
           <Button 
             onClick={() => router.push('/orders')}
-            className="bg-primary text-black font-black uppercase tracking-widest px-8 h-14 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.6)] transition-all active:scale-95"
+            className="bg-primary text-black font-black uppercase tracking-widest px-8 h-14 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.6)]"
           >
             <Plus className="w-5 h-5 mr-2" /> Nova OS
           </Button>
@@ -93,7 +102,7 @@ export default function DashboardPage() {
                   <OrderCard order={{
                     id: order.id,
                     client: order.client,
-                    description: order.items[0]?.desc || 'Sem descrição',
+                    description: order.items?.[0]?.desc || 'Sem descrição',
                     status: order.status,
                     deliveryDate: order.deliveryDate,
                     value: order.totalValue
@@ -102,7 +111,7 @@ export default function DashboardPage() {
               ))}
             </AnimatePresence>
           </div>
-          {orders.length === 0 && <EmptyState />}
+          {!isLoading && orders.length === 0 && <EmptyState />}
         </div>
       </main>
     </div>

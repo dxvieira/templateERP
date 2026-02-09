@@ -5,20 +5,21 @@ import { query, collection, orderBy, Query, DocumentData } from 'firebase/firest
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 
 /**
- * Hook unificado para gestão de fluxo de dados de Ordens de Serviço.
- * Garante sincronização em tempo real entre Dashboard e Monitor de Ordens.
+ * Hook central de dados para Ordens de Serviço.
+ * Fornece a lista de ordens em tempo real para qualquer componente.
  */
 export function useOrders() {
   const { firestore } = useFirestore();
-  const { user, isUserLoading } = useUser();
+  const { user } = useUser();
 
+  // Memoiza a query para evitar loops de renderização e garantir performance
   const ordersQuery = useMemoFirebase(() => {
-    if (!firestore || !user || isUserLoading) return null;
+    if (!firestore || !user) return null;
     return query(
       collection(firestore, 'orders'), 
       orderBy('createdAt', 'desc')
     ) as Query<DocumentData>;
-  }, [firestore, user, isUserLoading]);
+  }, [firestore, user]);
 
   const { data: orders, isLoading, error } = useCollection<any>(ordersQuery);
 
