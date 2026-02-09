@@ -7,12 +7,13 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string",
-          "description": "Unique identifier for the order (Doc ID)."
+          "type": "string"
         },
         "client": {
-          "type": "string",
-          "description": "Client name."
+          "type": "string"
+        },
+        "clientId": {
+          "type": "string"
         },
         "emissionDate": {
           "type": "string",
@@ -71,12 +72,6 @@
         "totalValue": {
           "type": "number"
         },
-        "isPriority": {
-          "type": "boolean"
-        },
-        "isDelayed": {
-          "type": "boolean"
-        },
         "createdAt": {
           "type": "string",
           "format": "date-time"
@@ -108,49 +103,12 @@
         "email": {
           "type": "string"
         },
-        "address": {
-          "type": "object",
-          "properties": {
-            "zip": { "type": "string" },
-            "street": { "type": "string" },
-            "neighborhood": { "type": "string" },
-            "city": { "type": "string" },
-            "state": { "type": "string" },
-            "number": { "type": "string" },
-            "complement": { "type": "string" }
-          }
-        },
         "createdAt": {
           "type": "string",
           "format": "date-time"
         }
       },
-      "required": ["id"]
-    },
-    "Kpi": {
-      "title": "Kpi",
-      "description": "Performance indicators.",
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "arte": {
-          "type": "number"
-        },
-        "impressao": {
-          "type": "number"
-        },
-        "acabamento": {
-          "type": "number"
-        },
-        "concluido": {
-          "type": "number"
-        }
-      },
-      "required": [
-        "id"
-      ]
+      "required": ["id", "name"]
     }
   },
   "auth": {
@@ -172,12 +130,6 @@
         "$ref": "#/backend/entities/Client"
       },
       "description": "Stores customer contact information."
-    },
-    "/kpis/{kpiId}": {
-      "schema": {
-        "$ref": "#/backend/entities/Kpi"
-      },
-      "description": "Stores performance metrics."
     }
   }
 }

@@ -1,18 +1,26 @@
+
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { useForm, useFieldArray, useWatch } from 'react-hook-form';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useForm, useFieldArray, useWatch, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { collection, doc, serverTimestamp } from 'firebase/firestore';
-import { useFirestore, useUser, setDocumentNonBlocking } from '@/firebase';
-import { useOrders } from '@/hooks/use-orders';
+import { collection, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { useFirestore, useUser, useCollection, useMemoFirebase, setDocumentNonBlocking } from '@/firebase';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { EmptyState } from '@/components/dashboard/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
 import { 
   Dialog, 
   DialogContent, 
@@ -20,161 +28,299 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from '@/components/ui/dialog';
-import { Plus, Trash2, Loader2, FileText, Save } from 'lucide-react';
+import { Plus, Trash2, Loader2, FileText, Save, Calculator, CreditCard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
-// Minimalist schema: only client is strictly required.
-const schema = z.object({
+// Schema robusto com coerção numérica e campos condicionais
+const orderSchema = z.object({
   client: z.string().min(1, 'Nome do cliente é obrigatório'),
-  deliveryDate: z.string().optional().default(''),
-  seller: z.string().optional().default('Carlos'),
-  status: z.string().optional().default('Arte'),
-  paymentMethod: z.string().optional().default('Pix'),
-  observations: z.string().optional().default(''),
+  clientId: z.string().optional(),
+  deliveryDate: z.string().optional(),
+  emissionDate: z.string().default(() => new Date().toISOString().split('T')[0]),
+  seller: z.string().optional().default('Vendedor Geral'),
+  status: z.enum(['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Entregue']).default('Arte'),
+  paymentMethod: z.string().default('Pix'),
+  machine: z.string().optional(),
+  installments: z.string().optional(),
+  observations: z.string().optional(),
   items: z.array(z.object({
-    desc: z.string().optional().default(''),
-    size: z.string().optional().default(''),
-    quantity: z.coerce.number().default(1),
-    unitValue: z.coerce.number().default(0),
-  })).default([{ desc: '', size: '', quantity: 1, unitValue: 0 }]),
+    desc: z.string().min(1, 'Descrição obrigatória'),
+    size: z.string().optional(),
+    quantity: z.coerce.number().min(1, 'Qtd mínima 1'),
+    unitValue: z.coerce.number().min(0, 'Valor não pode ser negativo'),
+  })).min(1, 'Adicione pelo menos um item'),
 });
 
-type FormValues = z.infer<typeof schema>;
+type OrderFormValues = z.infer<typeof orderSchema>;
 
-export default function OrdersPage() {
+export default function OrdersManagerPage() {
   const [open, setOpen] = useState(false);
   const { firestore } = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
-  const { orders, isLoading } = useOrders();
 
-  const { register, control, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+  // Queries em Tempo Real
+  const clientsQuery = useMemoFirebase(() => 
+    firestore ? query(collection(firestore, 'clients'), orderBy('name', 'asc')) : null
+  , [firestore]);
+  const ordersQuery = useMemoFirebase(() => 
+    firestore ? query(collection(firestore, 'orders'), orderBy('createdAt', 'desc')) : null
+  , [firestore]);
+
+  const { data: clients } = useCollection(clientsQuery);
+  const { data: orders, isLoading: isOrdersLoading } = useCollection(ordersQuery);
+
+  const { register, control, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<OrderFormValues>({
+    resolver: zodResolver(orderSchema),
     defaultValues: {
       client: '',
-      deliveryDate: '',
       status: 'Arte',
-      seller: 'Carlos',
       paymentMethod: 'Pix',
       items: [{ desc: '', size: '', quantity: 1, unitValue: 0 }]
     }
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
+  
+  // Watchers para lógica em tempo real
   const watchedItems = useWatch({ control, name: 'items' });
+  const watchedPayment = watch('paymentMethod');
 
-  const total = useMemo(() => {
-    return watchedItems?.reduce((acc, item) => acc + (Number(item.quantity || 0) * Number(item.unitValue || 0)), 0) || 0;
+  // Cálculo de Total Automático (Auditado para decimais)
+  const totalValue = useMemo(() => {
+    return watchedItems?.reduce((acc, item) => {
+      const q = Number(item.quantity) || 0;
+      const v = Number(item.unitValue) || 0;
+      return acc + (q * v);
+    }, 0) || 0;
   }, [watchedItems]);
 
-  const onSubmit = async (data: FormValues) => {
-    if (!firestore || !user) {
-      toast({ variant: "destructive", title: "Acesso negado", description: "Você precisa estar logado." });
-      return;
+  // Reset de campos de cartão se mudar forma de pagamento
+  useEffect(() => {
+    if (watchedPayment !== 'Cartão de Crédito' && watchedPayment !== 'Cartão de Débito') {
+      setValue('machine', undefined);
+      setValue('installments', undefined);
     }
+  }, [watchedPayment, setValue]);
 
-    try {
-      // Create a document reference first to get the ID
-      const orderRef = doc(collection(firestore, 'orders'));
-      
-      const payload = {
-        ...data,
-        id: orderRef.id, // CRITICAL: Field 'id' must match doc ID for security rules
-        totalValue: total,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        isPriority: false,
-        isDelayed: false
-      };
+  const onSubmit = async (data: OrderFormValues) => {
+    if (!firestore || !user) return;
 
-      // Non-blocking write for instant UI feedback
-      setDocumentNonBlocking(orderRef, payload, { merge: true });
+    const orderRef = doc(collection(firestore, 'orders'));
+    const payload = {
+      ...data,
+      id: orderRef.id,
+      totalValue,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
 
-      toast({ title: "Sucesso!", description: "Ordem de serviço registrada." });
-      setOpen(false);
-      reset();
-    } catch (err) {
-      console.error("Erro ao salvar:", err);
-      toast({ variant: "destructive", title: "Erro no Servidor", description: "Não foi possível salvar a OS." });
-    }
+    setDocumentNonBlocking(orderRef, payload, { merge: true });
+    
+    toast({ title: "OS Protocolada", description: `Protocolo #${orderRef.id.slice(-4)} gerado com sucesso.` });
+    setOpen(false);
+    reset();
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex flex-col md:flex-row">
+    <div className="min-h-screen bg-[#0A0A0A] flex flex-col md:flex-row overflow-x-hidden">
       <DashboardSidebar />
+      
       <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-8 mt-16 md:mt-0">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <h2 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-2">
-            <FileText className="text-primary" /> Histórico de Protocolos
-          </h2>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-1">
+            <h2 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+              <FileText className="text-primary w-8 h-8" /> Gestão de Protocolos
+            </h2>
+            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em] font-medium">Fluxo de Dados em Tempo Real</p>
+          </div>
 
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-primary text-black font-black uppercase tracking-widest px-6 h-12 rounded-xl active:scale-95 transition-all">
-                <Plus className="w-5 h-5 mr-2" /> Lançar Nova OS
+              <Button className="bg-primary text-black font-black uppercase tracking-widest px-8 h-14 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.6)] active:scale-95 transition-all gap-2">
+                <Plus className="w-5 h-5" /> Nova Ordem de Serviço
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl bg-zinc-950 border-white/10 text-white rounded-3xl overflow-hidden p-0 shadow-2xl">
-              <DialogHeader className="p-6 border-b border-white/5 bg-white/[0.02]">
-                <DialogTitle className="text-xl font-black text-primary uppercase tracking-tighter">Entrada de Produção</DialogTitle>
+            <DialogContent className="max-w-4xl bg-zinc-950 border-white/10 text-white rounded-3xl overflow-hidden p-0 shadow-2xl border-t-4 border-primary">
+              <DialogHeader className="p-6 bg-white/[0.02] border-b border-white/5">
+                <DialogTitle className="text-2xl font-black text-primary uppercase tracking-tighter">Entrada de Produção</DialogTitle>
               </DialogHeader>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-8 max-h-[70vh] overflow-y-auto no-scrollbar">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Cliente (Obrigatório)*</Label>
-                    <Input {...register('client')} className={cn("bg-black/40 border-white/10 h-12 rounded-xl focus:border-primary/50 transition-colors", errors.client && "border-destructive")} placeholder="Nome do Cliente" />
+              <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-8 max-h-[75vh] overflow-y-auto no-scrollbar">
+                {/* Seção Cliente e Datas */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="md:col-span-2 space-y-2">
+                    <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Cliente (Busca Híbrida)*</Label>
+                    <div className="relative">
+                      <Input 
+                        {...register('client')} 
+                        list="client-suggestions"
+                        className={cn("bg-black/40 border-white/10 h-12 rounded-xl focus:border-primary", errors.client && "border-destructive")} 
+                        placeholder="Digite o nome ou selecione da lista"
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const match = clients?.find(c => c.name === val);
+                          if (match) setValue('clientId', match.id);
+                          else setValue('clientId', '');
+                        }}
+                      />
+                      <datalist id="client-suggestions">
+                        {clients?.map(c => <option key={c.id} value={c.name} />)}
+                      </datalist>
+                    </div>
                     {errors.client && <p className="text-[10px] text-destructive uppercase font-bold">{errors.client.message}</p>}
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Data de Entrega</Label>
-                    <Input type="date" {...register('deliveryDate')} className="bg-black/40 border-white/10 h-12 rounded-xl focus:border-primary/50 transition-colors" />
+                    <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Entrega</Label>
+                    <Input type="date" {...register('deliveryDate')} className="bg-black/40 border-white/10 h-12 rounded-xl" />
                   </div>
                 </div>
 
+                {/* Seção Vendedor e Status */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Vendedor Responsável</Label>
+                    <Input {...register('seller')} className="bg-black/40 border-white/10 h-12 rounded-xl" placeholder="Nome do Vendedor" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Status de Partida</Label>
+                    <Controller
+                      name="status"
+                      control={control}
+                      render={({ field }) => (
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <SelectTrigger className="bg-black/40 border-white/10 h-12 rounded-xl">
+                            <SelectValue placeholder="Selecione o Status" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                            {['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Entregue'].map(s => (
+                              <SelectItem key={s} value={s}>{s}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* Seção Itens e Escopo */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Escopo do Projeto</h3>
+                    <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] flex items-center gap-2">
+                      <Calculator className="w-3 h-3" /> Escopo do Projeto
+                    </h3>
                     <Button type="button" onClick={() => append({ desc: '', size: '', quantity: 1, unitValue: 0 })} size="sm" variant="outline" className="border-primary/50 text-primary hover:bg-primary hover:text-black rounded-lg text-[9px] uppercase font-black">
-                      + Item de Linha
+                      + Novo Item
                     </Button>
                   </div>
                   
                   {fields.map((field, index) => (
-                    <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 p-4 bg-white/[0.02] rounded-2xl relative border border-white/5">
+                    <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 p-4 bg-white/[0.02] rounded-2xl relative border border-white/5 group">
                       <div className="md:col-span-5">
-                        <Label className="text-[8px] uppercase text-muted-foreground mb-1 block">Descrição</Label>
-                        <Input {...register(`items.${index}.desc`)} placeholder="Ex: Banner Lona" className="bg-transparent border-white/10" />
+                        <Label className="text-[8px] uppercase text-muted-foreground mb-1 block">Descrição do Serviço</Label>
+                        <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/10 h-10" placeholder="Ex: Banner em Lona" />
                       </div>
                       <div className="md:col-span-3">
-                        <Label className="text-[8px] uppercase text-muted-foreground mb-1 block">Medida</Label>
-                        <Input {...register(`items.${index}.size`)} placeholder="Ex: 2x1m" className="bg-transparent border-white/10" />
+                        <Label className="text-[8px] uppercase text-muted-foreground mb-1 block">Medidas</Label>
+                        <Input {...register(`items.${index}.size`)} className="bg-transparent border-white/10 h-10" placeholder="Ex: 2x1m" />
                       </div>
                       <div className="md:col-span-2">
                         <Label className="text-[8px] uppercase text-muted-foreground mb-1 block">Qtd</Label>
-                        <Input type="number" {...register(`items.${index}.quantity`)} className="bg-transparent border-white/10" />
+                        <Input type="number" {...register(`items.${index}.quantity`)} className="bg-transparent border-white/10 h-10" />
                       </div>
                       <div className="md:col-span-2">
-                        <Label className="text-[8px] uppercase text-muted-foreground mb-1 block">Valor</Label>
-                        <Input type="number" step="0.01" {...register(`items.${index}.unitValue`)} className="bg-transparent border-white/10" />
+                        <Label className="text-[8px] uppercase text-muted-foreground mb-1 block">Unitário (R$)</Label>
+                        <Input type="number" step="0.01" {...register(`items.${index}.unitValue`)} className="bg-transparent border-white/10 h-10" />
                       </div>
-                      {fields.length > 1 && (
-                        <button type="button" onClick={() => remove(index)} className="absolute -right-2 -top-2 bg-destructive text-white p-1 rounded-full hover:scale-110 transition-transform"><Trash2 className="w-3.5 h-3.5" /></button>
-                      )}
+                      <button type="button" onClick={() => remove(index)} className="absolute -right-2 -top-2 bg-destructive text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   ))}
                 </div>
 
-                <div className="flex flex-col md:flex-row items-end justify-between gap-6 pt-6 border-t border-white/5">
-                  <div className="text-left w-full md:w-auto">
+                {/* Seção Pagamento Condicional */}
+                <div className="pt-6 border-t border-white/5 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Forma de Pagamento</Label>
+                      <Controller
+                        name="paymentMethod"
+                        control={control}
+                        render={({ field }) => (
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <SelectTrigger className="bg-black/40 border-white/10 h-12 rounded-xl">
+                              <SelectValue placeholder="Selecione o Pagamento" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                              {['Dinheiro', 'Pix', 'Cartão de Crédito', 'Cartão de Débito', 'Boleto'].map(p => (
+                                <SelectItem key={p} value={p}>{p}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
+                    
+                    {(watchedPayment?.includes('Cartão')) && (
+                      <div className="grid grid-cols-2 gap-3 p-4 bg-primary/5 border border-primary/20 rounded-2xl animate-in fade-in slide-in-from-top-2">
+                        <div className="space-y-2">
+                          <Label className="text-[8px] uppercase text-primary font-black">Maquininha</Label>
+                          <Controller
+                            name="machine"
+                            control={control}
+                            render={({ field }) => (
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <SelectTrigger className="bg-black/40 border-white/10 h-10 text-[10px]">
+                                  <SelectValue placeholder="Selecione" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                  {['SICOOB/SIPAG', 'PagBank', 'Stone', 'Mercado Pago'].map(m => (
+                                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[8px] uppercase text-primary font-black">Parcelas</Label>
+                          <Controller
+                            name="installments"
+                            control={control}
+                            render={({ field }) => (
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <SelectTrigger className="bg-black/40 border-white/10 h-10 text-[10px]">
+                                  <SelectValue placeholder="1x" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                  {Array.from({length: 12}, (_, i) => `${i+1}x`).map(p => (
+                                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Observações Técnicas</Label>
+                  <Textarea {...register('observations')} className="bg-black/40 border-white/10 rounded-2xl min-h-[100px]" placeholder="Instruções extras de acabamento ou instalação..." />
+                </div>
+
+                {/* Rodapé do Form com Totalizador */}
+                <div className="flex flex-col md:flex-row items-center justify-between gap-6 pt-6 border-t border-white/5">
+                  <div className="text-center md:text-left">
                     <p className="text-[10px] uppercase text-muted-foreground font-black tracking-widest mb-1">Total da OS</p>
                     <p className="text-4xl font-black text-white tracking-tighter">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}
                     </p>
                   </div>
                   <Button type="submit" className="w-full md:w-64 h-16 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.4)] hover:shadow-[0_0_30px_rgba(255,95,31,0.6)]">
-                    <Save className="w-5 h-5 mr-2" /> Finalizar OS
+                    <Save className="w-5 h-5 mr-2" /> Finalizar Protocolo
                   </Button>
                 </div>
               </form>
@@ -182,26 +328,37 @@ export default function OrdersPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {isLoading ? (
-            <div className="col-span-full flex flex-col items-center py-20 opacity-20"><Loader2 className="w-10 h-10 animate-spin" /></div>
-          ) : orders.length > 0 ? (
-            orders.map(order => (
-              <OrderCard 
-                key={order.id} 
-                order={{
-                  id: order.id,
-                  client: order.client,
-                  description: order.items?.[0]?.desc || 'Sem descrição',
-                  status: order.status,
-                  deliveryDate: order.deliveryDate || 'Sem data',
-                  value: order.totalValue || 0
-                }} 
-              />
-            ))
-          ) : (
-            <div className="col-span-full"><EmptyState /></div>
-          )}
+        {/* Histórico em Tempo Real com Color-Coding */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between border-b border-white/5 pb-4">
+            <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.5em] flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-primary/40 animate-pulse"></span>
+              Histórico de Produção Cloud
+            </h3>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {isOrdersLoading ? (
+              <div className="col-span-full flex flex-col items-center py-20 opacity-20"><Loader2 className="w-10 h-10 animate-spin" /></div>
+            ) : orders && orders.length > 0 ? (
+              orders.map(order => (
+                <OrderCard 
+                  key={order.id} 
+                  order={{
+                    id: order.id,
+                    client: order.client,
+                    description: order.items?.[0]?.desc || 'Sem descrição',
+                    status: order.status,
+                    deliveryDate: order.deliveryDate || 'Sem data',
+                    value: order.totalValue || 0,
+                    isDelayed: false
+                  }} 
+                />
+              ))
+            ) : (
+              <div className="col-span-full"><EmptyState /></div>
+            )}
+          </div>
         </div>
       </main>
     </div>
