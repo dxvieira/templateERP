@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
 import { 
   Dialog, 
   DialogContent, 
@@ -35,7 +36,8 @@ import {
   FileDown, 
   Loader2,
   FileText,
-  Save
+  Save,
+  CreditCard
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -46,18 +48,21 @@ import { useToast } from '@/hooks/use-toast';
 // Schemas
 const orderItemSchema = z.object({
   desc: z.string().min(1, 'Descrição é obrigatória'),
+  size: z.string().default(''),
   quantity: z.number().min(1, 'Mínimo 1'),
   unitValue: z.number().min(0, 'Valor inválido'),
 });
 
 const orderSchema = z.object({
-  client: z.string().min(3, 'Cliente é obrigatório'),
+  client: z.string().min(1, 'Cliente é obrigatório'),
   emissionDate: z.string(),
   deliveryDate: z.string().min(1, 'Data de entrega é obrigatória'),
   seller: z.string().min(1, 'Selecione um vendedor'),
   observations: z.string().optional(),
   status: z.enum(['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Entregue']),
-  paymentMethod: z.enum(['Dinheiro', 'Pix', 'Cartão', 'Boleto']),
+  paymentMethod: z.enum(['Dinheiro', 'Pix', 'Cartão Crédito', 'Cartão Débito', 'Boleto']),
+  machine: z.string().optional(),
+  installments: z.string().optional(),
   items: z.array(orderItemSchema).min(1, 'Adicione pelo menos um item'),
 });
 
@@ -66,7 +71,7 @@ type OrderFormValues = z.infer<typeof orderSchema>;
 export default function OrdersManagementPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
-  const firestore = useFirestore();
+  const { firestore } = useFirestore();
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
 
@@ -76,7 +81,13 @@ export default function OrdersManagementPage() {
     return query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
   }, [firestore, user, isUserLoading]);
 
+  const clientsQuery = useMemoFirebase(() => {
+    if (!firestore || !user || isUserLoading) return null;
+    return query(collection(firestore, 'clients'), orderBy('name', 'asc'));
+  }, [firestore, user, isUserLoading]);
+
   const { data: orders, isLoading: ordersLoading } = useCollection(ordersQuery);
+  const { data: clientsList } = useCollection(clientsQuery);
 
   const { 
     register, 
@@ -92,7 +103,8 @@ export default function OrdersManagementPage() {
       emissionDate: new Date().toISOString().split('T')[0],
       status: 'Arte',
       paymentMethod: 'Pix',
-      items: [{ desc: '', quantity: 1, unitValue: 0 }],
+      items: [{ desc: '', size: '', quantity: 1, unitValue: 0 }],
+      seller: 'Carlos'
     },
   });
 
@@ -102,10 +114,14 @@ export default function OrdersManagementPage() {
   });
 
   const watchedItems = watch('items');
+  const watchedPaymentMethod = watch('paymentMethod');
+  
   const total = useMemo(() => 
     watchedItems?.reduce((acc, item) => 
       acc + ((item.quantity || 0) * (item.unitValue || 0)), 0) || 0,
   [watchedItems]);
+
+  const isCardPayment = watchedPaymentMethod === 'Cartão Crédito' || watchedPaymentMethod === 'Cartão Débito';
 
   useEffect(() => {
     if (editingOrder) {
@@ -117,8 +133,11 @@ export default function OrdersManagementPage() {
         observations: editingOrder.observations || '',
         status: editingOrder.status,
         paymentMethod: editingOrder.paymentMethod || 'Pix',
+        machine: editingOrder.machine || '',
+        installments: editingOrder.installments || '1x',
         items: editingOrder.items.map((item: any) => ({
           desc: item.desc,
+          size: item.size || '',
           quantity: item.quantity,
           unitValue: item.unitValue
         }))
@@ -145,14 +164,16 @@ export default function OrdersManagementPage() {
     doc.line(15, 52, 60, 52);
     doc.text(`Cliente: ${data.client}`, 15, 60);
     doc.text(`Vendedor: ${data.seller}`, 15, 65);
+    doc.text(`Pagamento: ${data.paymentMethod} ${data.machine ? `(${data.machine})` : ''}`, 15, 70);
     doc.text(`Emissão: ${data.emissionDate}`, 120, 60);
     doc.text(`Entrega: ${data.deliveryDate}`, 120, 65);
     
     autoTable(doc, {
-      startY: 75,
-      head: [['DESCRIÇÃO', 'QTD', 'VALOR UNIT.', 'SUBTOTAL']],
+      startY: 80,
+      head: [['DESCRIÇÃO', 'MEDIDA', 'QTD', 'UNIT.', 'SUB']],
       body: data.items.map(item => [
         item.desc,
+        item.size,
         item.quantity,
         new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitValue),
         new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.quantity * item.unitValue),
@@ -164,6 +185,11 @@ export default function OrdersManagementPage() {
     const finalY = (doc as any).lastAutoTable.finalY + 10;
     doc.setFont('helvetica', 'bold');
     doc.text(`TOTAL GERAL: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(orderTotal)}`, 130, finalY);
+    if (data.observations) {
+      doc.setFont('helvetica', 'normal');
+      doc.text('OBSERVAÇÕES:', 15, finalY + 15);
+      doc.text(data.observations, 15, finalY + 22, { maxWidth: 180 });
+    }
     doc.save(`OS_${data.client.replace(/\s+/g, '_')}_${docId.slice(-4)}.pdf`);
   };
 
@@ -209,7 +235,6 @@ export default function OrdersManagementPage() {
         }));
       });
 
-      // Feedback imediato e geração de PDF assíncrona
       setTimeout(() => generatePDF(data, orderRef.id, currentTotal), 100);
       toast({
         title: "Protocolo Lançado",
@@ -221,14 +246,6 @@ export default function OrdersManagementPage() {
     setEditingOrder(null);
     reset();
   };
-
-  if (isUserLoading) {
-    return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-primary animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col md:flex-row overflow-x-hidden">
@@ -264,35 +281,42 @@ export default function OrdersManagementPage() {
                 Nova Ordem de Serviço
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-zinc-950 border-white/10 text-white p-0 rounded-3xl">
+            <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto bg-zinc-950 border-white/10 text-white p-0 rounded-3xl">
               <DialogHeader className="p-6 border-b border-white/5 bg-white/[0.02]">
                 <DialogTitle className="text-xl font-black uppercase tracking-tighter text-primary flex items-center gap-2">
                   {editingOrder ? <Save className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
                   {editingOrder ? `Editar OS #${editingOrder.id.slice(-4).toUpperCase()}` : 'Lançar Protocolo'}
                 </DialogTitle>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
-                  Preencha os dados para gravação permanente no banco
+                  Terminal de Emissão Digital VisComm
                 </p>
               </DialogHeader>
 
               <form onSubmit={handleSubmit(onSubmit)} className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-8 space-y-6">
+                  {/* Busca de Cliente */}
                   <Card className="bg-white/5 border-none shadow-none">
                     <CardHeader className="py-4">
-                      <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Identificação</CardTitle>
+                      <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Cliente & Venda</CardTitle>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Cliente</Label>
+                      <div className="space-y-2 relative">
+                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Cliente (Busca ou Texto Livre)</Label>
                         <Input 
                           {...register('client')}
-                          placeholder="Nome ou Empresa..."
+                          list="clients-suggestions"
+                          placeholder="Digite ou selecione..."
                           className="bg-black/40 border-white/10 h-12"
                         />
+                        <datalist id="clients-suggestions">
+                          {clientsList?.map(c => (
+                            <option key={c.id} value={c.name} />
+                          ))}
+                        </datalist>
                         {errors.client && <p className="text-[10px] text-destructive">{errors.client.message}</p>}
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Vendedor</Label>
+                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Vendedor Responsável</Label>
                         <Select onValueChange={(v) => setValue('seller', v)} defaultValue={editingOrder?.seller || "Carlos"}>
                           <SelectTrigger className="bg-black/40 border-white/10 h-12">
                             <SelectValue placeholder="Selecione..." />
@@ -301,46 +325,74 @@ export default function OrdersManagementPage() {
                             <SelectItem value="Carlos">Carlos Eduardo</SelectItem>
                             <SelectItem value="Mariana">Mariana Silva</SelectItem>
                             <SelectItem value="Roberto">Roberto Costa</SelectItem>
+                            <SelectItem value="Avulso">Venda Avulsa</SelectItem>
                           </SelectContent>
                         </Select>
-                        {errors.seller && <p className="text-[10px] text-destructive">{errors.seller.message}</p>}
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] uppercase text-muted-foreground">Emissão</Label>
+                        <Input type="date" {...register('emissionDate')} className="bg-black/40 border-white/10 h-12" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] uppercase text-muted-foreground">Entrega Prevista</Label>
+                        <Input type="date" {...register('deliveryDate')} className="bg-black/40 border-white/10 h-12" />
                       </div>
                     </CardContent>
                   </Card>
 
+                  {/* Itens da OS */}
                   <Card className="bg-white/5 border-none shadow-none">
                     <CardHeader className="flex flex-row items-center justify-between py-4">
-                      <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Itens da OS</CardTitle>
+                      <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Escopo do Projeto</CardTitle>
                       <Button 
                         type="button" 
                         variant="outline" 
                         size="sm" 
-                        onClick={() => append({ desc: '', quantity: 1, unitValue: 0 })}
+                        onClick={() => append({ desc: '', size: '', quantity: 1, unitValue: 0 })}
                         className="border-primary/50 text-primary rounded-xl"
                       >
-                        <Plus className="w-4 h-4 mr-2" /> Adicionar
+                        <Plus className="w-4 h-4 mr-2" /> Novo Item
                       </Button>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {fields.map((field, index) => (
                         <div key={field.id} className="flex flex-col gap-4 p-4 rounded-xl bg-black/40 border border-white/5 relative">
-                          <Input 
-                            {...register(`items.${index}.desc`)}
-                            placeholder="Descrição do Item"
-                            className="bg-black/20 border-white/10 h-12"
-                          />
-                          <div className="grid grid-cols-2 gap-4">
-                            <Input 
-                              type="number"
-                              {...register(`items.${index}.quantity`, { valueAsNumber: true })}
-                              className="bg-black/20 border-white/10 h-12"
-                            />
-                            <Input 
-                              type="number"
-                              step="0.01"
-                              {...register(`items.${index}.unitValue`, { valueAsNumber: true })}
-                              className="bg-black/20 border-white/10 h-12"
-                            />
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <div className="md:col-span-2 space-y-1">
+                              <Label className="text-[8px] uppercase text-muted-foreground">Material / Serviço</Label>
+                              <Input 
+                                {...register(`items.${index}.desc`)}
+                                placeholder="Ex: Banner Frontlight"
+                                className="bg-black/20 border-white/10 h-12"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[8px] uppercase text-muted-foreground">Medidas</Label>
+                              <Input 
+                                {...register(`items.${index}.size`)}
+                                placeholder="Ex: 2x1m"
+                                className="bg-black/20 border-white/10 h-12"
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <Label className="text-[8px] uppercase text-muted-foreground">Qtd</Label>
+                                <Input 
+                                  type="number"
+                                  {...register(`items.${index}.quantity`, { valueAsNumber: true })}
+                                  className="bg-black/20 border-white/10 h-12 px-2"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-[8px] uppercase text-muted-foreground">Unitário</Label>
+                                <Input 
+                                  type="number"
+                                  step="0.01"
+                                  {...register(`items.${index}.unitValue`, { valueAsNumber: true })}
+                                  className="bg-black/20 border-white/10 h-12 px-2"
+                                />
+                              </div>
+                            </div>
                           </div>
                           {fields.length > 1 && (
                             <Button 
@@ -348,9 +400,9 @@ export default function OrdersManagementPage() {
                               variant="ghost" 
                               size="icon" 
                               onClick={() => remove(index)}
-                              className="text-destructive absolute top-2 right-2"
+                              className="text-destructive absolute -top-2 -right-2 bg-black border border-white/10 rounded-full w-8 h-8"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3 h-3" />
                             </Button>
                           )}
                         </div>
@@ -360,17 +412,75 @@ export default function OrdersManagementPage() {
                 </div>
 
                 <div className="lg:col-span-4 space-y-6">
+                  {/* Pagamento & Status */}
                   <Card className="bg-white/5 border-none shadow-none">
                     <CardHeader className="py-4">
-                      <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Fechamento</CardTitle>
+                      <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Fechamento Financeiro</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6">
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase text-muted-foreground">Entrega Prevista</Label>
-                        <Input type="date" {...register('deliveryDate')} className="bg-black/40 border-white/10 h-12" />
+                        <Label className="text-[10px] uppercase text-muted-foreground">Forma de Pagamento</Label>
+                        <Select 
+                          onValueChange={(v) => setValue('paymentMethod', v as any)} 
+                          defaultValue={editingOrder?.paymentMethod || "Pix"}
+                        >
+                          <SelectTrigger className="bg-black/40 border-white/10 h-12">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                            <SelectItem value="Dinheiro">Dinheiro (Espécie)</SelectItem>
+                            <SelectItem value="Pix">Pix / Transferência</SelectItem>
+                            <SelectItem value="Cartão Crédito">Cartão de Crédito</SelectItem>
+                            <SelectItem value="Cartão Débito">Cartão de Débito</SelectItem>
+                            <SelectItem value="Boleto">Boleto Bancário</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
+
+                      {/* Sub-seção Condicional para Cartão */}
+                      {isCardPayment && (
+                        <motion.div 
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-4"
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <CreditCard className="w-3 h-3 text-primary" />
+                            <span className="text-[9px] font-black uppercase text-primary">Detalhes do Terminal</span>
+                          </div>
+                          <div className="space-y-3">
+                            <div className="space-y-1">
+                              <Label className="text-[8px] uppercase text-muted-foreground">Maquininha</Label>
+                              <Select onValueChange={(v) => setValue('machine', v)} defaultValue={editingOrder?.machine || "PagBank"}>
+                                <SelectTrigger className="bg-black/20 border-white/5 h-10">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                  <SelectItem value="PagBank">PagBank (Moderninha)</SelectItem>
+                                  <SelectItem value="SIPAG">SIPAG / SICOOB</SelectItem>
+                                  <SelectItem value="Stone">Stone / Ton</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[8px] uppercase text-muted-foreground">Parcelamento</Label>
+                              <Select onValueChange={(v) => setValue('installments', v)} defaultValue={editingOrder?.installments || "1x"}>
+                                <SelectTrigger className="bg-black/20 border-white/5 h-10">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                  {Array.from({ length: 10 }, (_, i) => (
+                                    <SelectItem key={i + 1} value={`${i + 1}x`}>{i + 1}x sem juros</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase text-muted-foreground">Status</Label>
+                        <Label className="text-[10px] uppercase text-muted-foreground">Status Atual</Label>
                         <Select onValueChange={(v) => setValue('status', v as any)} defaultValue={editingOrder?.status || "Arte"}>
                           <SelectTrigger className="bg-black/40 border-white/10 h-12">
                             <SelectValue />
@@ -386,9 +496,18 @@ export default function OrdersManagementPage() {
                         </Select>
                       </div>
 
+                      <div className="space-y-2">
+                        <Label className="text-[10px] uppercase text-muted-foreground">Observações Técnicas</Label>
+                        <Textarea 
+                          {...register('observations')}
+                          placeholder="Detalhes de acabamento, ilhós, sangria..."
+                          className="bg-black/40 border-white/10 min-h-[100px]"
+                        />
+                      </div>
+
                       <div className="pt-4 border-t border-white/5">
                         <div className="flex justify-between items-center mb-6">
-                          <span className="text-[10px] text-muted-foreground uppercase font-black">Total</span>
+                          <span className="text-[10px] text-muted-foreground uppercase font-black">Total OS</span>
                           <span className="text-2xl font-black text-white">
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
                           </span>
@@ -397,10 +516,8 @@ export default function OrdersManagementPage() {
                           type="submit" 
                           className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl"
                         >
-                          <span className="flex items-center gap-2">
-                            {editingOrder ? 'Salvar Alterações' : 'Finalizar OS'} 
-                            {editingOrder ? <Save className="w-5 h-5" /> : <FileDown className="w-5 h-5" />}
-                          </span>
+                          {editingOrder ? 'Salvar Alterações' : 'Finalizar OS'} 
+                          <FileDown className="w-5 h-5 ml-2" />
                         </Button>
                       </div>
                     </CardContent>
@@ -458,7 +575,7 @@ export default function OrdersManagementPage() {
 
         <footer className="pt-8 pb-4 border-t border-white/5 opacity-30">
           <p className="text-[7px] md:text-[9px] text-muted-foreground uppercase tracking-[0.5em] text-center">
-            VISCOMM MANAGEMENT TERMINAL v1.1 • CLOUD SYNC ACTIVE
+            VISCOMM MANAGEMENT TERMINAL v1.2 • CLOUD SYNC ACTIVE
           </p>
         </footer>
       </main>
