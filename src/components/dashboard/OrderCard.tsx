@@ -1,13 +1,11 @@
-
 "use client"
 
 import React, { memo } from 'react';
 import { 
   Calendar, 
-  Check, 
-  ChevronDown, 
   Trash2,
-  Hash
+  CheckCircle,
+  ChevronDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -37,23 +35,7 @@ interface OrderCardProps {
 const statusOptions = ['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Concluído'];
 
 export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude, onDelete }: OrderCardProps) => {
-  const isCompleted = order.status === 'Entregue' || order.status === 'Concluído';
-
-  const handleStatusClick = (e: React.MouseEvent, status: string) => {
-    e.preventDefault();
-    e.stopPropagation(); 
-    if (onStatusChange) {
-      onStatusChange(order.id, status);
-    }
-  };
-
-  const handleConcludeClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation(); 
-    if (onQuickConclude) {
-      onQuickConclude(order.id);
-    }
-  };
+  const isCompleted = order.status === 'Concluído' || order.status === 'Entregue';
 
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -63,85 +45,92 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
     }
   };
 
+  const handleStatusChange = (e: React.MouseEvent, status: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onStatusChange) {
+      onStatusChange(order.id, status);
+    }
+  };
+
+  const handleConclude = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onQuickConclude) {
+      onQuickConclude(order.id);
+    }
+  };
+
+  const formattedDate = order.deliveryDate 
+    ? new Date(order.deliveryDate.includes('T') ? order.deliveryDate : order.deliveryDate + 'T12:00:00')
+        .toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+    : '--/--';
+
   return (
     <div 
       onClick={() => onClick?.(order)}
       className={cn(
-        "group relative flex flex-col rounded-xl bg-[#111111] border border-zinc-800/40 p-3 transition-all duration-200 cursor-pointer overflow-hidden gap-y-1.5",
-        "hover:border-primary/40 hover:bg-[#141414]",
-        isCompleted && "opacity-50 grayscale-[0.5]"
+        "group relative flex flex-col justify-between cursor-pointer overflow-hidden transition-all duration-200",
+        "bg-[#111111] rounded-xl border border-white/5",
+        "p-3 min-h-[140px] hover:border-primary/50",
+        isCompleted && "opacity-60 grayscale-[0.5]"
       )}
     >
-      <div className="flex items-center justify-between gap-2 z-10 border-b border-white/5 pb-1.5">
-        <div className="flex items-center gap-1 shrink-0">
-          <span className="text-[10px] font-black text-primary uppercase tracking-tighter">
-            #{order.id}
-          </span>
-        </div>
-        
-        <div className="flex items-center gap-1.5 min-w-0">
-          <Calendar className="w-3 h-3 text-primary/70" />
-          <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-tighter whitespace-nowrap">
-            {order.deliveryDate ? (
-              new Date(order.deliveryDate + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-            ) : '--/--'}
-          </span>
-        </div>
-
-        <button 
-          onClick={handleConcludeClick}
-          className={cn(
-            "w-5 h-5 rounded-full flex items-center justify-center transition-all active:scale-90",
-            isCompleted 
-              ? "bg-green-500 text-black" 
-              : "bg-zinc-800 text-zinc-500 hover:bg-green-500 hover:text-black"
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[9px] font-mono text-zinc-500 tracking-wider">#{order.id}</span>
+        <div className="flex items-center gap-1.5">
+          <Calendar className="w-2.5 h-2.5 text-primary" />
+          <span className="text-[10px] font-bold text-white">{formattedDate}</span>
+          {!isCompleted && (
+            <button 
+              onClick={handleConclude}
+              className="ml-1 p-1 rounded-md text-zinc-600 hover:text-green-500 hover:bg-green-500/10 transition-colors"
+            >
+              <CheckCircle className="w-3.5 h-3.5" />
+            </button>
           )}
-        >
-          <Check className="w-3 h-3" />
-        </button>
+        </div>
       </div>
 
-      <div className="flex-1 min-w-0">
-        <h4 className="text-[11px] font-black text-white uppercase tracking-tight truncate">
+      <div className="flex-1 min-w-0 mb-3">
+        <h2 className="text-[11px] font-black text-white uppercase tracking-tight truncate leading-none mb-1">
           {order.client}
-        </h4>
-        <p className="text-[10px] text-zinc-500 truncate mt-0.5 font-medium">
-          {order.description}
+        </h2>
+        <p className="text-[9px] text-zinc-500 truncate whitespace-nowrap">
+          {order.description || "Sem descrição"}
         </p>
       </div>
 
-      <div className="flex items-center gap-2 pt-1 border-t border-white/5">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <button className={cn(
-              "flex-1 flex items-center justify-between px-2 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all active:scale-95 border",
-              isCompleted 
-                ? "bg-zinc-900 text-zinc-500 border-zinc-800" 
-                : "bg-primary/5 text-primary border-primary/20 hover:bg-primary/10"
-            )}>
-              <span className="truncate">{order.status}</span>
-              <ChevronDown className="w-2.5 h-2.5 opacity-50" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent 
-            align="center"
-            className="bg-zinc-950 border-white/10 text-white min-w-[140px] rounded-xl z-[150]"
-          >
-            {statusOptions.map((s) => (
-              <DropdownMenuItem 
-                key={s} 
-                onClick={(e) => handleStatusClick(e as any, s)}
-                className="text-[10px] uppercase font-black tracking-widest focus:bg-primary focus:text-black p-2.5 cursor-pointer"
+      <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+        <div className="flex-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button 
+                onClick={(e) => e.stopPropagation()}
+                className="w-full flex items-center justify-between px-2 h-7 bg-white/5 hover:bg-white/10 rounded-md border border-white/5 transition-colors"
               >
-                {s}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+                <span className="text-[9px] font-bold text-primary uppercase tracking-widest truncate">{order.status}</span>
+                <ChevronDown className="w-2.5 h-2.5 text-zinc-500" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="bg-zinc-950 border-white/10 text-white min-w-[120px]">
+              {statusOptions.map((status) => (
+                <DropdownMenuItem 
+                  key={status} 
+                  onClick={(e) => handleStatusChange(e as any, status)}
+                  className="text-[9px] uppercase font-bold tracking-widest hover:bg-primary hover:text-black cursor-pointer"
+                >
+                  {status}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
         <button 
           onClick={handleDeleteClick}
-          className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-600 transition-all hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 shrink-0"
+          className="p-1.5 rounded-md text-zinc-700 hover:text-red-500 hover:bg-red-500/10 transition-all active:scale-95"
+          title="Excluir OS"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
