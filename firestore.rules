@@ -27,6 +27,11 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
+    // Permite leitura e escrita para contadores (IDs Sequenciais)
+    match /counters/{counterId} {
+      allow read, write: if isSignedIn();
+    }
+
     // Permite leitura e escrita para KPIs se o usuário estiver autenticado
     match /kpis/{kpiId} {
       allow read, write: if isSignedIn();
