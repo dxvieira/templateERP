@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useCallback } from 'react';
@@ -106,7 +105,7 @@ export default function OrdersManagementPage() {
       acc + ((item.quantity || 0) * (item.unitValue || 0)), 0) || 0,
   [watchedItems]);
 
-  const generatePDF = (data: OrderFormValues, docId: string) => {
+  const generatePDF = (data: OrderFormValues, docId: string, orderTotal: number) => {
     const doc = new jsPDF();
     const primaryColor = [255, 95, 31];
     doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
@@ -144,36 +143,46 @@ export default function OrdersManagementPage() {
     doc.setFont('helvetica', 'bold');
     doc.text(`PAGAMENTO: ${data.paymentMethod.toUpperCase()}`, 15, finalY);
     doc.setFontSize(14);
-    doc.text(`TOTAL GERAL: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}`, 130, finalY);
+    doc.text(`TOTAL GERAL: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(orderTotal)}`, 130, finalY);
     doc.save(`OS_${data.client.replace(/\s+/g, '_')}_${docId.slice(-4)}.pdf`);
   };
 
-  const onSubmit = async (data: OrderFormValues) => {
+  const onSubmit = (data: OrderFormValues) => {
     if (!firestore) return;
     setIsSubmitting(true);
     
-    try {
-      const docRef = await addDoc(collection(firestore, 'orders'), {
-        ...data,
-        totalValue: total,
-        createdAt: serverTimestamp(),
-        isPriority: false,
-        isDelayed: false
+    const currentTotal = total;
+    const orderData = {
+      ...data,
+      totalValue: currentTotal,
+      createdAt: serverTimestamp(),
+      isPriority: false,
+      isDelayed: false
+    };
+
+    // 1. Mutação não-bloqueante para Optimistic UI imediata no cache do Firestore
+    addDoc(collection(firestore, 'orders'), orderData)
+      .then((docRef) => {
+        // 2. Geração assíncrona de PDF após sucesso (não trava a Main Thread)
+        setTimeout(() => {
+          generatePDF(data, docRef.id, currentTotal);
+        }, 300);
+      })
+      .catch(async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: 'orders',
+          operation: 'create',
+          requestResourceData: orderData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      })
+      .finally(() => {
+        setIsSubmitting(false);
       });
 
-      generatePDF(data, docRef.id);
-      setIsModalOpen(false);
-      reset();
-      setIsSubmitting(false);
-    } catch (error) {
-      const permissionError = new FirestorePermissionError({
-        path: 'orders',
-        operation: 'create',
-        requestResourceData: data,
-      });
-      errorEmitter.emit('permission-error', permissionError);
-      setIsSubmitting(false);
-    }
+    // 3. UX Instantânea: Fecha o modal e limpa o form sem esperar a rede
+    setIsModalOpen(false);
+    reset();
   };
 
   return (
@@ -181,7 +190,6 @@ export default function OrdersManagementPage() {
       <DashboardSidebar />
       
       <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-6 md:space-y-8 mt-16 md:mt-0 max-w-full">
-        {/* Header de Gestão */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -360,7 +368,6 @@ export default function OrdersManagementPage() {
           </Dialog>
         </div>
 
-        {/* Histórico Recente Grid */}
         <section className="space-y-6">
           <div className="flex items-center justify-between border-b border-white/5 pb-4">
             <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.5em] flex items-center gap-2">
@@ -383,9 +390,11 @@ export default function OrdersManagementPage() {
                 {orders.map((order, idx) => (
                   <motion.div
                     key={order.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.05 }}
+                    layout
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{ duration: 0.2 }}
                   >
                     <OrderCard order={{
                       id: order.id,
