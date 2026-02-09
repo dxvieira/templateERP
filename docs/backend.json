@@ -7,18 +7,29 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "client": { "type": "string" },
-        "description": { "type": "string" },
+        "client_name": { "type": "string" },
+        "os_number": { "type": "number" },
         "status": { 
           "type": "string",
-          "enum": ["Arte", "Impressão", "Acabamento", "Concluído"]
+          "enum": ["Arte", "Impressão", "Serralheria", "Acabamento", "Instalação", "Entregue"]
         },
-        "deliveryDate": { "type": "string", "format": "date" },
-        "value": { "type": "number" },
-        "isPriority": { "type": "boolean" },
-        "isDelayed": { "type": "boolean" }
+        "created_at": { "type": "string", "format": "date-time" },
+        "deadline": { "type": "string", "format": "date" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "desc": { "type": "string" },
+              "qty": { "type": "number" },
+              "price": { "type": "number" }
+            }
+          }
+        },
+        "payment_method": { "type": "string" },
+        "total_value": { "type": "number" }
       },
-      "required": ["client", "status", "deliveryDate"]
+      "required": ["client_name", "os_number", "status", "deadline"]
     }
   },
   "auth": {
