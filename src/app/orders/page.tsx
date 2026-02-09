@@ -1,11 +1,12 @@
+
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, addDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useFirestore, useCollection } from '@/firebase';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { OrderCard } from '@/components/dashboard/OrderCard';
@@ -35,12 +36,15 @@ import {
   Loader2,
   FileText,
   Search,
-  Filter
+  Filter,
+  Save,
+  X as CloseIcon
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { useToast } from '@/hooks/use-toast';
 
 // Schemas
 const orderItemSchema = z.object({
@@ -65,7 +69,9 @@ type OrderFormValues = z.infer<typeof orderSchema>;
 export default function OrdersManagementPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<any | null>(null);
   const firestore = useFirestore();
+  const { toast } = useToast();
 
   // Fetch Orders
   const ordersQuery = useMemo(() => {
@@ -104,6 +110,27 @@ export default function OrdersManagementPage() {
     watchedItems?.reduce((acc, item) => 
       acc + ((item.quantity || 0) * (item.unitValue || 0)), 0) || 0,
   [watchedItems]);
+
+  // Carrega dados para edição
+  useEffect(() => {
+    if (editingOrder) {
+      reset({
+        client: editingOrder.client,
+        emissionDate: editingOrder.emissionDate || new Date().toISOString().split('T')[0],
+        deliveryDate: editingOrder.deliveryDate,
+        seller: editingOrder.seller || 'Carlos',
+        observations: editingOrder.observations || '',
+        status: editingOrder.status,
+        paymentMethod: editingOrder.paymentMethod || 'Pix',
+        items: editingOrder.items.map((item: any) => ({
+          desc: item.desc,
+          quantity: item.quantity,
+          unitValue: item.unitValue
+        }))
+      });
+      setIsModalOpen(true);
+    }
+  }, [editingOrder, reset]);
 
   const generatePDF = (data: OrderFormValues, docId: string, orderTotal: number) => {
     const doc = new jsPDF();
@@ -155,34 +182,72 @@ export default function OrdersManagementPage() {
     const orderData = {
       ...data,
       totalValue: currentTotal,
-      createdAt: serverTimestamp(),
-      isPriority: false,
-      isDelayed: false
+      updatedAt: serverTimestamp(),
+      isPriority: editingOrder?.isPriority || false,
+      isDelayed: editingOrder?.isDelayed || false
     };
 
-    // 1. Mutação não-bloqueante para Optimistic UI imediata no cache do Firestore
-    addDoc(collection(firestore, 'orders'), orderData)
-      .then((docRef) => {
-        // 2. Geração assíncrona de PDF após sucesso (não trava a Main Thread)
-        setTimeout(() => {
-          generatePDF(data, docRef.id, currentTotal);
-        }, 300);
-      })
-      .catch(async (error) => {
-        const permissionError = new FirestorePermissionError({
-          path: 'orders',
-          operation: 'create',
-          requestResourceData: orderData,
+    if (editingOrder) {
+      // MODO EDIÇÃO
+      const orderRef = doc(firestore, 'orders', editingOrder.id);
+      updateDoc(orderRef, orderData)
+        .then(() => {
+          toast({
+            title: "Protocolo Atualizado",
+            description: `A OS do cliente ${data.client} foi salva com sucesso.`,
+          });
+        })
+        .catch(async (error) => {
+          const permissionError = new FirestorePermissionError({
+            path: `orders/${editingOrder.id}`,
+            operation: 'update',
+            requestResourceData: orderData,
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        })
+        .finally(() => {
+          setIsSubmitting(false);
+          setEditingOrder(null);
         });
-        errorEmitter.emit('permission-error', permissionError);
-      })
-      .finally(() => {
-        setIsSubmitting(false);
-      });
+    } else {
+      // MODO CRIAÇÃO
+      const newOrderData = { ...orderData, createdAt: serverTimestamp() };
+      addDoc(collection(firestore, 'orders'), newOrderData)
+        .then((docRef) => {
+          setTimeout(() => {
+            generatePDF(data, docRef.id, currentTotal);
+          }, 300);
+          toast({
+            title: "Protocolo Lançado",
+            description: `Nova OS gerada para ${data.client}. PDF em download.`,
+          });
+        })
+        .catch(async (error) => {
+          const permissionError = new FirestorePermissionError({
+            path: 'orders',
+            operation: 'create',
+            requestResourceData: newOrderData,
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        })
+        .finally(() => {
+          setIsSubmitting(false);
+        });
+    }
 
-    // 3. UX Instantânea: Fecha o modal e limpa o form sem esperar a rede
     setIsModalOpen(false);
-    reset();
+    if (!editingOrder) reset();
+  };
+
+  const handleOpenNew = () => {
+    setEditingOrder(null);
+    reset({
+      emissionDate: new Date().toISOString().split('T')[0],
+      status: 'Arte',
+      paymentMethod: 'Pix',
+      items: [{ desc: '', quantity: 1, unitValue: 0 }],
+    });
+    setIsModalOpen(true);
   };
 
   return (
@@ -203,9 +268,13 @@ export default function OrdersManagementPage() {
             <p className="text-muted-foreground text-[8px] md:text-[10px] uppercase tracking-[0.4em] font-medium whitespace-nowrap">Monitoramento e Arquivo Digital</p>
           </motion.div>
 
-          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <Dialog open={isModalOpen} onOpenChange={(open) => {
+            setIsModalOpen(open);
+            if (!open) setEditingOrder(null);
+          }}>
             <DialogTrigger asChild>
               <Button 
+                onClick={handleOpenNew}
                 className="w-full md:w-auto bg-primary text-black font-black uppercase tracking-widest px-8 h-12 md:h-14 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.6)] hover:bg-primary transition-all gap-3 active:scale-95 whitespace-nowrap"
               >
                 <Plus className="w-5 h-5" />
@@ -215,9 +284,12 @@ export default function OrdersManagementPage() {
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-zinc-950 border-white/10 text-white p-0 rounded-3xl">
               <DialogHeader className="p-6 border-b border-white/5 bg-white/[0.02]">
                 <DialogTitle className="text-xl font-black uppercase tracking-tighter text-primary flex items-center gap-2">
-                  <Plus className="w-6 h-6" /> Lançar Protocolo
+                  {editingOrder ? <Save className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
+                  {editingOrder ? `Editar OS #${editingOrder.id.slice(-4).toUpperCase()}` : 'Lançar Protocolo'}
                 </DialogTitle>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Digitalização de nova Ordem de Serviço</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
+                  {editingOrder ? 'Atualização de dados cadastrados' : 'Digitalização de nova Ordem de Serviço'}
+                </p>
               </DialogHeader>
 
               <form onSubmit={handleSubmit(onSubmit)} className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -238,7 +310,7 @@ export default function OrdersManagementPage() {
                       </div>
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Vendedor</Label>
-                        <Select onValueChange={(v) => setValue('seller', v)}>
+                        <Select onValueChange={(v) => setValue('seller', v)} defaultValue={editingOrder?.seller || "Carlos"}>
                           <SelectTrigger className="bg-black/40 border-white/10 h-12">
                             <SelectValue placeholder="Selecione..." />
                           </SelectTrigger>
@@ -324,8 +396,8 @@ export default function OrdersManagementPage() {
                         <Input type="date" {...register('deliveryDate')} className="bg-black/40 border-white/10 h-12" />
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Status Inicial</Label>
-                        <Select onValueChange={(v) => setValue('status', v as any)} defaultValue="Arte">
+                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Status Atual</Label>
+                        <Select onValueChange={(v) => setValue('status', v as any)} defaultValue={editingOrder?.status || "Arte"}>
                           <SelectTrigger className="bg-black/40 border-white/10 h-12">
                             <SelectValue />
                           </SelectTrigger>
@@ -355,7 +427,8 @@ export default function OrdersManagementPage() {
                             <Loader2 className="w-6 h-6 animate-spin" />
                           ) : (
                             <span className="flex items-center gap-2">
-                              Finalizar <FileDown className="w-5 h-5" />
+                              {editingOrder ? 'Salvar Alterações' : 'Finalizar OS'} 
+                              {editingOrder ? <Save className="w-5 h-5" /> : <FileDown className="w-5 h-5" />}
                             </span>
                           )}
                         </Button>
@@ -396,15 +469,18 @@ export default function OrdersManagementPage() {
                     exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ duration: 0.2 }}
                   >
-                    <OrderCard order={{
-                      id: order.id,
-                      client: order.client || 'Cliente não identificado',
-                      description: order.items?.[0]?.desc || 'Sem descrição',
-                      status: order.status,
-                      deliveryDate: order.deliveryDate,
-                      value: order.totalValue || 0,
-                      isDelayed: order.isDelayed || false
-                    }} />
+                    <OrderCard 
+                      order={{
+                        id: order.id,
+                        client: order.client || 'Cliente não identificado',
+                        description: order.items?.[0]?.desc || 'Sem descrição',
+                        status: order.status,
+                        deliveryDate: order.deliveryDate,
+                        value: order.totalValue || 0,
+                        isDelayed: order.isDelayed || false
+                      }} 
+                      onClick={() => setEditingOrder(order)}
+                    />
                   </motion.div>
                 ))}
               </div>

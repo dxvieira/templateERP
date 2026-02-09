@@ -3,7 +3,7 @@
 
 import React, { memo } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, AlertCircle, Clock, ArrowRight, FileText } from 'lucide-react';
+import { Calendar, AlertCircle, Clock, ArrowRight, FileText, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface Order {
@@ -18,16 +18,20 @@ export interface Order {
 
 interface OrderCardProps {
   order: Order;
+  onClick?: (order: Order) => void;
 }
 
-export const OrderCard = memo(({ order }: OrderCardProps) => {
+export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
   const isDelayed = order.isDelayed || order.status === 'atrasado';
 
   return (
-    <div className={cn(
-      "flex flex-col rounded-2xl bg-white/5 border border-white/5 overflow-hidden group will-change-transform will-change-shadow transition-all hover:-translate-y-1",
-      isDelayed ? "neon-hover-red" : "neon-hover-orange"
-    )}>
+    <div 
+      onClick={() => onClick?.(order)}
+      className={cn(
+        "flex flex-col rounded-2xl bg-white/5 border border-white/5 overflow-hidden group will-change-transform will-change-shadow transition-all hover:-translate-y-1 cursor-pointer",
+        isDelayed ? "neon-hover-red" : "neon-hover-orange"
+      )}
+    >
       {/* Cabeçalho do Card */}
       <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
         <div className="flex items-center gap-2">
@@ -42,7 +46,11 @@ export const OrderCard = memo(({ order }: OrderCardProps) => {
             {order.deliveryDate}
           </div>
         </div>
-        {isDelayed && <AlertCircle className="w-3.5 h-3.5 text-destructive animate-pulse" />}
+        {isDelayed ? (
+          <AlertCircle className="w-3.5 h-3.5 text-destructive animate-pulse" />
+        ) : (
+          <Pencil className="w-3 h-3 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+        )}
       </div>
 
       {/* Corpo do Card */}
