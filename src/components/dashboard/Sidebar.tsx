@@ -10,8 +10,7 @@ import {
   TrendingUp, 
   Package,
   Menu,
-  X,
-  Plus
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -86,24 +85,10 @@ export const DashboardSidebar = memo(() => {
 
           <Separator className="my-6 bg-white/5" />
 
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/5">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
-                AD
-              </div>
-              <div className="overflow-hidden">
-                <p className="text-sm font-semibold truncate text-white">Modo Demo</p>
-                <p className="text-[10px] text-muted-foreground truncate uppercase tracking-widest">Acesso Livre</p>
-              </div>
-            </div>
-            <Button 
-              variant="outline" 
-              className="w-full justify-start border-primary/20 text-primary hover:bg-primary/10 gap-3 rounded-xl"
-              onClick={() => handleNavigation('/orders/new')}
-            >
-              <Plus className="w-4 h-4" />
-              Nova OS
-            </Button>
+          <div className="pt-4">
+            <p className="text-[8px] text-muted-foreground/30 uppercase tracking-[0.3em] text-center">
+              VisComm v1.0.0
+            </p>
           </div>
         </div>
       </div>
