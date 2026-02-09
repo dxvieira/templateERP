@@ -37,7 +37,8 @@ import {
   Loader2,
   FileText,
   Save,
-  CreditCard
+  CreditCard,
+  AlertCircle
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -75,7 +76,6 @@ export default function OrdersManagementPage() {
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
 
-  // Fetch Real-time via useCollection
   const ordersQuery = useMemoFirebase(() => {
     if (!firestore || !user || isUserLoading) return null;
     return query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
@@ -101,6 +101,7 @@ export default function OrdersManagementPage() {
     resolver: zodResolver(orderSchema),
     defaultValues: {
       emissionDate: new Date().toISOString().split('T')[0],
+      deliveryDate: '',
       status: 'Arte',
       paymentMethod: 'Pix',
       items: [{ desc: '', size: '', quantity: 1, unitValue: 0 }],
@@ -235,7 +236,7 @@ export default function OrdersManagementPage() {
         }));
       });
 
-      setTimeout(() => generatePDF(data, orderRef.id, currentTotal), 100);
+      setTimeout(() => generatePDF(data, orderRef.id, currentTotal), 500);
       toast({
         title: "Protocolo Lançado",
         description: `Nova OS gerada para ${data.client}.`,
@@ -245,6 +246,15 @@ export default function OrdersManagementPage() {
     setIsModalOpen(false);
     setEditingOrder(null);
     reset();
+  };
+
+  const onError = (errors: any) => {
+    console.error('Form errors:', errors);
+    toast({
+      variant: "destructive",
+      title: "Erro de Validação",
+      description: "Por favor, preencha todos os campos obrigatórios, incluindo a data de entrega.",
+    });
   };
 
   return (
@@ -292,9 +302,8 @@ export default function OrdersManagementPage() {
                 </p>
               </DialogHeader>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <form onSubmit={handleSubmit(onSubmit, onError)} className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-8 space-y-6">
-                  {/* Busca de Cliente */}
                   <Card className="bg-white/5 border-none shadow-none">
                     <CardHeader className="py-4">
                       <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Cliente & Venda</CardTitle>
@@ -306,14 +315,14 @@ export default function OrdersManagementPage() {
                           {...register('client')}
                           list="clients-suggestions"
                           placeholder="Digite ou selecione..."
-                          className="bg-black/40 border-white/10 h-12"
+                          className={`bg-black/40 border-white/10 h-12 ${errors.client ? 'border-destructive' : ''}`}
                         />
                         <datalist id="clients-suggestions">
                           {clientsList?.map(c => (
                             <option key={c.id} value={c.name} />
                           ))}
                         </datalist>
-                        {errors.client && <p className="text-[10px] text-destructive">{errors.client.message}</p>}
+                        {errors.client && <p className="text-[10px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" /> {errors.client.message}</p>}
                       </div>
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Vendedor Responsável</Label>
@@ -335,12 +344,16 @@ export default function OrdersManagementPage() {
                       </div>
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase text-muted-foreground">Entrega Prevista</Label>
-                        <Input type="date" {...register('deliveryDate')} className="bg-black/40 border-white/10 h-12" />
+                        <Input 
+                          type="date" 
+                          {...register('deliveryDate')} 
+                          className={`bg-black/40 border-white/10 h-12 ${errors.deliveryDate ? 'border-destructive' : ''}`} 
+                        />
+                        {errors.deliveryDate && <p className="text-[10px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" /> Obrigatório</p>}
                       </div>
                     </CardContent>
                   </Card>
 
-                  {/* Itens da OS */}
                   <Card className="bg-white/5 border-none shadow-none">
                     <CardHeader className="flex flex-row items-center justify-between py-4">
                       <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Escopo do Projeto</CardTitle>
@@ -412,7 +425,6 @@ export default function OrdersManagementPage() {
                 </div>
 
                 <div className="lg:col-span-4 space-y-6">
-                  {/* Pagamento & Status */}
                   <Card className="bg-white/5 border-none shadow-none">
                     <CardHeader className="py-4">
                       <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Fechamento Financeiro</CardTitle>
@@ -437,7 +449,6 @@ export default function OrdersManagementPage() {
                         </Select>
                       </div>
 
-                      {/* Sub-seção Condicional para Cartão */}
                       {isCardPayment && (
                         <motion.div 
                           initial={{ opacity: 0, height: 0 }}
@@ -469,7 +480,7 @@ export default function OrdersManagementPage() {
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                  {Array.from({ length: 10 }, (_, i) => (
+                                  {Array.from({ length: 12 }, (_, i) => (
                                     <SelectItem key={i + 1} value={`${i + 1}x`}>{i + 1}x sem juros</SelectItem>
                                   ))}
                                 </SelectContent>
