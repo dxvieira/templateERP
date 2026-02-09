@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { useForm, useFieldArray, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -36,8 +36,7 @@ import {
   FileDown, 
   Loader2,
   FileText,
-  Save,
-  AlertCircle
+  Save
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -45,18 +44,18 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { useToast } from '@/hooks/use-toast';
 
-// Schemas relaxados - Apenas client é obrigatório. 
-// Usamos z.coerce para garantir que números sejam tratados corretamente mesmo se vierem vazios ou strings.
+// Schema relaxado: Apenas o nome do cliente é obrigatório.
+// Coerção agressiva para garantir que campos vazios ou nulos virem 0 e não quebrem a validação.
 const orderItemSchema = z.object({
   desc: z.string().default(''),
   size: z.string().optional().default(''),
-  quantity: z.coerce.number().default(1),
-  unitValue: z.coerce.number().default(0),
+  quantity: z.preprocess((val) => (val === '' || val === undefined ? 1 : Number(val)), z.number().default(1)),
+  unitValue: z.preprocess((val) => (val === '' || val === undefined ? 0 : Number(val)), z.number().default(0)),
 });
 
 const orderSchema = z.object({
-  client: z.string().min(1, 'Cliente é obrigatório'),
-  emissionDate: z.string().optional().default(new Date().toISOString().split('T')[0]),
+  client: z.string().min(1, 'Nome do cliente é obrigatório'),
+  emissionDate: z.string().optional().default(() => new Date().toISOString().split('T')[0]),
   deliveryDate: z.string().optional().default(''),
   seller: z.string().optional().default('Carlos'),
   observations: z.string().optional().default(''),
@@ -64,7 +63,7 @@ const orderSchema = z.object({
   paymentMethod: z.string().optional().default('Pix'),
   machine: z.string().optional().default(''),
   installments: z.string().optional().default('1x'),
-  items: z.array(orderItemSchema).optional().default([]),
+  items: z.array(orderItemSchema).default([{ desc: '', size: '', quantity: 1, unitValue: 0 }]),
 });
 
 type OrderFormValues = z.infer<typeof orderSchema>;
@@ -93,9 +92,7 @@ export default function OrdersManagementPage() {
     register, 
     control, 
     handleSubmit, 
-    setValue, 
     reset,
-    watch,
     formState: { errors } 
   } = useForm<OrderFormValues>({
     resolver: zodResolver(orderSchema),
@@ -118,13 +115,25 @@ export default function OrdersManagementPage() {
     name: "items"
   });
 
-  const watchedItems = watch('items');
-  const watchedPaymentMethod = watch('paymentMethod');
+  // Monitoramento reativo dos itens para cálculo do total em tempo real
+  const watchedItems = useWatch({
+    control,
+    name: 'items',
+  });
+
+  const watchedPaymentMethod = useWatch({
+    control,
+    name: 'paymentMethod',
+  });
   
-  const total = useMemo(() => 
-    watchedItems?.reduce((acc, item) => 
-      acc + ((Number(item.quantity) || 0) * (Number(item.unitValue) || 0)), 0) || 0,
-  [watchedItems]);
+  const total = useMemo(() => {
+    if (!watchedItems) return 0;
+    return watchedItems.reduce((acc, item) => {
+      const q = Number(item?.quantity) || 0;
+      const v = Number(item?.unitValue) || 0;
+      return acc + (q * v);
+    }, 0);
+  }, [watchedItems]);
 
   const isCardPayment = watchedPaymentMethod === 'Cartão Crédito' || watchedPaymentMethod === 'Cartão Débito';
 
@@ -205,7 +214,10 @@ export default function OrdersManagementPage() {
   };
 
   const onSubmit = async (data: OrderFormValues) => {
-    if (!firestore || !user) return;
+    if (!firestore || !user) {
+      toast({ variant: "destructive", title: "Erro de Conexão", description: "Verifique sua autenticação." });
+      return;
+    }
     
     const currentTotal = total;
     const commonData = {
@@ -223,6 +235,8 @@ export default function OrdersManagementPage() {
       const orderRef = doc(firestore, 'orders', editingOrder.id);
       const updatePayload = { ...commonData, id: editingOrder.id };
       
+      console.log('Atualizando OS:', editingOrder.id, updatePayload);
+      
       updateDoc(orderRef, updatePayload).catch(async (error) => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: orderRef.path,
@@ -231,10 +245,7 @@ export default function OrdersManagementPage() {
         }));
       });
       
-      toast({
-        title: "Protocolo Atualizado",
-        description: `Alterações salvas para ${data.client}.`,
-      });
+      toast({ title: "Protocolo Atualizado", description: `Alterações salvas para ${data.client}.` });
     } else {
       const orderRef = doc(collection(firestore, 'orders'));
       const newOrderData = { 
@@ -242,6 +253,8 @@ export default function OrdersManagementPage() {
         createdAt: serverTimestamp(),
         id: orderRef.id 
       };
+
+      console.log('Criando Nova OS:', orderRef.id, newOrderData);
 
       setDoc(orderRef, newOrderData).catch(async (error) => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
@@ -254,10 +267,7 @@ export default function OrdersManagementPage() {
       if (currentTotal > 0) {
         setTimeout(() => generatePDF(data, orderRef.id, currentTotal), 1500);
       }
-      toast({
-        title: "Protocolo Lançado",
-        description: `Nova OS gerada para ${data.client}.`,
-      });
+      toast({ title: "Protocolo Lançado", description: `Nova OS gerada para ${data.client}.` });
     }
 
     setEditingOrder(null);
@@ -269,7 +279,7 @@ export default function OrdersManagementPage() {
     toast({
       variant: "destructive",
       title: "Erro de Validação",
-      description: "Verifique o nome do cliente ou outros campos destacados.",
+      description: "Certifique-se de que o Nome do Cliente foi preenchido.",
     });
   };
 
@@ -543,7 +553,6 @@ export default function OrdersManagementPage() {
                           className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl"
                         >
                           {editingOrder ? 'Salvar Alterações' : 'Finalizar OS'} 
-                          <FileDown className="w-5 h-5 ml-2" />
                         </Button>
                       </div>
                     </CardContent>
