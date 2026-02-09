@@ -1,7 +1,7 @@
 
 "use client"
 
-import React from 'react';
+import React, { memo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, User, ArrowRight, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -20,12 +20,13 @@ interface OrderCardProps {
   order: Order;
 }
 
-export function OrderCard({ order }: OrderCardProps) {
+// Memoized to prevent re-renders when other items in the parent list change
+export const OrderCard = memo(({ order }: OrderCardProps) => {
   const isDelayed = order.isDelayed || order.status === 'atrasado';
 
   return (
     <div className={cn(
-      "flex flex-col md:flex-row items-start md:items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 gap-4 group",
+      "flex flex-col md:flex-row items-start md:items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 gap-4 group will-change-transform",
       isDelayed ? "neon-hover-red" : "neon-hover-orange"
     )}>
       <div className="flex items-center gap-4 w-full md:w-auto">
@@ -72,7 +73,7 @@ export function OrderCard({ order }: OrderCardProps) {
           </p>
         </div>
         <button className={cn(
-          "p-2 bg-white/5 rounded-lg transition-all",
+          "p-2 bg-white/5 rounded-lg transition-all transform group-hover:scale-105 active:scale-95",
           isDelayed ? "hover:bg-destructive hover:text-white" : "hover:bg-primary hover:text-black"
         )}>
           <ArrowRight className="w-4 h-4" />
@@ -80,4 +81,6 @@ export function OrderCard({ order }: OrderCardProps) {
       </div>
     </div>
   );
-}
+});
+
+OrderCard.displayName = 'OrderCard';

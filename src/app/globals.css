@@ -33,31 +33,41 @@
     @apply border-border;
   }
   body {
-    @apply bg-[#0A0A0A] text-foreground font-body;
+    @apply bg-[#0A0A0A] text-foreground font-body antialiased;
   }
 }
 
-/* Glassmorphism utility */
+/* Glassmorphism utility - Using backdrop-filter: blur for performance */
 .glass-card {
-  @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl;
+  @apply bg-white/5 border border-white/10 shadow-2xl;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
-/* Neon Interaction Utilities */
+/* Neon Interaction Utilities - Using transform-translate-z(0) for GPU acceleration */
 .neon-hover-orange {
   @apply transition-all duration-300 ease-in-out;
+  transform: translateZ(0);
 }
 .neon-hover-orange:hover {
-  @apply border-primary/100 shadow-[0_0_20px_rgba(255,95,31,0.7)];
+  @apply border-primary/100;
+  box-shadow: 0 0 20px rgba(255, 95, 31, 0.5);
 }
 
 .neon-hover-red {
   @apply transition-all duration-300 ease-in-out;
+  transform: translateZ(0);
 }
 .neon-hover-red:hover {
-  @apply border-destructive/100 shadow-[0_0_20px_rgba(255,0,0,0.7)];
+  @apply border-destructive/100;
+  box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
 }
 
-/* Shake Animation for Login Errors */
+/* Performance optimization for heavy shadows */
+.will-change-shadow {
+  will-change: box-shadow;
+}
+
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-5px); }

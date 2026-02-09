@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { useState } from 'react';
+import React, { useState, memo, useCallback } from 'react';
 import { 
   LayoutDashboard, 
   ClipboardList, 
@@ -27,10 +27,15 @@ const navItems = [
   { icon: Settings, label: 'Configurações', path: '#' },
 ];
 
-export function DashboardSidebar() {
+export const DashboardSidebar = memo(() => {
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+
+  const handleNavigation = useCallback((path: string) => {
+    if (path !== '#') router.push(path);
+    setIsOpen(false);
+  }, [router]);
 
   return (
     <>
@@ -44,7 +49,7 @@ export function DashboardSidebar() {
       </Button>
 
       <div className={cn(
-        "fixed inset-y-0 left-0 z-40 w-64 glass border-r border-white/5 transition-transform duration-300 md:translate-x-0",
+        "fixed inset-y-0 left-0 z-40 w-64 glass border-r border-white/5 transition-transform duration-300 md:translate-x-0 will-change-transform",
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="flex flex-col h-full p-6">
@@ -54,7 +59,7 @@ export function DashboardSidebar() {
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight text-white">VISCOMM</h1>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em]">Command Center</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em]">CC Terminal</p>
             </div>
           </div>
 
@@ -62,10 +67,7 @@ export function DashboardSidebar() {
             {navItems.map((item) => (
               <button
                 key={item.label}
-                onClick={() => {
-                  if (item.path !== '#') router.push(item.path);
-                  setIsOpen(false);
-                }}
+                onClick={() => handleNavigation(item.path)}
                 className={cn(
                   "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
                   pathname === item.path 
@@ -97,7 +99,7 @@ export function DashboardSidebar() {
             <Button 
               variant="outline" 
               className="w-full justify-start border-primary/20 text-primary hover:bg-primary/10 gap-3 rounded-xl"
-              onClick={() => router.push('/orders/new')}
+              onClick={() => handleNavigation('/orders/new')}
             >
               <Plus className="w-4 h-4" />
               Nova OS
@@ -107,4 +109,6 @@ export function DashboardSidebar() {
       </div>
     </>
   );
-}
+});
+
+DashboardSidebar.displayName = 'DashboardSidebar';
