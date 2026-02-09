@@ -1,0 +1,91 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * VISCOMM COMMAND CENTER - SECURITY RULES ANALYSIS
+     * 
+     * Core Philosophy:
+     * This ruleset provides a secure baseline for a collaborative operational dashboard. 
+     * Since the application is in a prototyping phase and the data model (Orders and KPIs) 
+     * lacks explicit user-ownership fields, the security model follows a "Verified Identity" 
+     * approach. This ensures that only authenticated users (via Password or Anonymous 
+     * providers) can interact with the Command Center data.
+     * 
+     * Data Structure:
+     * - /orders/{orderId}: Flat collection of customer orders.
+     * - /kpis/{kpiId}: Flat collection for dashboard performance metrics.
+     * 
+     * Key Security Decisions:
+     * 1. Authenticated Access: All read and write operations are restricted to signed-in 
+     *    users to prevent unauthorized public access to business data.
+     * 2. Schema Flexibility: While authorization is strictly enforced, the rules do not 
+     *    enforce specific data types or mandatory fields (other than IDs) to allow for 
+     *    rapid UI/UX iteration.
+     * 3. Relational Integrity: On creation, the rules enforce that the document's 
+     *    internal 'id' field matches the Firestore Document ID to ensure path consistency.
+     * 
+     * Denormalization for Authorization:
+     * Currently, the system relies on the existence of a valid session (isSignedIn). 
+     * For future production scaling, it is recommended to denormalize an 'ownerId' or 
+     * 'orgId' onto the Order documents to transition from global access to 
+     * organization-specific access.
+     */
+
+    // --- Helper Functions ---
+
+    /**
+     * @description Checks if the request is from a verified, authenticated user.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * @description Verifies the document exists and the user is authenticated.
+     * Used for updates and deletes to prevent operations on null resources.
+     */
+    function canModify() {
+      return isSignedIn() && resource != null;
+    }
+
+    // --- Collection Rules ---
+
+    /**
+     * @description Rules for the 'orders' collection. Controls customer order persistence.
+     * @path /orders/{orderId}
+     * @allow (get) request.auth != null
+     * @allow (create) request.auth != null && request.resource.data.id == orderId
+     * @deny (write) request.auth == null
+     * @principle Validates authenticated access and path-to-data integrity for IDs.
+     */
+    match /orders/{orderId} {
+      // CRITICAL: Cannot implement owner-only writes as 'Order' entity lacks an 'ownerId'.
+      // Currently defaulting to any authenticated user.
+      
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.id == orderId;
+      allow update: if canModify() && request.resource.data.id == resource.data.id;
+      allow delete: if canModify();
+    }
+
+    /**
+     * @description Rules for the 'kpis' collection. Controls dashboard metric data.
+     * @path /kpis/{kpiId}
+     * @allow (list) request.auth != null
+     * @deny (update) resource == null
+     * @principle Restricts metric updates to authenticated sessions and ensures document existence.
+     */
+    match /kpis/{kpiId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.id == kpiId;
+      allow update: if canModify() && request.resource.data.id == resource.data.id;
+      allow delete: if canModify();
+    }
+
+    // Default deny for any paths not explicitly matched
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

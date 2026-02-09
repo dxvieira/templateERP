@@ -1,44 +1,113 @@
-
 {
   "entities": {
     "Order": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Order",
-      "description": "Uma ordem de serviço no ERP VisComm",
       "type": "object",
+      "description": "Represents a customer order within the VisComm Command Center application.",
       "properties": {
-        "id": { "type": "string" },
-        "client_name": { "type": "string" },
-        "os_number": { "type": "number" },
-        "status": { 
+        "id": {
           "type": "string",
-          "enum": ["Arte", "Impressão", "Serralheria", "Acabamento", "Instalação", "Entregue"]
+          "description": "Unique identifier for the order."
         },
-        "created_at": { "type": "string", "format": "date-time" },
-        "deadline": { "type": "string", "format": "date" },
-        "items": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "desc": { "type": "string" },
-              "qty": { "type": "number" },
-              "price": { "type": "number" }
-            }
-          }
+        "cliente": {
+          "type": "string",
+          "description": "The name of the client associated with this order."
         },
-        "payment_method": { "type": "string" },
-        "total_value": { "type": "number" }
+        "status": {
+          "type": "string",
+          "description": "The current status of the order, e.g., 'arte', 'impressao', 'acabamento'."
+        },
+        "data_entrega": {
+          "type": "string",
+          "description": "The delivery date for the order.",
+          "format": "date-time"
+        },
+        "valor": {
+          "type": "number",
+          "description": "The total value of the order."
+        }
       },
-      "required": ["client_name", "os_number", "status", "deadline"]
+      "required": [
+        "id",
+        "cliente",
+        "status",
+        "data_entrega",
+        "valor"
+      ]
+    },
+    "Kpi": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Kpi",
+      "type": "object",
+      "description": "Represents Key Performance Indicators (KPIs) for the VisComm Command Center application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the KPI record."
+        },
+        "arte": {
+          "type": "number",
+          "description": "Real-time count of orders in the 'arte' stage."
+        },
+        "impressao": {
+          "type": "number",
+          "description": "Real-time count of orders in the 'impressao' stage."
+        },
+        "acabamento": {
+          "type": "number",
+          "description": "Real-time count of orders in the 'acabamento' stage."
+        }
+      },
+      "required": [
+        "id",
+        "arte",
+        "impressao",
+        "acabamento"
+      ]
     }
   },
   "auth": {
-    "providers": ["password", "google"]
+    "providers": [
+      "password",
+      "anonymous"
+    ]
   },
   "firestore": {
-    "/orders/{orderId}": {
-      "schema": "#/backend/entities/Order",
-      "description": "Coleção de ordens de serviço do sistema"
-    }
+    "structure": [
+      {
+        "path": "/orders/{orderId}",
+        "definition": {
+          "entityName": "Order",
+          "schema": {
+            "$ref": "#/backend/entities/Order"
+          },
+          "description": "Stores order documents.",
+          "params": [
+            {
+              "name": "orderId",
+              "description": "Unique identifier for the order."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/kpis/{kpiId}",
+        "definition": {
+          "entityName": "Kpi",
+          "schema": {
+            "$ref": "#/backend/entities/Kpi"
+          },
+          "description": "Stores KPI documents.",
+          "params": [
+            {
+              "name": "kpiId",
+              "description": "Unique identifier for the KPI record."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to directly address the persistence problem outlined in the user request, ensuring data survives page refreshes and reflects real-time updates. Given that all orders are likely managed internally by the application (no user-specific ownership is mentioned), a top-level collection `/orders` is appropriate. A separate collection `/kpis` stores key performance indicators.\n\n*   **/orders Collection:** Stores all order documents. Since no user-specific access control was specified, there is no need for Authorization Independence via Denormalization or Membership Maps in this particular case. All the CRUD operations in `/orders` are accessible from the application itself using Firebase Admin SDK.\n*   **/kpis Collection:** Stores KPI documents. Similar to `/orders`, assumes internal management and doesn't necessitate user-level authorization.\n\nThis design facilitates simple reads and writes, and the security rules will need to ensure only the application's backend can modify these collections (using Firebase Admin SDK and associated service accounts). List operations can be easily secured by limiting access to the Firebase Admin SDK only."
   }
 }
