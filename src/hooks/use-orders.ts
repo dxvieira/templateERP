@@ -1,6 +1,6 @@
 'use client';
 
-import { query, collection, orderBy, onSnapshot, doc, serverTimestamp, setDoc, updateDoc, runTransaction } from 'firebase/firestore';
+import { query, collection, orderBy, onSnapshot, doc, serverTimestamp, setDoc, updateDoc, runTransaction, deleteDoc } from 'firebase/firestore';
 import { useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { useState, useEffect, useCallback } from 'react';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -114,6 +114,21 @@ export function useOrders() {
     }
   }, [firestore]);
 
+  const deleteOrder = useCallback(async (orderId: string) => {
+    if (!firestore) throw new Error("Firestore não inicializado");
+    
+    const orderRef = doc(firestore, 'orders', orderId);
+    try {
+      await deleteDoc(orderRef);
+    } catch (err: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: orderRef.path,
+        operation: 'delete'
+      }));
+      throw err;
+    }
+  }, [firestore]);
+
   const stats = {
     total: orders.length,
     arte: orders.filter(o => o.status === 'Arte').length,
@@ -122,5 +137,5 @@ export function useOrders() {
     concluido: orders.filter(o => o.status === 'Entregue' || o.status === 'Concluído').length,
   };
 
-  return { orders, stats, isLoading, createOrder, updateOrder };
+  return { orders, stats, isLoading, createOrder, updateOrder, deleteOrder };
 }

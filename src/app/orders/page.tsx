@@ -59,7 +59,7 @@ export default function OrdersManagerPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
   
-  const { orders, createOrder, updateOrder, isLoading } = useOrders();
+  const { orders, createOrder, updateOrder, deleteOrder, isLoading } = useOrders();
 
   const clientsQuery = useMemoFirebase(() => 
     firestore ? query(collection(firestore, 'clients'), orderBy('name', 'asc')) : null
@@ -168,6 +168,17 @@ export default function OrdersManagerPage() {
     }
   };
 
+  const handleDeleteOrder = async (orderId: string) => {
+    if (window.confirm(`Tem certeza que deseja excluir permanentemente a OS #${orderId}? Essa ação não pode ser desfeita.`)) {
+      try {
+        await deleteOrder(orderId);
+        toast({ title: "OS Removida", description: "Protocolo excluído com sucesso." });
+      } catch (error) {
+        toast({ variant: "destructive", title: "Erro ao excluir", description: "Não foi possível remover a OS." });
+      }
+    }
+  };
+
   const activeOrders = useMemo(() => orders.filter(o => o.status !== 'Concluído' && o.status !== 'Entregue'), [orders]);
   const completedOrders = useMemo(() => orders.filter(o => o.status === 'Concluído' || o.status === 'Entregue'), [orders]);
 
@@ -225,6 +236,7 @@ export default function OrdersManagerPage() {
                     onClick={(o) => setEditingOrder(order)}
                     onStatusChange={handleQuickStatusChange}
                     onQuickConclude={handleQuickConclude}
+                    onDelete={handleDeleteOrder}
                   />
                 </motion.div>
               ))}
@@ -264,6 +276,7 @@ export default function OrdersManagerPage() {
                     }} 
                     onClick={(o) => setEditingOrder(order)}
                     onStatusChange={handleQuickStatusChange}
+                    onDelete={handleDeleteOrder}
                   />
                 </motion.div>
               ))}
@@ -272,7 +285,7 @@ export default function OrdersManagerPage() {
         </div>
 
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
-          <DialogContent className="max-w-4xl bg-zinc-950 border-white/10 text-white rounded-3xl overflow-hidden p-0 shadow-2xl">
+          <DialogContent className="max-w-4xl bg-zinc-950 border-white/10 text-white rounded-3xl overflow-hidden p-0 shadow-2xl z-[9999]">
             <DialogHeader className="p-6 bg-white/[0.02] border-b border-white/5">
               <DialogTitle className="text-2xl font-black text-primary uppercase tracking-tighter">
                 {editingOrder ? 'Ajustar Protocolo' : 'Entrada de Produção'}
@@ -315,7 +328,7 @@ export default function OrdersManagerPage() {
                         <SelectTrigger className="bg-black/40 border-white/10 h-12 rounded-xl">
                           <SelectValue placeholder="Status" />
                         </SelectTrigger>
-                        <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                        <SelectContent className="bg-zinc-900 border-white/10 text-white z-[100]">
                           {['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Concluído'].map(s => (
                             <SelectItem key={s} value={s}>{s}</SelectItem>
                           ))}
@@ -382,7 +395,7 @@ export default function OrdersManagerPage() {
                         <SelectTrigger className="bg-black/40 border-white/10 h-12 rounded-xl">
                           <SelectValue placeholder="Forma" />
                         </SelectTrigger>
-                        <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                        <SelectContent className="bg-zinc-900 border-white/10 text-white z-[100]">
                           {['Dinheiro', 'Pix', 'Cartão de Crédito', 'Cartão de Débito', 'Boleto'].map(p => (
                             <SelectItem key={p} value={p}>{p}</SelectItem>
                           ))}
@@ -404,7 +417,7 @@ export default function OrdersManagerPage() {
                             <SelectTrigger className="bg-black/40 border-white/10 h-12 rounded-xl">
                               <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
-                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                            <SelectContent className="bg-zinc-900 border-white/10 text-white z-[100]">
                               {['SICOOB/SIPAG', 'PagBank'].map(m => (
                                 <SelectItem key={m} value={m}>{m}</SelectItem>
                               ))}
@@ -423,7 +436,7 @@ export default function OrdersManagerPage() {
                             <SelectTrigger className="bg-black/40 border-white/10 h-12 rounded-xl">
                               <SelectValue placeholder="1x" />
                             </SelectTrigger>
-                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                            <SelectContent className="bg-zinc-900 border-white/10 text-white z-[100]">
                               {Array.from({ length: 12 }, (_, i) => `${i + 1}x`).map(p => (
                                 <SelectItem key={p} value={p}>{p}</SelectItem>
                               ))}

@@ -5,7 +5,8 @@ import {
   Calendar, 
   Check, 
   ChevronDown, 
-  PackageCheck
+  PackageCheck,
+  Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -29,11 +30,12 @@ interface OrderCardProps {
   onClick?: (order: Order) => void;
   onStatusChange?: (orderId: string, newStatus: string) => void;
   onQuickConclude?: (orderId: string) => void;
+  onDelete?: (orderId: string) => void;
 }
 
 const statusOptions = ['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Concluído'];
 
-export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude }: OrderCardProps) => {
+export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude, onDelete }: OrderCardProps) => {
   const isCompleted = order.status === 'Entregue' || order.status === 'Concluído';
 
   const handleStatusClick = (e: React.MouseEvent, status: string) => {
@@ -44,6 +46,11 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
   const handleConcludeClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onQuickConclude?.(order.id);
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDelete?.(order.id);
   };
 
   return (
@@ -64,7 +71,7 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
       )} />
 
       {/* Cabeçalho Compacto */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className={cn(
           "text-[9px] font-black tracking-[0.1em] uppercase",
           isCompleted ? "text-[#00FF00]" : "text-primary"
@@ -72,7 +79,7 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
           #{order.id}
         </span>
         
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center flex-1">
           <div className="flex items-center gap-1.5">
             <Calendar className={cn("w-3 h-3", isCompleted ? "text-[#00FF00]" : "text-primary")} />
             <span className="text-[14px] font-black text-white tracking-tighter">
@@ -83,18 +90,27 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
           </div>
         </div>
 
-        {!isCompleted ? (
+        <div className="flex items-center gap-1.5">
+          {!isCompleted ? (
+            <button 
+              onClick={handleConcludeClick}
+              className="w-7 h-7 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 transition-all hover:bg-primary hover:text-black hover:border-primary active:scale-90"
+            >
+              <Check className="w-3.5 h-3.5" />
+            </button>
+          ) : (
+            <div className="w-7 h-7 rounded-full bg-[#00FF00]/10 flex items-center justify-center text-[#00FF00]">
+              <PackageCheck className="w-3.5 h-3.5" />
+            </div>
+          )}
+          
           <button 
-            onClick={handleConcludeClick}
-            className="w-7 h-7 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 transition-all hover:bg-primary hover:text-black hover:border-primary active:scale-90"
+            onClick={handleDeleteClick}
+            className="w-7 h-7 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 transition-all hover:bg-destructive hover:text-white hover:border-destructive hover:shadow-[0_0_15px_rgba(255,0,0,0.5)] active:scale-90"
           >
-            <Check className="w-3.5 h-3.5" />
+            <Trash2 className="w-3.5 h-3.5" />
           </button>
-        ) : (
-          <div className="w-7 h-7 rounded-full bg-[#00FF00]/10 flex items-center justify-center text-[#00FF00]">
-            <PackageCheck className="w-3.5 h-3.5" />
-          </div>
-        )}
+        </div>
       </div>
 
       {/* Corpo Compacto com Valor Reposicionado */}
