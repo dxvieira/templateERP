@@ -14,24 +14,15 @@ import { useUser } from '@/firebase';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, loading: isUserLoading } = useUser();
+  const { user, isUserLoading } = useUser();
   const { orders, isLoading, stats } = useOrders();
 
-  // Protect route: redirect to login if not authenticated
+  // Proteção de rota simplificada: redireciona apenas se não estiver carregando e não houver usuário
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.replace('/login');
     }
   }, [user, isUserLoading, router]);
-
-  if (isUserLoading || isLoading) {
-    return (
-      <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center gap-4">
-        <Loader2 className="w-10 h-10 text-primary animate-spin" />
-        <p className="text-[10px] uppercase tracking-[0.5em] text-primary/50 font-black">Acessando Terminal...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col md:flex-row overflow-x-hidden">
@@ -55,11 +46,12 @@ export default function DashboardPage() {
           </Button>
         </div>
 
+        {/* Estatísticas com Skeletons Visuais se estiver carregando */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          <DashboardStatCard label="Arte Final" value={stats.arte.toString()} icon={Palette} />
-          <DashboardStatCard label="Impressão" value={stats.impressao.toString()} icon={Printer} />
-          <DashboardStatCard label="Acabamento" value={stats.acabamento.toString()} icon={Hammer} />
-          <DashboardStatCard label="Entregue" value={stats.concluido.toString()} icon={CheckCircle2} />
+          <DashboardStatCard label="Arte Final" value={isLoading ? "..." : stats.arte.toString()} icon={Palette} />
+          <DashboardStatCard label="Impressão" value={isLoading ? "..." : stats.impressao.toString()} icon={Printer} />
+          <DashboardStatCard label="Acabamento" value={isLoading ? "..." : stats.acabamento.toString()} icon={Hammer} />
+          <DashboardStatCard label="Entregue" value={isLoading ? "..." : stats.concluido.toString()} icon={CheckCircle2} />
         </div>
 
         <div className="space-y-6">
@@ -71,25 +63,32 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <AnimatePresence mode="popLayout">
-              {orders.slice(0, 8).map((order) => (
-                <motion.div 
-                  key={order.id} 
-                  layout 
-                  initial={{ opacity: 0, scale: 0.95 }} 
-                  animate={{ opacity: 1, scale: 1 }}
-                >
-                  <OrderCard order={{
-                    id: order.id,
-                    client: order.client,
-                    description: order.items?.[0]?.desc || 'Sem descrição',
-                    status: order.status,
-                    deliveryDate: order.deliveryDate || 'N/A',
-                    value: order.totalValue || 0
-                  }} />
-                </motion.div>
-              ))}
-            </AnimatePresence>
+            {isLoading ? (
+              <div className="col-span-full flex flex-col items-center py-20 opacity-20 gap-4">
+                <Loader2 className="w-10 h-10 animate-spin text-primary" />
+                <p className="text-[10px] uppercase tracking-[0.5em]">Sincronizando Fila...</p>
+              </div>
+            ) : (
+              <AnimatePresence mode="popLayout">
+                {orders.slice(0, 8).map((order) => (
+                  <motion.div 
+                    key={order.id} 
+                    layout 
+                    initial={{ opacity: 0, scale: 0.95 }} 
+                    animate={{ opacity: 1, scale: 1 }}
+                  >
+                    <OrderCard order={{
+                      id: order.id,
+                      client: order.client,
+                      description: order.items?.[0]?.desc || 'Sem descrição',
+                      status: order.status,
+                      deliveryDate: order.deliveryDate || 'N/A',
+                      value: order.totalValue || 0
+                    }} />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            )}
           </div>
           {!isLoading && orders.length === 0 && <EmptyState />}
         </div>
