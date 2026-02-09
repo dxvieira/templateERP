@@ -8,6 +8,7 @@ import * as z from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
 import { collection, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { useOrders } from '@/hooks/use-orders';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { EmptyState } from '@/components/dashboard/EmptyState';
@@ -35,18 +36,19 @@ import {
   Trash2, 
   Loader2,
   FileText,
-  Save
+  Save,
+  CheckCircle
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useToast } from '@/hooks/use-toast';
 
-// Schema ultra-relaxado: Apenas o cliente é obrigatório.
+// Schema relaxado para agilidade operacional
 const orderItemSchema = z.object({
   desc: z.string().optional().default(''),
   size: z.string().optional().default(''),
-  quantity: z.number().optional().default(1),
-  unitValue: z.number().optional().default(0),
+  quantity: z.coerce.number().optional().default(1),
+  unitValue: z.coerce.number().optional().default(0),
 });
 
 const orderSchema = z.object({
@@ -67,21 +69,19 @@ type OrderFormValues = z.infer<typeof orderSchema>;
 export default function OrdersManagementPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
+  
   const { firestore } = useFirestore();
-  const { user, isUserLoading } = useUser();
+  const { user } = useUser();
   const { toast } = useToast();
-
-  const ordersQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
-  }, [firestore, user]);
+  
+  // Utiliza o hook unificado para sincronia total
+  const { orders, isLoading: ordersLoading } = useOrders();
 
   const clientsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collection(firestore, 'clients'), orderBy('name', 'asc'));
   }, [firestore, user]);
 
-  const { data: orders, isLoading: ordersLoading } = useCollection(ordersQuery);
   const { data: clientsList } = useCollection(clientsQuery);
 
   const { 
@@ -111,18 +111,10 @@ export default function OrdersManagementPage() {
     name: "items"
   });
 
-  // Reatividade instantânea com useWatch
-  const watchedItems = useWatch({
-    control,
-    name: 'items',
-  });
-
-  const watchedPaymentMethod = useWatch({
-    control,
-    name: 'paymentMethod',
-  });
+  const watchedItems = useWatch({ control, name: 'items' });
+  const watchedPaymentMethod = useWatch({ control, name: 'paymentMethod' });
   
-  const total = useMemo(() => {
+  const totalValue = useMemo(() => {
     if (!watchedItems) return 0;
     return watchedItems.reduce((acc, item) => {
       const q = Number(item?.quantity) || 0;
@@ -137,393 +129,215 @@ export default function OrdersManagementPage() {
     if (editingOrder) {
       reset({
         client: editingOrder.client,
-        emissionDate: editingOrder.emissionDate || new Date().toISOString().split('T')[0],
-        deliveryDate: editingOrder.deliveryDate || '',
-        seller: editingOrder.seller || 'Carlos',
-        observations: editingOrder.observations || '',
-        status: editingOrder.status || 'Arte',
-        paymentMethod: editingOrder.paymentMethod || 'Pix',
+        emissionDate: editingOrder.emissionDate,
+        deliveryDate: editingOrder.deliveryDate,
+        seller: editingOrder.seller,
+        observations: editingOrder.observations,
+        status: editingOrder.status,
+        paymentMethod: editingOrder.paymentMethod,
         machine: editingOrder.machine || '',
         installments: editingOrder.installments || '1x',
-        items: (editingOrder.items || []).map((item: any) => ({
-          desc: item.desc || '',
-          size: item.size || '',
-          quantity: item.quantity || 1,
-          unitValue: item.unitValue || 0
-        }))
+        items: editingOrder.items
       });
       setIsModalOpen(true);
     }
   }, [editingOrder, reset]);
 
   const generatePDF = (data: OrderFormValues, docId: string, orderTotal: number) => {
-    try {
-      const doc = new jsPDF();
-      const primaryColor = [255, 95, 31];
-      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.rect(0, 0, 210, 40, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(22);
-      doc.setFont('helvetica', 'bold');
-      doc.text('VISCOMM COMMAND CENTER', 15, 20);
-      doc.setFontSize(12);
-      doc.text(`ORDEM DE SERVIÇO #${docId.slice(-6).toUpperCase()}`, 15, 30);
-      doc.setTextColor(0, 0, 0);
-      doc.setFontSize(10);
-      doc.text('DADOS DO CLIENTE', 15, 50);
-      doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.line(15, 52, 60, 52);
-      doc.text(`Cliente: ${data.client}`, 15, 60);
-      doc.text(`Vendedor: ${data.seller || 'Não informado'}`, 15, 65);
-      doc.text(`Pagamento: ${data.paymentMethod || 'Não informado'} ${data.machine ? `(${data.machine})` : ''}`, 15, 70);
-      doc.text(`Emissão: ${data.emissionDate || '-'}`, 120, 60);
-      doc.text(`Entrega: ${data.deliveryDate || '-'}`, 120, 65);
-      
-      const tableBody = (data.items || []).map(item => [
-        item.desc || '-',
-        item.size || '-',
-        item.quantity || 0,
-        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitValue || 0),
-        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((item.quantity || 0) * (item.unitValue || 0)),
-      ]);
+    const doc = new jsPDF();
+    const primaryColor = [255, 95, 31];
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.rect(0, 0, 210, 40, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22).setFont('helvetica', 'bold').text('VISCOMM COMMAND CENTER', 15, 20);
+    doc.setFontSize(12).text(`ORDEM DE SERVIÇO #${docId.slice(-6).toUpperCase()}`, 15, 30);
+    
+    doc.setTextColor(0, 0, 0).setFontSize(10).text('DADOS DO CLIENTE', 15, 50);
+    doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]).line(15, 52, 60, 52);
+    doc.text(`Cliente: ${data.client}`, 15, 60);
+    doc.text(`Vendedor: ${data.seller}`, 15, 65);
+    doc.text(`Pagamento: ${data.paymentMethod}`, 15, 70);
+    
+    const tableBody = data.items.map(item => [
+      item.desc,
+      item.size,
+      item.quantity,
+      new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitValue),
+      new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.quantity * item.unitValue),
+    ]);
 
-      autoTable(doc, {
-        startY: 80,
-        head: [['DESCRIÇÃO', 'MEDIDA', 'QTD', 'UNIT.', 'SUB']],
-        body: tableBody.length > 0 ? tableBody : [['Sem itens registrados', '-', '-', '-', '-']],
-        headStyles: { fillColor: primaryColor, textColor: [255, 255, 255] },
-        alternateRowStyles: { fillColor: [245, 245, 245] },
-      });
-      
-      const finalY = (doc as any).lastAutoTable?.finalY || 100;
-      doc.setFont('helvetica', 'bold');
-      doc.text(`TOTAL GERAL: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(orderTotal)}`, 130, finalY + 10);
-      if (data.observations) {
-        doc.setFont('helvetica', 'normal');
-        doc.text('OBSERVAÇÕES:', 15, finalY + 25);
-        doc.text(data.observations, 15, finalY + 32, { maxWidth: 180 });
-      }
-      doc.save(`OS_${data.client.replace(/\s+/g, '_')}_${docId.slice(-4)}.pdf`);
-    } catch (e) {
-      console.error("PDF Generation error", e);
-    }
+    autoTable(doc, {
+      startY: 80,
+      head: [['DESCRIÇÃO', 'MEDIDA', 'QTD', 'UNIT.', 'SUB']],
+      body: tableBody,
+      headStyles: { fillColor: primaryColor },
+    });
+    
+    doc.save(`OS_${data.client.replace(/\s+/g, '_')}.pdf`);
   };
 
   const onSubmit = (data: OrderFormValues) => {
     if (!firestore || !user) return;
     
-    const currentTotal = total;
-    const commonData = {
+    const orderData = {
       ...data,
-      totalValue: currentTotal,
+      totalValue,
       updatedAt: serverTimestamp(),
       isPriority: editingOrder?.isPriority || false,
       isDelayed: editingOrder?.isDelayed || false
     };
 
-    // UX Instantânea: Fecha o modal e limpa estado imediatamente
     setIsModalOpen(false);
 
     if (editingOrder) {
       const orderRef = doc(firestore, 'orders', editingOrder.id);
-      updateDocumentNonBlocking(orderRef, { ...commonData, id: editingOrder.id });
-      toast({ title: "Protocolo Atualizado", description: "As alterações foram sincronizadas." });
+      updateDocumentNonBlocking(orderRef, { ...orderData, id: editingOrder.id });
+      toast({ title: "Protocolo Atualizado", description: "Sincronização concluída." });
     } else {
       const orderRef = doc(collection(firestore, 'orders'));
-      const newOrderData = { ...commonData, createdAt: serverTimestamp(), id: orderRef.id };
-      setDocumentNonBlocking(orderRef, newOrderData, { merge: true });
-      
-      toast({ title: "Protocolo Criado", description: "Nova OS adicionada ao sistema." });
-      // Gera PDF após um pequeno delay para não travar a UI
-      setTimeout(() => generatePDF(data, orderRef.id, currentTotal), 1000);
+      const newOrder = { ...orderData, createdAt: serverTimestamp(), id: orderRef.id };
+      setDocumentNonBlocking(orderRef, newOrder, { merge: true });
+      toast({ title: "OS Criada", description: "Protocolo registrado com sucesso." });
+      setTimeout(() => generatePDF(data, orderRef.id, totalValue), 500);
     }
 
     setEditingOrder(null);
     reset();
   };
 
-  const onError = (formErrors: any) => {
-    console.error('Validation Error Details:', formErrors);
-    toast({
-      variant: "destructive",
-      title: "Falha na OS",
-      description: "Verifique o nome do cliente e tente novamente.",
-    });
-  };
-
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col md:flex-row overflow-x-hidden">
       <DashboardSidebar />
-      
-      <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-6 md:space-y-8 mt-16 md:mt-0 max-w-full">
+      <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-8 mt-16 md:mt-0">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-1"
-          >
-            <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-primary" />
-              <h2 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase truncate">Gestão de Protocolos</h2>
-            </div>
-            <p className="text-muted-foreground text-[8px] md:text-[10px] uppercase tracking-[0.4em] font-medium whitespace-nowrap">Persistência Cloud em Tempo Real</p>
-          </motion.div>
+          <div className="space-y-1">
+            <h2 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase flex items-center gap-2">
+              <FileText className="text-primary" /> Gestão de Protocolos
+            </h2>
+            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em]">Fluxo de Dados Realtime</p>
+          </div>
 
-          <Dialog open={isModalOpen} onOpenChange={(open) => {
-            setIsModalOpen(open);
-            if (!open) {
-              setEditingOrder(null);
-              reset();
-            }
-          }}>
+          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
             <DialogTrigger asChild>
-              <Button 
-                onClick={() => setIsModalOpen(true)}
-                className="w-full md:w-auto bg-primary text-black font-black uppercase tracking-widest px-8 h-12 md:h-14 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.6)] hover:bg-primary transition-all gap-3 active:scale-95"
-              >
-                <Plus className="w-5 h-5" />
-                Nova Ordem de Serviço
+              <Button className="bg-primary text-black font-black uppercase tracking-widest px-8 h-14 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.6)]">
+                <Plus className="w-5 h-5 mr-2" /> Nova OS
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto bg-zinc-950 border-white/10 text-white p-0 rounded-3xl">
+            <DialogContent className="max-w-5xl bg-zinc-950 border-white/10 text-white p-0 rounded-3xl overflow-hidden">
               <DialogHeader className="p-6 border-b border-white/5 bg-white/[0.02]">
-                <DialogTitle className="text-xl font-black uppercase tracking-tighter text-primary flex items-center gap-2">
-                  {editingOrder ? <Save className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
-                  {editingOrder ? `Editar OS #${editingOrder.id.slice(-4).toUpperCase()}` : 'Lançar Protocolo'}
-                </DialogTitle>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
-                  Terminal de Emissão Digital VisComm
-                </p>
+                <DialogTitle className="text-xl font-black uppercase text-primary">Terminal VisComm</DialogTitle>
               </DialogHeader>
 
-              <form onSubmit={handleSubmit(onSubmit, onError)} className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <form onSubmit={handleSubmit(onSubmit)} className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 max-h-[70vh] overflow-y-auto">
                 <div className="lg:col-span-8 space-y-6">
-                  <Card className="bg-white/5 border-none shadow-none">
-                    <CardHeader className="py-4">
-                      <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Cliente & Venda</CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label className={`text-[10px] uppercase tracking-widest font-bold ${errors.client ? 'text-destructive' : 'text-muted-foreground'}`}>
-                          Cliente *
-                        </Label>
-                        <Input 
-                          {...register('client')}
-                          list="clients-suggestions"
-                          placeholder="Digite ou selecione..."
-                          className={`bg-black/40 border-white/10 h-12 ${errors.client ? 'border-destructive' : ''}`}
-                        />
-                        <datalist id="clients-suggestions">
-                          {clientsList?.map(c => (
-                            <option key={c.id} value={c.name} />
-                          ))}
-                        </datalist>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Vendedor</Label>
-                        <Controller
-                          name="seller"
-                          control={control}
-                          render={({ field }) => (
-                            <Select onValueChange={field.onChange} value={field.value || 'Carlos'}>
-                              <SelectTrigger className="bg-black/40 border-white/10 h-12">
-                                <SelectValue placeholder="Selecione..." />
-                              </SelectTrigger>
-                              <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                <SelectItem value="Carlos">Carlos Eduardo</SelectItem>
-                                <SelectItem value="Mariana">Mariana Silva</SelectItem>
-                                <SelectItem value="Roberto">Roberto Costa</SelectItem>
-                                <SelectItem value="Avulso">Venda Avulsa</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          )}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-[10px] uppercase text-muted-foreground">Emissão</Label>
-                        <Input type="date" {...register('emissionDate')} className="bg-black/40 border-white/10 h-12" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-[10px] uppercase text-muted-foreground">Entrega Prevista</Label>
-                        <Input 
-                          type="date" 
-                          {...register('deliveryDate')} 
-                          className="bg-black/40 border-white/10 h-12" 
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] uppercase">Cliente *</Label>
+                      <Input {...register('client')} list="clients-list" className="bg-black/40 h-12 border-white/10" />
+                      <datalist id="clients-list">
+                        {clientsList?.map(c => <option key={c.id} value={c.name} />)}
+                      </datalist>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] uppercase">Vendedor</Label>
+                      <Controller
+                        name="seller"
+                        control={control}
+                        render={({ field }) => (
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <SelectTrigger className="bg-black/40 h-12 border-white/10">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                              <SelectItem value="Carlos">Carlos Eduardo</SelectItem>
+                              <SelectItem value="Mariana">Mariana Silva</SelectItem>
+                              <SelectItem value="Roberto">Roberto Costa</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
+                  </div>
 
-                  <Card className="bg-white/5 border-none shadow-none">
-                    <CardHeader className="flex flex-row items-center justify-between py-4">
-                      <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Escopo do Projeto</CardTitle>
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => append({ desc: '', size: '', quantity: 1, unitValue: 0 })}
-                        className="border-primary/50 text-primary rounded-xl"
-                      >
-                        <Plus className="w-4 h-4 mr-2" /> Novo Item
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-[10px] font-bold text-primary uppercase">Itens do Escopo</h3>
+                      <Button type="button" size="sm" onClick={() => append({ desc: '', size: '', quantity: 1, unitValue: 0 })} className="border-primary/50 text-primary" variant="outline">
+                        + Item
                       </Button>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {fields.map((field, index) => (
-                        <div key={field.id} className="flex flex-col gap-4 p-4 rounded-xl bg-black/40 border border-white/5 relative">
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                            <div className="md:col-span-2 space-y-1">
-                              <Label className="text-[8px] uppercase text-muted-foreground">Material / Serviço</Label>
-                              <Input 
-                                {...register(`items.${index}.desc`)}
-                                placeholder="Ex: Banner Frontlight"
-                                className="bg-black/20 border-white/10 h-12"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-[8px] uppercase text-muted-foreground">Medidas</Label>
-                              <Input 
-                                {...register(`items.${index}.size`)}
-                                placeholder="Ex: 2x1m"
-                                className="bg-black/20 border-white/10 h-12"
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="space-y-1">
-                                <Label className="text-[8px] uppercase text-muted-foreground">Qtd</Label>
-                                <Input 
-                                  type="number"
-                                  {...register(`items.${index}.quantity`, { valueAsNumber: true })}
-                                  className="bg-black/20 border-white/10 h-12 px-2"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="text-[8px] uppercase text-muted-foreground">Unitário</Label>
-                                <Input 
-                                  type="number"
-                                  step="0.01"
-                                  {...register(`items.${index}.unitValue`, { valueAsNumber: true })}
-                                  className="bg-black/20 border-white/10 h-12 px-2"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                          {fields.length > 1 && (
-                            <Button 
-                              type="button" 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => remove(index)}
-                              className="text-destructive absolute -top-2 -right-2 bg-black border border-white/10 rounded-full w-8 h-8"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          )}
+                    </div>
+                    {fields.map((field, index) => (
+                      <div key={field.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 bg-black/40 border border-white/5 rounded-xl relative">
+                        <Input {...register(`items.${index}.desc`)} placeholder="Descrição" className="md:col-span-2 bg-transparent" />
+                        <Input {...register(`items.${index}.size`)} placeholder="Medidas" className="bg-transparent" />
+                        <div className="flex gap-2">
+                          <Input type="number" {...register(`items.${index}.quantity`)} className="bg-transparent" />
+                          <Input type="number" step="0.01" {...register(`items.${index}.unitValue`)} className="bg-transparent" />
                         </div>
-                      ))}
-                    </CardContent>
-                  </Card>
+                        {fields.length > 1 && (
+                          <Button type="button" onClick={() => remove(index)} className="absolute -right-2 -top-2 text-destructive" variant="ghost">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="lg:col-span-4 space-y-6">
-                  <Card className="bg-white/5 border-none shadow-none">
-                    <CardHeader className="py-4">
-                      <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Fechamento</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                      <div className="space-y-2">
-                        <Label className="text-[10px] uppercase text-muted-foreground">Pagamento</Label>
+                  <Card className="bg-white/5 border-none p-4 space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] uppercase">Forma de Pagamento</Label>
+                      <Controller
+                        name="paymentMethod"
+                        control={control}
+                        render={({ field }) => (
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <SelectTrigger className="bg-black/40 h-12 border-white/10">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-zinc-900 text-white">
+                              <SelectItem value="Pix">Pix</SelectItem>
+                              <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                              <SelectItem value="Cartão Crédito">Cartão Crédito</SelectItem>
+                              <SelectItem value="Boleto">Boleto</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
+
+                    {isCardPayment && (
+                      <div className="p-4 border border-primary/30 rounded-xl space-y-4 bg-primary/5">
                         <Controller
-                          name="paymentMethod"
+                          name="machine"
                           control={control}
                           render={({ field }) => (
-                            <Select onValueChange={field.onChange} value={field.value || 'Pix'}>
-                              <SelectTrigger className="bg-black/40 border-white/10 h-12">
-                                <SelectValue />
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <SelectTrigger className="bg-black/20 h-10 border-white/5">
+                                <SelectValue placeholder="Maquininha" />
                               </SelectTrigger>
-                              <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-                                <SelectItem value="Pix">Pix</SelectItem>
-                                <SelectItem value="Cartão Crédito">Cartão Crédito</SelectItem>
-                                <SelectItem value="Cartão Débito">Cartão Débito</SelectItem>
-                                <SelectItem value="Boleto">Boleto</SelectItem>
+                              <SelectContent className="bg-zinc-900 text-white">
+                                <SelectItem value="PagBank">PagBank</SelectItem>
+                                <SelectItem value="SIPAG">SIPAG</SelectItem>
                               </SelectContent>
                             </Select>
                           )}
                         />
                       </div>
+                    )}
 
-                      {isCardPayment && (
-                        <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-4">
-                          <div className="space-y-1">
-                            <Label className="text-[8px] uppercase text-muted-foreground">Maquininha</Label>
-                            <Controller
-                              name="machine"
-                              control={control}
-                              render={({ field }) => (
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                  <SelectTrigger className="bg-black/20 border-white/5 h-10">
-                                    <SelectValue placeholder="Selecione..." />
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                    <SelectItem value="PagBank">PagBank</SelectItem>
-                                    <SelectItem value="SIPAG">SIPAG</SelectItem>
-                                    <SelectItem value="Stone">Stone</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              )}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="space-y-2">
-                        <Label className="text-[10px] uppercase text-muted-foreground">Status</Label>
-                        <Controller
-                          name="status"
-                          control={control}
-                          render={({ field }) => (
-                            <Select onValueChange={field.onChange} value={field.value || 'Arte'}>
-                              <SelectTrigger className="bg-black/40 border-white/10 h-12">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                <SelectItem value="Arte">Arte</SelectItem>
-                                <SelectItem value="Impressão">Impressão</SelectItem>
-                                <SelectItem value="Serralheria">Serralheria</SelectItem>
-                                <SelectItem value="Acabamento">Acabamento</SelectItem>
-                                <SelectItem value="Instalação">Instalação</SelectItem>
-                                <SelectItem value="Entregue">Entregue</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          )}
-                        />
+                    <div className="pt-4 border-t border-white/5">
+                      <div className="flex justify-between items-center mb-6">
+                        <span className="text-xs uppercase text-muted-foreground font-black">Total</span>
+                        <span className="text-2xl font-black text-white">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}
+                        </span>
                       </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-[10px] uppercase text-muted-foreground">Observações</Label>
-                        <Textarea 
-                          {...register('observations')}
-                          placeholder="Detalhes extras..."
-                          className="bg-black/40 border-white/10 min-h-[100px]"
-                        />
-                      </div>
-
-                      <div className="pt-4 border-t border-white/5">
-                        <div className="flex justify-between items-center mb-6">
-                          <span className="text-[10px] text-muted-foreground uppercase font-black">Total</span>
-                          <span className="text-2xl font-black text-white">
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
-                          </span>
-                        </div>
-                        <Button 
-                          type="submit" 
-                          disabled={isUserLoading}
-                          className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl"
-                        >
-                          {editingOrder ? 'Salvar Alterações' : 'Finalizar OS'} 
-                        </Button>
-                      </div>
-                    </CardContent>
+                      <Button type="submit" className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl">
+                        Finalizar OS
+                      </Button>
+                    </div>
                   </Card>
                 </div>
               </form>
@@ -531,56 +345,27 @@ export default function OrdersManagementPage() {
           </Dialog>
         </div>
 
-        <section className="space-y-6">
-          <div className="flex items-center justify-between border-b border-white/5 pb-4">
-            <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.5em] flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-primary/40 animate-pulse" />
-              Monitor de Ordens Ativas
-            </h3>
-          </div>
-
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <AnimatePresence mode="popLayout">
-            {orders && orders.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                {orders.map((order) => (
-                  <motion.div
-                    key={order.id}
-                    layout
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                  >
-                    <OrderCard 
-                      order={{
-                        id: order.id,
-                        client: order.client || 'Cliente não identificado',
-                        description: order.items?.[0]?.desc || 'Sem descrição',
-                        status: order.status,
-                        deliveryDate: order.deliveryDate,
-                        value: order.totalValue || 0,
-                        isDelayed: order.isDelayed || false
-                      }} 
-                      onClick={() => setEditingOrder(order)}
-                    />
-                  </motion.div>
-                ))}
-              </div>
-            ) : (
-              !ordersLoading && <EmptyState />
-            )}
-            {ordersLoading && (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-10 h-10 text-primary animate-spin" />
-              </div>
-            )}
+            {orders.map((order) => (
+              <motion.div key={order.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <OrderCard 
+                  order={{
+                    id: order.id,
+                    client: order.client,
+                    description: order.items[0]?.desc || 'Sem descrição',
+                    status: order.status,
+                    deliveryDate: order.deliveryDate,
+                    value: order.totalValue
+                  }} 
+                  onClick={() => setEditingOrder(order)}
+                />
+              </motion.div>
+            ))}
           </AnimatePresence>
-        </section>
-
-        <footer className="pt-8 pb-4 border-t border-white/5 opacity-30">
-          <p className="text-[7px] md:text-[9px] text-muted-foreground uppercase tracking-[0.5em] text-center">
-            VISCOMM MANAGEMENT TERMINAL v1.2 • CLOUD SYNC ACTIVE
-          </p>
-        </footer>
+          {ordersLoading && <div className="col-span-full flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>}
+          {!ordersLoading && orders.length === 0 && <div className="col-span-full"><EmptyState /></div>}
+        </div>
       </main>
     </div>
   );
