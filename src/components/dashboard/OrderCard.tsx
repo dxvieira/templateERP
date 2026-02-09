@@ -50,81 +50,83 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
     <div 
       onClick={() => onClick?.(order)}
       className={cn(
-        "group relative flex flex-col rounded-3xl bg-[#121212] border border-zinc-800/50 p-5 transition-all duration-300 cursor-pointer overflow-hidden min-h-[220px]",
-        "hover:scale-[1.02] hover:bg-[#161616]",
+        "group relative flex flex-col rounded-2xl bg-[#121212] border border-zinc-800/50 p-4 transition-all duration-300 cursor-pointer overflow-hidden min-h-[180px] gap-y-3",
+        "hover:scale-[1.01] hover:bg-[#161616]",
         isCompleted 
-          ? "hover:border-[#00FF00] hover:shadow-[0_0_30px_-10px_rgba(0,255,0,0.5)]" 
-          : "hover:border-primary hover:shadow-[0_0_30px_-10px_rgba(255,95,31,0.5)]"
+          ? "hover:border-[#00FF00] hover:shadow-[0_0_20px_-5px_rgba(0,255,0,0.5)]" 
+          : "hover:border-primary hover:shadow-[0_0_20px_-5px_rgba(255,95,31,0.5)]"
       )}
     >
-      {/* Background Decorativo */}
+      {/* Background Decorativo Suave */}
       <div className={cn(
-        "absolute -right-12 -top-12 w-32 h-32 blur-[80px] opacity-10 transition-opacity group-hover:opacity-20",
+        "absolute -right-8 -top-8 w-24 h-24 blur-[60px] opacity-10 transition-opacity group-hover:opacity-20",
         isCompleted ? "bg-[#00FF00]" : "bg-primary"
       )} />
 
-      {/* Cabeçalho: ID Sequencial e Botão Check */}
-      <div className="flex items-center justify-between mb-4">
+      {/* Cabeçalho Compacto */}
+      <div className="flex items-center justify-between">
         <span className={cn(
-          "text-[10px] font-black tracking-[0.2em] uppercase",
+          "text-[9px] font-black tracking-[0.1em] uppercase",
           isCompleted ? "text-[#00FF00]" : "text-primary"
         )}>
-          ID #{order.id}
+          #{order.id}
         </span>
         
+        <div className="flex flex-col items-center">
+          <div className="flex items-center gap-1.5">
+            <Calendar className={cn("w-3 h-3", isCompleted ? "text-[#00FF00]" : "text-primary")} />
+            <span className="text-[14px] font-black text-white tracking-tighter">
+              {order.deliveryDate ? (
+                new Date(order.deliveryDate + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+              ) : 'N/A'}
+            </span>
+          </div>
+        </div>
+
         {!isCompleted ? (
           <button 
             onClick={handleConcludeClick}
-            className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 transition-all hover:bg-primary hover:text-black hover:border-primary active:scale-90"
-            title="Concluir OS"
+            className="w-7 h-7 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 transition-all hover:bg-primary hover:text-black hover:border-primary active:scale-90"
           >
-            <Check className="w-4 h-4" />
+            <Check className="w-3.5 h-3.5" />
           </button>
         ) : (
-          <div className="w-8 h-8 rounded-full bg-[#00FF00]/10 flex items-center justify-center text-[#00FF00]">
-            <PackageCheck className="w-4 h-4" />
+          <div className="w-7 h-7 rounded-full bg-[#00FF00]/10 flex items-center justify-center text-[#00FF00]">
+            <PackageCheck className="w-3.5 h-3.5" />
           </div>
         )}
       </div>
 
-      {/* Destaque Central: Data de Entrega */}
-      <div className="flex flex-col items-center justify-center py-2 mb-6 border-y border-zinc-800/30">
-        <div className="flex items-center gap-2 mb-1">
-          <Calendar className={cn("w-3.5 h-3.5", isCompleted ? "text-[#00FF00]" : "text-primary")} />
-          <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Entrega prevista</span>
+      {/* Corpo Compacto com Valor Reposicionado */}
+      <div className="space-y-1">
+        <div className="flex items-start justify-between gap-2">
+          <h4 className="text-sm font-black text-white leading-tight uppercase truncate flex-1">
+            {order.client}
+          </h4>
+          <span className="text-[10px] font-mono text-zinc-400 whitespace-nowrap mt-0.5">
+            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.value || 0)}
+          </span>
         </div>
-        <div className="text-2xl font-black text-white tracking-tighter">
-          {order.deliveryDate ? (
-            new Date(order.deliveryDate + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
-          ) : 'N/A'}
-        </div>
-      </div>
-
-      {/* Corpo: Cliente e Descrição */}
-      <div className="flex-1 space-y-1 mb-8">
-        <h4 className="text-lg font-black text-white leading-tight uppercase truncate">
-          {order.client}
-        </h4>
-        <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+        <p className="text-[10px] text-zinc-500 line-clamp-1 leading-relaxed italic">
           {order.description}
         </p>
       </div>
 
-      {/* Rodapé: Seletor (Badge) */}
-      <div className="flex items-center justify-start mt-auto">
+      {/* Rodapé Dominante: Barra de Status Full-Width */}
+      <div className="mt-auto pt-1">
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
             <button className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95",
+              "w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all active:scale-[0.98] border shadow-sm",
               isCompleted 
-                ? "bg-[#00FF00] text-black shadow-[0_0_15px_rgba(0,255,0,0.3)]" 
-                : "bg-primary text-black shadow-[0_0_15px_rgba(255,95,31,0.3)]"
+                ? "bg-[#00FF00] text-black border-[#00FF00]/20 shadow-[0_0_10px_rgba(0,255,0,0.2)]" 
+                : "bg-primary text-black border-primary/20 shadow-[0_0_10px_rgba(255,95,31,0.2)]"
             )}>
-              {order.status}
-              <ChevronDown className="w-3 h-3 opacity-60" />
+              <span className="flex-1 text-center">{order.status}</span>
+              <ChevronDown className="w-3.5 h-3.5 opacity-70" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="bg-zinc-900 border-zinc-800 text-white min-w-[140px] rounded-xl shadow-2xl z-[100]">
+          <DropdownMenuContent className="bg-zinc-900 border-zinc-800 text-white min-w-[200px] rounded-xl shadow-2xl z-[100]">
             {statusOptions.map((s) => (
               <DropdownMenuItem 
                 key={s} 
