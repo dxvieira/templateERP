@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useState, memo, useCallback } from 'react';
@@ -76,7 +75,7 @@ export const DashboardSidebar = memo(() => {
       )}
 
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-64 glass border-r border-white/5 transition-transform duration-300 ease-in-out md:translate-x-0 will-change-transform",
+        "fixed inset-y-0 left-0 z-50 w-64 glass border-r border-white/5 transition-transform duration-300 ease-in-out md:translate-x-0 will-change-transform shadow-2xl",
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="flex flex-col h-full p-6">
@@ -85,7 +84,7 @@ export const DashboardSidebar = memo(() => {
               <ClipboardList className="text-black w-6 h-6" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl font-bold tracking-tight text-white uppercase truncate">VISCOMM</h1>
+              <h1 className="text-xl font-bold tracking-tighter text-white uppercase truncate">VISCOMM</h1>
               <p className="text-[8px] text-muted-foreground uppercase tracking-[0.2em] truncate">Terminal de Comando</p>
             </div>
           </div>
@@ -98,7 +97,7 @@ export const DashboardSidebar = memo(() => {
                 className={cn(
                   "w-full flex items-center gap-3 px-4 h-12 rounded-xl transition-all duration-200 group relative overflow-hidden",
                   pathname === item.path 
-                    ? "bg-primary text-black font-bold" 
+                    ? "bg-primary text-black font-black" 
                     : "text-muted-foreground hover:bg-white/5 hover:text-white"
                 )}
               >
@@ -106,7 +105,7 @@ export const DashboardSidebar = memo(() => {
                   "w-5 h-5",
                   pathname === item.path ? "text-black" : "group-hover:text-primary transition-colors"
                 )} />
-                <span className="text-sm tracking-tight whitespace-nowrap">{item.label}</span>
+                <span className="text-sm tracking-tight font-medium whitespace-nowrap">{item.label}</span>
                 {pathname === item.path && (
                   <div className="absolute inset-0 bg-white/20 animate-pulse" />
                 )}
@@ -118,10 +117,10 @@ export const DashboardSidebar = memo(() => {
           
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 h-12 rounded-xl text-destructive hover:bg-destructive/10 transition-all duration-200 group"
+            className="w-full flex items-center gap-3 px-4 h-12 rounded-xl text-destructive hover:bg-destructive/10 transition-all duration-200 group active:scale-95"
           >
             <LogOut className="w-5 h-5 group-hover:scale-110 transition-transform" />
-            <span className="text-sm tracking-tight whitespace-nowrap font-bold uppercase">Sair do Terminal</span>
+            <span className="text-sm tracking-tight font-black uppercase">Sair do Terminal</span>
           </button>
 
           <div className="pt-6 flex flex-col items-center gap-1 opacity-40">

@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect } from 'react';
@@ -15,10 +14,10 @@ import { useUser } from '@/firebase';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, isUserLoading } = useUser();
+  const { user, loading: isUserLoading } = useUser();
   const { orders, isLoading, stats } = useOrders();
 
-  // Proteção de rota
+  // Protect route: redirect to login if not authenticated
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.replace('/login');
@@ -29,7 +28,7 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-10 h-10 text-primary animate-spin" />
-        <p className="text-[10px] uppercase tracking-[0.5em] text-primary/50">Acessando Terminal...</p>
+        <p className="text-[10px] uppercase tracking-[0.5em] text-primary/50 font-black">Acessando Terminal...</p>
       </div>
     );
   }
@@ -43,16 +42,16 @@ export default function DashboardPage() {
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <Zap className="w-5 h-5 text-primary animate-pulse" />
-              <h2 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase">Central de Comando</h2>
+              <h2 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase">Painel de Controle</h2>
             </div>
-            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em]">Monitoramento Realtime</p>
+            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em] font-medium">Monitoramento Realtime</p>
           </div>
           
           <Button 
             onClick={() => router.push('/orders')}
-            className="bg-primary text-black font-black uppercase tracking-widest px-8 h-14 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.6)]"
+            className="bg-primary text-black font-black uppercase tracking-widest px-8 h-14 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.6)] active:scale-95 transition-all"
           >
-            <Plus className="w-5 h-5 mr-2" /> Nova OS
+            <Plus className="w-5 h-5 mr-2" /> Gerenciar OS
           </Button>
         </div>
 
@@ -60,14 +59,14 @@ export default function DashboardPage() {
           <DashboardStatCard label="Arte Final" value={stats.arte.toString()} icon={Palette} />
           <DashboardStatCard label="Impressão" value={stats.impressao.toString()} icon={Printer} />
           <DashboardStatCard label="Acabamento" value={stats.acabamento.toString()} icon={Hammer} />
-          <DashboardStatCard label="Concluído" value={stats.concluido.toString()} icon={CheckCircle2} />
+          <DashboardStatCard label="Entregue" value={stats.concluido.toString()} icon={CheckCircle2} />
         </div>
 
         <div className="space-y-6">
           <div className="flex items-center justify-between border-b border-white/5 pb-4">
             <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.5em] flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-primary/40 animate-pulse"></span>
-              Fila de Produção Ativa
+              Fila de Produção Recente
             </h3>
           </div>
 
@@ -85,8 +84,8 @@ export default function DashboardPage() {
                     client: order.client,
                     description: order.items?.[0]?.desc || 'Sem descrição',
                     status: order.status,
-                    deliveryDate: order.deliveryDate,
-                    value: order.totalValue
+                    deliveryDate: order.deliveryDate || 'N/A',
+                    value: order.totalValue || 0
                   }} />
                 </motion.div>
               ))}
