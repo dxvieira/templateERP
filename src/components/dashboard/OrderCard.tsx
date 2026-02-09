@@ -3,7 +3,7 @@
 
 import React, { memo } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, User, ArrowRight, AlertCircle, Clock } from 'lucide-react';
+import { Calendar, AlertCircle, Clock, ArrowRight, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface Order {
@@ -25,61 +25,63 @@ export const OrderCard = memo(({ order }: OrderCardProps) => {
 
   return (
     <div className={cn(
-      "flex flex-col md:flex-row items-stretch md:items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 gap-4 group will-change-transform will-change-shadow active:scale-[0.99] transition-all",
+      "flex flex-col rounded-2xl bg-white/5 border border-white/5 overflow-hidden group will-change-transform will-change-shadow transition-all hover:-translate-y-1",
       isDelayed ? "neon-hover-red" : "neon-hover-orange"
     )}>
-      {/* Esquerda: Identificação e Cliente */}
-      <div className="flex items-center gap-4 w-full md:w-auto min-w-0">
-        <div className={cn(
-          "w-12 h-12 md:w-14 md:h-14 rounded-xl flex items-center justify-center font-bold text-[10px] md:text-xs border transition-colors shrink-0 whitespace-nowrap",
-          isDelayed 
-            ? "bg-destructive/10 text-destructive border-destructive/20" 
-            : "bg-primary/10 text-primary border-primary/20"
-        )}>
-          #{order.id.slice(-4).toUpperCase()}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h4 className="font-bold text-sm md:text-base tracking-tight text-white truncate whitespace-nowrap">{order.client}</h4>
-            {isDelayed && <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0 animate-pulse" />}
-          </div>
-          <p className="text-xs text-muted-foreground truncate whitespace-nowrap italic">{order.description}</p>
-        </div>
-      </div>
-
-      {/* Meio: Informações de Data e Status Mobile-Ready */}
-      <div className="grid grid-cols-2 md:flex md:flex-1 items-center gap-4 md:gap-8 px-0 md:px-6">
-        <div className="flex items-center gap-2 text-muted-foreground whitespace-nowrap">
-          <Calendar className="w-3.5 h-3.5 shrink-0" />
-          <span className={cn("text-[10px] font-mono", isDelayed && "text-destructive font-black uppercase")}>
-            {order.deliveryDate}
-          </span>
-        </div>
-        <div className="flex items-center gap-2 text-muted-foreground min-w-0">
-          <Clock className="w-3.5 h-3.5 shrink-0" />
-          <span className="text-[10px] uppercase tracking-wider font-medium truncate whitespace-nowrap">{order.status}</span>
-        </div>
-      </div>
-
-      {/* Direita: Badge, Valor e Ação */}
-      <div className="flex items-center justify-between w-full md:w-auto md:gap-8 pt-3 md:pt-0 border-t md:border-t-0 border-white/5">
-        <div className="text-left md:text-right min-w-0">
-          <Badge variant="outline" className={cn(
-            "text-[9px] md:text-[10px] rounded-full px-3 py-0.5 md:py-1 font-black whitespace-nowrap",
-            isDelayed ? "border-destructive text-destructive bg-destructive/5" : "border-primary text-primary bg-primary/5"
+      {/* Cabeçalho do Card */}
+      <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+        <div className="flex items-center gap-2">
+          <div className={cn(
+            "text-[10px] font-black px-2 py-0.5 rounded border",
+            isDelayed ? "border-destructive/30 text-destructive bg-destructive/5" : "border-primary/30 text-primary bg-primary/5"
           )}>
-            {order.status.toUpperCase()}
-          </Badge>
-          <p className="text-[10px] md:text-[11px] text-white/70 mt-1 font-mono font-bold whitespace-nowrap">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.value)}
+            #{order.id.slice(-4).toUpperCase()}
+          </div>
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
+            <Calendar className="w-3 h-3" />
+            {order.deliveryDate}
+          </div>
+        </div>
+        {isDelayed && <AlertCircle className="w-3.5 h-3.5 text-destructive animate-pulse" />}
+      </div>
+
+      {/* Corpo do Card */}
+      <div className="p-4 space-y-4">
+        <div>
+          <h4 className="font-black text-white uppercase tracking-tight text-sm line-clamp-1">
+            {order.client}
+          </h4>
+          <p className="text-[10px] text-muted-foreground truncate uppercase tracking-widest mt-0.5">
+            {order.description}
           </p>
         </div>
-        
+
+        <div className="flex items-center justify-between gap-4 pt-2">
+          <Badge variant="outline" className={cn(
+            "text-[9px] rounded-full px-3 py-0.5 font-black uppercase tracking-tighter",
+            isDelayed ? "border-destructive text-destructive bg-destructive/5" : "border-primary text-primary bg-primary/5"
+          )}>
+            {order.status}
+          </Badge>
+          <div className="text-right">
+            <p className="text-xs font-mono font-black text-white">
+              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.value)}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Rodapé do Card */}
+      <div className="px-4 py-3 border-t border-white/5 flex items-center justify-between gap-2 group/footer bg-white/[0.01]">
+        <button className="text-[9px] font-black uppercase text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5">
+          <FileText className="w-3 h-3" />
+          Ver Protocolo
+        </button>
         <button className={cn(
-          "w-11 h-11 md:w-10 md:h-10 flex items-center justify-center bg-white/5 rounded-xl transition-all transform active:scale-90 shrink-0",
-          isDelayed ? "hover:bg-destructive text-destructive hover:text-white" : "hover:bg-primary text-primary hover:text-black"
+          "w-8 h-8 rounded-lg flex items-center justify-center transition-all",
+          isDelayed ? "bg-destructive/10 text-destructive group-hover/footer:bg-destructive group-hover/footer:text-white" : "bg-primary/10 text-primary group-hover/footer:bg-primary group-hover/footer:text-black"
         )}>
-          <ArrowRight className="w-5 h-5 md:w-4 md:h-4" />
+          <ArrowRight className="w-4 h-4" />
         </button>
       </div>
     </div>
