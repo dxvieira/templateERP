@@ -33,7 +33,7 @@
     }
   },
   "auth": {
-    "providers": ["password"]
+    "providers": ["password", "google"]
   },
   "firestore": {
     "/orders/{orderId}": {
