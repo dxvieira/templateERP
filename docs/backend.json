@@ -40,13 +40,13 @@
           ]
         },
         "paymentMethod": {
-          "type": "string",
-          "enum": [
-            "Dinheiro",
-            "Pix",
-            "Cartão",
-            "Boleto"
-          ]
+          "type": "string"
+        },
+        "machine": {
+          "type": "string"
+        },
+        "installments": {
+          "type": "string"
         },
         "items": {
           "type": "array",
@@ -54,6 +54,9 @@
             "type": "object",
             "properties": {
               "desc": {
+                "type": "string"
+              },
+              "size": {
                 "type": "string"
               },
               "quantity": {

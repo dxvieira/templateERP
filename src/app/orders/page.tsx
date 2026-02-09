@@ -49,21 +49,21 @@ import { useToast } from '@/hooks/use-toast';
 // Schemas
 const orderItemSchema = z.object({
   desc: z.string().min(1, 'Descrição é obrigatória'),
-  size: z.string().default(''),
+  size: z.string().optional().default(''),
   quantity: z.number().min(1, 'Mínimo 1'),
   unitValue: z.number().min(0, 'Valor inválido'),
 });
 
 const orderSchema = z.object({
   client: z.string().min(1, 'Cliente é obrigatório'),
-  emissionDate: z.string(),
+  emissionDate: z.string().min(1, 'Data de emissão é obrigatória'),
   deliveryDate: z.string().min(1, 'Data de entrega é obrigatória'),
   seller: z.string().min(1, 'Selecione um vendedor'),
-  observations: z.string().optional(),
+  observations: z.string().optional().default(''),
   status: z.enum(['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Entregue']),
-  paymentMethod: z.enum(['Dinheiro', 'Pix', 'Cartão Crédito', 'Cartão Débito', 'Boleto']),
-  machine: z.string().optional(),
-  installments: z.string().optional(),
+  paymentMethod: z.string().min(1, 'Selecione o pagamento'),
+  machine: z.string().optional().default(''),
+  installments: z.string().optional().default('1x'),
   items: z.array(orderItemSchema).min(1, 'Adicione pelo menos um item'),
 });
 
@@ -100,12 +100,16 @@ export default function OrdersManagementPage() {
   } = useForm<OrderFormValues>({
     resolver: zodResolver(orderSchema),
     defaultValues: {
+      client: '',
       emissionDate: new Date().toISOString().split('T')[0],
       deliveryDate: '',
       status: 'Arte',
       paymentMethod: 'Pix',
       items: [{ desc: '', size: '', quantity: 1, unitValue: 0 }],
-      seller: 'Carlos'
+      seller: 'Carlos',
+      observations: '',
+      machine: '',
+      installments: '1x'
     },
   });
 
@@ -175,7 +179,7 @@ export default function OrdersManagementPage() {
         head: [['DESCRIÇÃO', 'MEDIDA', 'QTD', 'UNIT.', 'SUB']],
         body: data.items.map(item => [
           item.desc,
-          item.size,
+          item.size || '-',
           item.quantity,
           new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitValue),
           new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.quantity * item.unitValue),
@@ -184,13 +188,13 @@ export default function OrdersManagementPage() {
         alternateRowStyles: { fillColor: [245, 245, 245] },
       });
       
-      const finalY = (doc as any).lastAutoTable.finalY + 10;
+      const finalY = (doc as any).lastAutoTable?.finalY || 100;
       doc.setFont('helvetica', 'bold');
-      doc.text(`TOTAL GERAL: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(orderTotal)}`, 130, finalY);
+      doc.text(`TOTAL GERAL: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(orderTotal)}`, 130, finalY + 10);
       if (data.observations) {
         doc.setFont('helvetica', 'normal');
-        doc.text('OBSERVAÇÕES:', 15, finalY + 15);
-        doc.text(data.observations, 15, finalY + 22, { maxWidth: 180 });
+        doc.text('OBSERVAÇÕES:', 15, finalY + 25);
+        doc.text(data.observations, 15, finalY + 32, { maxWidth: 180 });
       }
       doc.save(`OS_${data.client.replace(/\s+/g, '_')}_${docId.slice(-4)}.pdf`);
     } catch (e) {
@@ -199,10 +203,17 @@ export default function OrdersManagementPage() {
   };
 
   const onSubmit = async (data: OrderFormValues) => {
-    if (!firestore || !user) return;
+    if (!firestore || !user) {
+      toast({
+        variant: "destructive",
+        title: "Erro de Conexão",
+        description: "Firebase não inicializado ou usuário offline.",
+      });
+      return;
+    }
     
     const currentTotal = total;
-    const orderData = {
+    const commonData = {
       ...data,
       totalValue: currentTotal,
       updatedAt: serverTimestamp(),
@@ -212,11 +223,13 @@ export default function OrdersManagementPage() {
 
     if (editingOrder) {
       const orderRef = doc(firestore, 'orders', editingOrder.id);
-      updateDoc(orderRef, orderData).catch(async () => {
+      const updatePayload = { ...commonData, id: editingOrder.id };
+      
+      updateDoc(orderRef, updatePayload).catch(async (error) => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: orderRef.path,
           operation: 'update',
-          requestResourceData: orderData
+          requestResourceData: updatePayload
         }));
       });
       
@@ -227,12 +240,12 @@ export default function OrdersManagementPage() {
     } else {
       const orderRef = doc(collection(firestore, 'orders'));
       const newOrderData = { 
-        ...orderData, 
+        ...commonData, 
         createdAt: serverTimestamp(),
         id: orderRef.id 
       };
 
-      setDoc(orderRef, newOrderData).catch(async () => {
+      setDoc(orderRef, newOrderData).catch(async (error) => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: orderRef.path,
           operation: 'create',
@@ -252,11 +265,12 @@ export default function OrdersManagementPage() {
     reset();
   };
 
-  const onError = (errors: any) => {
+  const onError = (formErrors: any) => {
+    console.error('Validation Errors:', formErrors);
     toast({
       variant: "destructive",
       title: "Erro de Validação",
-      description: "Por favor, verifique os campos destacados em vermelho.",
+      description: "Verifique os campos obrigatórios.",
     });
   };
 
@@ -312,8 +326,8 @@ export default function OrdersManagementPage() {
                       <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Cliente & Venda</CardTitle>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2 relative">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Cliente (Busca ou Texto Livre)</Label>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Cliente</Label>
                         <Input 
                           {...register('client')}
                           list="clients-suggestions"
@@ -325,10 +339,9 @@ export default function OrdersManagementPage() {
                             <option key={c.id} value={c.name} />
                           ))}
                         </datalist>
-                        {errors.client && <p className="text-[10px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" /> {errors.client.message}</p>}
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Vendedor Responsável</Label>
+                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Vendedor</Label>
                         <Controller
                           name="seller"
                           control={control}
@@ -346,7 +359,6 @@ export default function OrdersManagementPage() {
                             </Select>
                           )}
                         />
-                        {errors.seller && <p className="text-[10px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" /> {errors.seller.message}</p>}
                       </div>
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase text-muted-foreground">Emissão</Label>
@@ -359,7 +371,6 @@ export default function OrdersManagementPage() {
                           {...register('deliveryDate')} 
                           className={`bg-black/40 border-white/10 h-12 ${errors.deliveryDate ? 'border-destructive' : ''}`} 
                         />
-                        {errors.deliveryDate && <p className="text-[10px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" /> {errors.deliveryDate.message || 'Obrigatório'}</p>}
                       </div>
                     </CardContent>
                   </Card>
@@ -430,7 +441,6 @@ export default function OrdersManagementPage() {
                           )}
                         </div>
                       ))}
-                      {errors.items && <p className="text-[10px] text-destructive text-center">{errors.items.message || 'Adicione itens válidos'}</p>}
                     </CardContent>
                   </Card>
                 </div>
@@ -438,11 +448,11 @@ export default function OrdersManagementPage() {
                 <div className="lg:col-span-4 space-y-6">
                   <Card className="bg-white/5 border-none shadow-none">
                     <CardHeader className="py-4">
-                      <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Fechamento Financeiro</CardTitle>
+                      <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Fechamento</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6">
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase text-muted-foreground">Forma de Pagamento</Label>
+                        <Label className="text-[10px] uppercase text-muted-foreground">Pagamento</Label>
                         <Controller
                           name="paymentMethod"
                           control={control}
@@ -452,11 +462,11 @@ export default function OrdersManagementPage() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                <SelectItem value="Dinheiro">Dinheiro (Espécie)</SelectItem>
-                                <SelectItem value="Pix">Pix / Transferência</SelectItem>
-                                <SelectItem value="Cartão Crédito">Cartão de Crédito</SelectItem>
-                                <SelectItem value="Cartão Débito">Cartão de Débito</SelectItem>
-                                <SelectItem value="Boleto">Boleto Bancário</SelectItem>
+                                <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                                <SelectItem value="Pix">Pix</SelectItem>
+                                <SelectItem value="Cartão Crédito">Cartão Crédito</SelectItem>
+                                <SelectItem value="Cartão Débito">Cartão Débito</SelectItem>
+                                <SelectItem value="Boleto">Boleto</SelectItem>
                               </SelectContent>
                             </Select>
                           )}
@@ -464,60 +474,31 @@ export default function OrdersManagementPage() {
                       </div>
 
                       {isCardPayment && (
-                        <motion.div 
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-4"
-                        >
-                          <div className="flex items-center gap-2 mb-2">
-                            <CreditCard className="w-3 h-3 text-primary" />
-                            <span className="text-[9px] font-black uppercase text-primary">Detalhes do Terminal</span>
+                        <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-4">
+                          <div className="space-y-1">
+                            <Label className="text-[8px] uppercase text-muted-foreground">Maquininha</Label>
+                            <Controller
+                              name="machine"
+                              control={control}
+                              render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                  <SelectTrigger className="bg-black/20 border-white/5 h-10">
+                                    <SelectValue placeholder="Selecione..." />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                    <SelectItem value="PagBank">PagBank</SelectItem>
+                                    <SelectItem value="SIPAG">SIPAG</SelectItem>
+                                    <SelectItem value="Stone">Stone</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            />
                           </div>
-                          <div className="space-y-3">
-                            <div className="space-y-1">
-                              <Label className="text-[8px] uppercase text-muted-foreground">Maquininha</Label>
-                              <Controller
-                                name="machine"
-                                control={control}
-                                render={({ field }) => (
-                                  <Select onValueChange={field.onChange} value={field.value || 'PagBank'}>
-                                    <SelectTrigger className="bg-black/20 border-white/5 h-10">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                      <SelectItem value="PagBank">PagBank (Moderninha)</SelectItem>
-                                      <SelectItem value="SIPAG">SIPAG / SICOOB</SelectItem>
-                                      <SelectItem value="Stone">Stone / Ton</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                )}
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-[8px] uppercase text-muted-foreground">Parcelamento</Label>
-                              <Controller
-                                name="installments"
-                                control={control}
-                                render={({ field }) => (
-                                  <Select onValueChange={field.onChange} value={field.value || '1x'}>
-                                    <SelectTrigger className="bg-black/20 border-white/5 h-10">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                      {Array.from({ length: 12 }, (_, i) => (
-                                        <SelectItem key={i + 1} value={`${i + 1}x`}>{i + 1}x sem juros</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                )}
-                              />
-                            </div>
-                          </div>
-                        </motion.div>
+                        </div>
                       )}
 
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase text-muted-foreground">Status Atual</Label>
+                        <Label className="text-[10px] uppercase text-muted-foreground">Status</Label>
                         <Controller
                           name="status"
                           control={control}
@@ -527,7 +508,7 @@ export default function OrdersManagementPage() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                <SelectItem value="Arte">Arte Final</SelectItem>
+                                <SelectItem value="Arte">Arte</SelectItem>
                                 <SelectItem value="Impressão">Impressão</SelectItem>
                                 <SelectItem value="Serralheria">Serralheria</SelectItem>
                                 <SelectItem value="Acabamento">Acabamento</SelectItem>
@@ -540,26 +521,27 @@ export default function OrdersManagementPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase text-muted-foreground">Observações Técnicas</Label>
+                        <Label className="text-[10px] uppercase text-muted-foreground">Observações</Label>
                         <Textarea 
                           {...register('observations')}
-                          placeholder="Detalhes de acabamento, ilhós, sangria..."
+                          placeholder="Detalhes extras..."
                           className="bg-black/40 border-white/10 min-h-[100px]"
                         />
                       </div>
 
                       <div className="pt-4 border-t border-white/5">
                         <div className="flex justify-between items-center mb-6">
-                          <span className="text-[10px] text-muted-foreground uppercase font-black">Total OS</span>
+                          <span className="text-[10px] text-muted-foreground uppercase font-black">Total</span>
                           <span className="text-2xl font-black text-white">
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
                           </span>
                         </div>
                         <Button 
                           type="submit" 
+                          disabled={isUserLoading}
                           className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl"
                         >
-                          {editingOrder ? 'Salvar Alterações' : 'Finalizar OS'} 
+                          {editingOrder ? 'Salvar' : 'Finalizar'} 
                           <FileDown className="w-5 h-5 ml-2" />
                         </Button>
                       </div>
