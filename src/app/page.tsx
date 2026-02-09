@@ -2,31 +2,21 @@
 "use client"
 
 import React, { useMemo, memo } from 'react';
-import dynamic from 'next/dynamic';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { DashboardStatCard } from '@/components/dashboard/DashboardStatCard';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { EmptyState } from '@/components/dashboard/EmptyState';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Palette, Printer, Hammer, CheckCircle2, Plus, Loader2 } from 'lucide-react';
+import { Palette, Printer, Hammer, CheckCircle2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
 import { useFirestore, useCollection } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
+import { ProductionChart } from '@/components/dashboard/ProductionChart';
+import { WarRoom } from '@/components/dashboard/WarRoom';
 
-// CODE SPLITTING: Carregamento dinâmico de componentes pesados (Charts e AI)
-// Isso reduz o bundle inicial da Home em ~30%
-const ProductionChart = dynamic(() => import('@/components/dashboard/ProductionChart').then(mod => mod.ProductionChart), {
-  loading: () => <div className="h-[300px] w-full bg-white/5 animate-pulse rounded-xl" />
-});
-
-const WarRoom = dynamic(() => import('@/components/dashboard/WarRoom').then(mod => mod.WarRoom), {
-  loading: () => <div className="h-[200px] w-full bg-white/5 animate-pulse rounded-xl" />
-});
-
-// Memoized Header to prevent re-renders on data sync
 const DashboardHeader = memo(({ onNewOrder }: { onNewOrder: () => void }) => (
   <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
     <motion.div
@@ -57,7 +47,6 @@ export default function DashboardPage() {
   const router = useRouter();
   const db = useFirestore();
 
-  // Memoized Query Reference - Preventing effect re-runs
   const ordersQuery = useMemo(() => {
     if (!db) return null;
     return query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
@@ -65,7 +54,6 @@ export default function DashboardPage() {
 
   const { data: orders, loading: ordersLoading } = useCollection(ordersQuery);
 
-  // Memoized Stats - Recalculated only when orders data changes
   const stats = useMemo(() => ({
     arte: orders?.filter(o => o.status === 'Arte').length || 0,
     impressao: orders?.filter(o => o.status === 'Impressão').length || 0,
@@ -80,7 +68,6 @@ export default function DashboardPage() {
       <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-8">
         <DashboardHeader onNewOrder={() => router.push('/orders/new')} />
 
-        {/* KPIs Section - Memoized data access */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
           <DashboardStatCard label="Arte Final" value={stats.arte.toString()} icon={Palette} />
           <DashboardStatCard label="Impressão" value={stats.impressao.toString()} icon={Printer} />
@@ -115,7 +102,7 @@ export default function DashboardPage() {
                             key={order.id}
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: idx * 0.02 }} // Optimized stagger
+                            transition={{ delay: idx * 0.02 }}
                           >
                             <OrderCard order={{
                               id: order.id,
@@ -139,12 +126,8 @@ export default function DashboardPage() {
           </div>
 
           <div className="lg:col-span-4 space-y-8">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-              <ProductionChart />
-            </motion.div>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
-              <WarRoom />
-            </motion.div>
+            <ProductionChart orders={orders} />
+            <WarRoom orders={orders} />
           </div>
         </div>
 

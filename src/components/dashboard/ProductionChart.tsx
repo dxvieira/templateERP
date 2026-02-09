@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -16,12 +17,9 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart"
 
-const chartData = [
-  { status: "arte", visitors: 275, fill: "#D026FF" },
-  { status: "impressao", visitors: 200, fill: "#3B82F6" },
-  { status: "acabamento", visitors: 187, fill: "#FF5F1F" },
-  { status: "concluido", visitors: 450, fill: "#06B6D4" },
-]
+interface ProductionChartProps {
+  orders?: any[];
+}
 
 const chartConfig = {
   visitors: {
@@ -29,32 +27,60 @@ const chartConfig = {
   },
   arte: {
     label: "Arte",
-    color: "hsl(var(--chart-1))",
+    color: "#D026FF",
   },
   impressao: {
     label: "Impressão",
-    color: "hsl(var(--chart-2))",
+    color: "#3B82F6",
   },
   acabamento: {
     label: "Acabamento",
-    color: "hsl(var(--chart-3))",
+    color: "#FF5F1F",
   },
   concluido: {
     label: "Concluído",
-    color: "hsl(var(--chart-4))",
+    color: "#06B6D4",
   },
 } satisfies ChartConfig
 
-export function ProductionChart() {
+export function ProductionChart({ orders = [] }: ProductionChartProps) {
+  const chartData = React.useMemo(() => {
+    const counts = {
+      Arte: 0,
+      Impressão: 0,
+      Acabamento: 0,
+      Entregue: 0,
+    };
+
+    orders.forEach((order) => {
+      const status = order.status as keyof typeof counts;
+      if (counts[status] !== undefined) {
+        counts[status]++;
+      }
+    });
+
+    return [
+      { status: "arte", visitors: counts["Arte"], fill: chartConfig.arte.color },
+      { status: "impressao", visitors: counts["Impressão"], fill: chartConfig.impressao.color },
+      { status: "acabamento", visitors: counts["Acabamento"], fill: chartConfig.acabamento.color },
+      { status: "concluido", visitors: counts["Entregue"], fill: chartConfig.concluido.color },
+    ];
+  }, [orders]);
+
   const totalOrders = React.useMemo(() => {
     return chartData.reduce((acc, curr) => acc + curr.visitors, 0)
-  }, [])
+  }, [chartData]);
+
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+
+  if (!mounted) return <div className="h-[300px] w-full bg-white/5 animate-pulse rounded-xl" />;
 
   return (
     <Card className="glass border-white/5 h-full">
       <CardHeader className="items-center pb-0">
         <CardTitle className="text-sm font-semibold text-primary uppercase tracking-widest">Fluxo de Produção</CardTitle>
-        <CardDescription className="text-xs text-muted-foreground">Distribuição atual de OS</CardDescription>
+        <CardDescription className="text-xs text-muted-foreground">Distribuição real de OS</CardDescription>
       </CardHeader>
       <CardContent className="flex-1 pb-0">
         <ChartContainer
