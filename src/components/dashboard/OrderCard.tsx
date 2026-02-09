@@ -1,15 +1,12 @@
 "use client"
 
 import React, { memo } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { 
   Calendar, 
-  AlertCircle, 
-  ArrowRight, 
-  FileText, 
-  CheckCircle2, 
+  Check, 
   ChevronDown, 
-  Check 
+  PackageCheck,
+  Clock
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -26,7 +23,6 @@ export interface Order {
   status: string;
   deliveryDate: string;
   value: number;
-  isDelayed?: boolean;
 }
 
 interface OrderCardProps {
@@ -55,102 +51,95 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
     <div 
       onClick={() => onClick?.(order)}
       className={cn(
-        "flex flex-col rounded-2xl bg-white/5 border border-white/5 overflow-hidden group transition-all hover:-translate-y-1 cursor-pointer",
+        "group relative flex flex-col rounded-3xl bg-[#121212] border border-zinc-800/50 p-5 transition-all duration-300 cursor-pointer overflow-hidden",
+        "hover:scale-[1.02] hover:bg-[#161616]",
         isCompleted 
-          ? "hover:border-[#00FF00]/50 hover:shadow-[0_0_20px_rgba(0,255,0,0.2)] opacity-80 hover:opacity-100" 
-          : "hover:border-primary/50 hover:shadow-[0_0_20px_rgba(255,95,31,0.2)]"
+          ? "hover:border-[#00FF00] hover:shadow-[0_0_30px_-10px_rgba(0,255,0,0.5)]" 
+          : "hover:border-primary hover:shadow-[0_0_30px_-10px_rgba(255,95,31,0.5)]"
       )}
     >
-      {/* Cabeçalho do Card */}
-      <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-        <div className="flex items-center gap-2">
-          <div className={cn(
-            "text-[10px] font-black px-2 py-0.5 rounded border uppercase",
-            isCompleted 
-              ? "border-[#00FF00]/30 text-[#00FF00] bg-[#00FF00]/5" 
-              : "border-primary/30 text-primary bg-primary/5"
-          )}>
-            #{order.id.slice(-4).toUpperCase()}
-          </div>
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
-            <Calendar className="w-3 h-3" />
-            {order.deliveryDate || 'N/A'}
-          </div>
-        </div>
+      {/* Background Decorativo */}
+      <div className={cn(
+        "absolute -right-12 -top-12 w-32 h-32 blur-[80px] opacity-10 transition-opacity group-hover:opacity-20",
+        isCompleted ? "bg-[#00FF00]" : "bg-primary"
+      )} />
+
+      {/* Cabeçalho: ID e Botão Check */}
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-[10px] font-black tracking-[0.2em] text-zinc-500 uppercase">
+          ID #{order.id.slice(-4).toUpperCase()}
+        </span>
         
-        {!isCompleted && (
+        {!isCompleted ? (
           <button 
             onClick={handleConcludeClick}
-            className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#00FF00] hover:text-black transition-all group/check"
-            title="Concluir Instantaneamente"
+            className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 transition-all hover:bg-primary hover:text-black hover:border-primary active:scale-90"
+            title="Concluir OS"
           >
-            <Check className="w-3 h-3" />
+            <Check className="w-4 h-4" />
           </button>
-        )}
-        
-        {isCompleted && (
-          <CheckCircle2 className="w-3.5 h-3.5 text-[#00FF00]" />
-        )}
-      </div>
-
-      {/* Corpo do Card */}
-      <div className="p-4 space-y-4">
-        <div>
-          <h4 className="font-black text-white uppercase tracking-tight text-sm line-clamp-1">
-            {order.client}
-          </h4>
-          <p className="text-[10px] text-muted-foreground truncate uppercase tracking-widest mt-0.5">
-            {order.description}
-          </p>
-        </div>
-
-        <div className="flex items-center justify-between gap-4 pt-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Badge variant="outline" className={cn(
-                "text-[9px] rounded-full px-3 py-1 font-black uppercase tracking-tighter cursor-pointer flex items-center gap-1 transition-all",
-                isCompleted 
-                  ? "border-[#00FF00] text-[#00FF00] bg-[#00FF00]/5 hover:bg-[#00FF00]/10" 
-                  : "border-primary text-primary bg-primary/5 hover:bg-primary/10"
-              )}>
-                {order.status}
-                <ChevronDown className="w-2.5 h-2.5 opacity-50" />
-              </Badge>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="bg-zinc-900 border-white/10 text-white min-w-[140px]">
-              {statusOptions.map((s) => (
-                <DropdownMenuItem 
-                  key={s} 
-                  onClick={(e) => handleStatusClick(e as any, s)}
-                  className="text-[10px] uppercase font-bold tracking-widest focus:bg-primary focus:text-black"
-                >
-                  {s}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <div className="text-right">
-            <p className="text-xs font-mono font-black text-white">
-              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.value)}
-            </p>
+        ) : (
+          <div className="w-8 h-8 rounded-full bg-[#00FF00]/10 flex items-center justify-center text-[#00FF00]">
+            <PackageCheck className="w-4 h-4" />
           </div>
+        )}
+      </div>
+
+      {/* Destaque Central: Data de Entrega */}
+      <div className="flex flex-col items-center justify-center py-2 mb-6 border-y border-zinc-800/30">
+        <div className="flex items-center gap-2 mb-1">
+          <Calendar className={cn("w-3.5 h-3.5", isCompleted ? "text-[#00FF00]" : "text-primary")} />
+          <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Entrega prevista</span>
+        </div>
+        <div className="text-2xl font-black text-white tracking-tighter">
+          {order.deliveryDate ? (
+            new Date(order.deliveryDate + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+          ) : 'N/A'}
         </div>
       </div>
 
-      {/* Rodapé do Card */}
-      <div className="px-4 py-3 border-t border-white/5 flex items-center justify-between gap-2 group/footer bg-white/[0.01]">
-        <button className="text-[9px] font-black uppercase text-muted-foreground hover:text-white transition-colors flex items-center gap-1.5">
-          <FileText className="w-3 h-3" />
-          Editar Protocolo
-        </button>
-        <div className={cn(
-          "w-8 h-8 rounded-lg flex items-center justify-center transition-all",
-          isCompleted 
-            ? "bg-[#00FF00]/10 text-[#00FF00] group-hover/footer:bg-[#00FF00] group-hover/footer:text-black" 
-            : "bg-primary/10 text-primary group-hover/footer:bg-primary group-hover/footer:text-black"
-        )}>
-          <ArrowRight className="w-4 h-4" />
+      {/* Corpo: Cliente e Descrição */}
+      <div className="flex-1 space-y-1 mb-8">
+        <h4 className="text-lg font-black text-white leading-tight uppercase truncate">
+          {order.client}
+        </h4>
+        <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+          {order.description}
+        </p>
+      </div>
+
+      {/* Rodapé: Seletor (Badge) e Valor */}
+      <div className="flex items-end justify-between gap-4 mt-auto">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+            <button className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95",
+              isCompleted 
+                ? "bg-[#00FF00] text-black shadow-[0_0_15px_rgba(0,255,0,0.3)]" 
+                : "bg-primary text-black shadow-[0_0_15px_rgba(255,95,31,0.3)]"
+            )}>
+              {order.status}
+              <ChevronDown className="w-3 h-3 opacity-60" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="bg-zinc-900 border-zinc-800 text-white min-w-[140px] rounded-xl shadow-2xl">
+            {statusOptions.map((s) => (
+              <DropdownMenuItem 
+                key={s} 
+                onClick={(e) => handleStatusClick(e as any, s)}
+                className="text-[10px] uppercase font-bold tracking-widest focus:bg-primary focus:text-black p-3"
+              >
+                {s}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <div className="text-right">
+          <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-0.5">Total</div>
+          <div className="text-xl font-black text-white tracking-tighter">
+            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.value)}
+          </div>
         </div>
       </div>
     </div>
