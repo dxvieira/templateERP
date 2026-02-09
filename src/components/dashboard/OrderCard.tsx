@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { memo } from 'react';
@@ -66,22 +67,21 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
     <div 
       onClick={() => onClick?.(order)}
       className={cn(
-        "group relative flex flex-col rounded-xl bg-[#121212] border border-zinc-800/50 p-3 transition-all duration-200 cursor-pointer overflow-hidden gap-y-2",
-        "hover:border-primary/50 hover:bg-[#161616]",
-        isCompleted && "opacity-60 grayscale-[0.3]"
+        "group relative flex flex-col rounded-xl bg-[#111111] border border-zinc-800/40 p-3 transition-all duration-200 cursor-pointer overflow-hidden gap-y-1.5",
+        "hover:border-primary/40 hover:bg-[#141414]",
+        isCompleted && "opacity-50 grayscale-[0.5]"
       )}
     >
-      <div className="flex items-center justify-between gap-2 z-10 border-b border-white/5 pb-2">
-        <div className="flex items-center gap-1">
-          <Hash className="w-2.5 h-2.5 text-zinc-500" />
-          <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter">
-            {order.id}
+      <div className="flex items-center justify-between gap-2 z-10 border-b border-white/5 pb-1.5">
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="text-[10px] font-black text-primary uppercase tracking-tighter">
+            #{order.id}
           </span>
         </div>
         
-        <div className="flex items-center gap-1.5">
-          <Calendar className="w-3 h-3 text-primary" />
-          <span className="text-[10px] font-bold text-white uppercase tracking-tighter">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Calendar className="w-3 h-3 text-primary/70" />
+          <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-tighter whitespace-nowrap">
             {order.deliveryDate ? (
               new Date(order.deliveryDate + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
             ) : '--/--'}
@@ -91,33 +91,33 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
         <button 
           onClick={handleConcludeClick}
           className={cn(
-            "w-6 h-6 rounded-full flex items-center justify-center transition-all active:scale-90",
+            "w-5 h-5 rounded-full flex items-center justify-center transition-all active:scale-90",
             isCompleted 
               ? "bg-green-500 text-black" 
-              : "bg-zinc-800 text-zinc-400 hover:bg-green-500 hover:text-black"
+              : "bg-zinc-800 text-zinc-500 hover:bg-green-500 hover:text-black"
           )}
         >
-          <Check className="w-3.5 h-3.5" />
+          <Check className="w-3 h-3" />
         </button>
       </div>
 
       <div className="flex-1 min-w-0">
-        <h4 className="text-xs font-black text-white uppercase tracking-tight truncate">
+        <h4 className="text-[11px] font-black text-white uppercase tracking-tight truncate">
           {order.client}
         </h4>
-        <p className="text-[9px] text-zinc-500 truncate mt-0.5">
+        <p className="text-[10px] text-zinc-500 truncate mt-0.5 font-medium">
           {order.description}
         </p>
       </div>
 
-      <div className="flex items-center gap-2 pt-1">
+      <div className="flex items-center gap-2 pt-1 border-t border-white/5">
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
             <button className={cn(
-              "flex-1 flex items-center justify-between px-2 py-1 rounded-lg text-[8px] font-bold uppercase tracking-widest transition-all active:scale-95 border",
+              "flex-1 flex items-center justify-between px-2 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all active:scale-95 border",
               isCompleted 
-                ? "bg-zinc-800 text-zinc-400 border-zinc-700" 
-                : "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+                ? "bg-zinc-900 text-zinc-500 border-zinc-800" 
+                : "bg-primary/5 text-primary border-primary/20 hover:bg-primary/10"
             )}>
               <span className="truncate">{order.status}</span>
               <ChevronDown className="w-2.5 h-2.5 opacity-50" />
@@ -125,13 +125,13 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
           </DropdownMenuTrigger>
           <DropdownMenuContent 
             align="center"
-            className="bg-zinc-900 border-zinc-800 text-white min-w-[140px] rounded-lg z-[150]"
+            className="bg-zinc-950 border-white/10 text-white min-w-[140px] rounded-xl z-[150]"
           >
             {statusOptions.map((s) => (
               <DropdownMenuItem 
                 key={s} 
                 onClick={(e) => handleStatusClick(e as any, s)}
-                className="text-[9px] uppercase font-bold tracking-widest focus:bg-primary focus:text-black p-2 cursor-pointer"
+                className="text-[10px] uppercase font-black tracking-widest focus:bg-primary focus:text-black p-2.5 cursor-pointer"
               >
                 {s}
               </DropdownMenuItem>
@@ -141,7 +141,7 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
 
         <button 
           onClick={handleDeleteClick}
-          className="w-8 h-8 rounded-lg bg-zinc-800/50 border border-zinc-700 flex items-center justify-center text-zinc-500 transition-all hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 shrink-0"
+          className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-600 transition-all hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 shrink-0"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
