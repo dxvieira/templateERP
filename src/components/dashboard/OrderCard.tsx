@@ -41,18 +41,20 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
   const isCompleted = order.status === 'Entregue' || order.status === 'Concluído';
 
   const handleStatusClick = (e: React.MouseEvent, status: string) => {
-    e.stopPropagation(); // Impede abrir o modal de edição
+    e.stopPropagation(); 
     onStatusChange?.(order.id, status);
   };
 
   const handleConcludeClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Impede abrir o modal de edição
+    e.stopPropagation(); 
     onQuickConclude?.(order.id);
   };
 
   const handleDeleteClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Impede abrir o modal de edição
-    onDelete?.(order.id);
+    e.stopPropagation(); 
+    if (onDelete) {
+      onDelete(order.id);
+    }
   };
 
   const handleContainerClick = () => {
@@ -70,13 +72,11 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
           : "hover:border-primary hover:shadow-[0_0_30px_-5px_rgba(255,95,31,0.3)]"
       )}
     >
-      {/* Glow Effect Background */}
       <div className={cn(
         "absolute -right-10 -top-10 w-32 h-32 blur-[80px] opacity-10 transition-opacity group-hover:opacity-25",
         isCompleted ? "bg-[#00FF00]" : "bg-primary"
       )} />
 
-      {/* Cabeçalho Espaçoso */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-1.5 opacity-50">
           <Hash className="w-3 h-3 text-zinc-400" />
@@ -103,14 +103,13 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
           <button 
             onClick={handleDeleteClick}
             title="Excluir Pedido"
-            className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 transition-all hover:bg-destructive hover:text-white hover:border-destructive hover:shadow-[0_0_15px_rgba(255,0,0,0.4)] active:scale-90"
+            className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 transition-all hover:bg-destructive hover:text-white hover:border-destructive hover:shadow-[0_0_15px_rgba(255,0,0,0.4)] active:scale-90 z-10"
           >
             <Trash2 className="w-5 h-5" />
           </button>
         </div>
       </div>
 
-      {/* Seção Central - Hierarquia de Peso */}
       <div className="space-y-3 flex-1">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 text-primary">
@@ -136,7 +135,6 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
         </div>
       </div>
 
-      {/* Rodapé Dominante: Barra de Status Full-Width */}
       <div className="mt-auto">
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>

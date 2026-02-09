@@ -174,6 +174,10 @@ export default function OrdersManagerPage() {
       try {
         await deleteOrder(orderId);
         toast({ title: "OS Removida", description: "Protocolo excluído com sucesso." });
+        if (editingOrder && editingOrder.id === orderId) {
+          setIsModalOpen(false);
+          setEditingOrder(null);
+        }
       } catch (error) {
         toast({ variant: "destructive", title: "Erro ao excluir", description: "Não foi possível remover a OS." });
       }
@@ -204,7 +208,6 @@ export default function OrdersManagerPage() {
           </Button>
         </div>
 
-        {/* Fila Ativa */}
         <div className="space-y-8">
           <div className="flex items-center gap-6 border-b border-white/5 pb-6">
             <h3 className="text-sm font-black text-primary uppercase tracking-[0.6em] flex items-center gap-3">
@@ -248,7 +251,6 @@ export default function OrdersManagerPage() {
           </div>
         </div>
 
-        {/* Concluídos */}
         <div className="space-y-8 pt-12">
           <div className="flex items-center gap-6 border-b border-white/5 pb-6">
             <h3 className="text-sm font-black text-[#00FF00] uppercase tracking-[0.6em] flex items-center gap-3">
@@ -291,9 +293,20 @@ export default function OrdersManagerPage() {
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
           <DialogContent className="max-w-4xl bg-zinc-950 border-white/10 text-white rounded-[2.5rem] overflow-hidden p-0 shadow-2xl z-[9999]">
             <DialogHeader className="p-8 bg-white/[0.02] border-b border-white/5">
-              <DialogTitle className="text-3xl font-black text-primary uppercase tracking-tighter">
-                {editingOrder ? 'Ajustar Protocolo' : 'Entrada de Produção'}
-              </DialogTitle>
+              <div className="flex items-center justify-between">
+                <DialogTitle className="text-3xl font-black text-primary uppercase tracking-tighter">
+                  {editingOrder ? 'Ajustar Protocolo' : 'Entrada de Produção'}
+                </DialogTitle>
+                {editingOrder && (
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => handleDeleteOrder(editingOrder.id)}
+                    className="text-destructive hover:bg-destructive/10 font-black uppercase tracking-widest gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" /> Excluir OS
+                  </Button>
+                )}
+              </div>
             </DialogHeader>
 
             <form onSubmit={handleSubmit(onSubmit)} className="p-8 space-y-10 max-h-[75vh] overflow-y-auto no-scrollbar">
