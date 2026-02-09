@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect } from 'react';
@@ -7,7 +8,7 @@ import { OrderCard } from '@/components/dashboard/OrderCard';
 import { EmptyState } from '@/components/dashboard/EmptyState';
 import { useOrders } from '@/hooks/use-orders';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Palette, Printer, Hammer, CheckCircle2, Zap, Plus, Loader2 } from 'lucide-react';
+import { Palette, Printer, Hammer, CheckCircle2, Zap, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/firebase';
@@ -15,9 +16,8 @@ import { useUser } from '@/firebase';
 export default function DashboardPage() {
   const router = useRouter();
   const { user, isUserLoading } = useUser();
-  const { orders, isLoading, stats } = useOrders();
+  const { orders, stats } = useOrders();
 
-  // Proteção de rota simplificada: redireciona apenas se não estiver carregando e não houver usuário
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.replace('/login');
@@ -46,51 +46,43 @@ export default function DashboardPage() {
           </Button>
         </div>
 
-        {/* Estatísticas com Skeletons Visuais se estiver carregando */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          <DashboardStatCard label="Arte Final" value={isLoading ? "..." : stats.arte.toString()} icon={Palette} />
-          <DashboardStatCard label="Impressão" value={isLoading ? "..." : stats.impressao.toString()} icon={Printer} />
-          <DashboardStatCard label="Acabamento" value={isLoading ? "..." : stats.acabamento.toString()} icon={Hammer} />
-          <DashboardStatCard label="Entregue" value={isLoading ? "..." : stats.concluido.toString()} icon={CheckCircle2} />
+          <DashboardStatCard label="Arte Final" value={stats.arte.toString()} icon={Palette} />
+          <DashboardStatCard label="Impressão" value={stats.impressao.toString()} icon={Printer} />
+          <DashboardStatCard label="Acabamento" value={stats.acabamento.toString()} icon={Hammer} />
+          <DashboardStatCard label="Entregue" value={stats.concluido.toString()} icon={CheckCircle2} />
         </div>
 
         <div className="space-y-6">
           <div className="flex items-center justify-between border-b border-white/5 pb-4">
             <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.5em] flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-primary/40 animate-pulse"></span>
+              <span className="w-2 h-2 rounded-full bg-primary/40"></span>
               Fila de Produção Recente
             </h3>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {isLoading ? (
-              <div className="col-span-full flex flex-col items-center py-20 opacity-20 gap-4">
-                <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                <p className="text-[10px] uppercase tracking-[0.5em]">Sincronizando Fila...</p>
-              </div>
-            ) : (
-              <AnimatePresence mode="popLayout">
-                {orders.slice(0, 8).map((order) => (
-                  <motion.div 
-                    key={order.id} 
-                    layout 
-                    initial={{ opacity: 0, scale: 0.95 }} 
-                    animate={{ opacity: 1, scale: 1 }}
-                  >
-                    <OrderCard order={{
-                      id: order.id,
-                      client: order.client,
-                      description: order.items?.[0]?.desc || 'Sem descrição',
-                      status: order.status,
-                      deliveryDate: order.deliveryDate || 'N/A',
-                      value: order.totalValue || 0
-                    }} />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            )}
+            <AnimatePresence mode="popLayout">
+              {orders.slice(0, 8).map((order) => (
+                <motion.div 
+                  key={order.id} 
+                  layout 
+                  initial={{ opacity: 0, scale: 0.95 }} 
+                  animate={{ opacity: 1, scale: 1 }}
+                >
+                  <OrderCard order={{
+                    id: order.id,
+                    client: order.client,
+                    description: order.items?.[0]?.desc || 'Sem descrição',
+                    status: order.status,
+                    deliveryDate: order.deliveryDate || 'N/A',
+                    value: order.totalValue || 0
+                  }} />
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
-          {!isLoading && orders.length === 0 && <EmptyState />}
+          {orders.length === 0 && <EmptyState />}
         </div>
       </main>
     </div>

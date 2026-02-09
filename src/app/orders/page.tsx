@@ -28,11 +28,10 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from '@/components/ui/dialog';
-import { Plus, Trash2, Loader2, FileText, Save, Calculator, CreditCard } from 'lucide-react';
+import { Plus, Trash2, FileText, Save, Calculator } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
-// Schema robusto com coerção numérica e campos condicionais
 const orderSchema = z.object({
   client: z.string().min(1, 'Nome do cliente é obrigatório'),
   clientId: z.string().optional(),
@@ -60,7 +59,6 @@ export default function OrdersManagerPage() {
   const { user } = useUser();
   const { toast } = useToast();
 
-  // Queries em Tempo Real
   const clientsQuery = useMemoFirebase(() => 
     firestore ? query(collection(firestore, 'clients'), orderBy('name', 'asc')) : null
   , [firestore]);
@@ -69,7 +67,7 @@ export default function OrdersManagerPage() {
   , [firestore]);
 
   const { data: clients } = useCollection(clientsQuery);
-  const { data: orders, isLoading: isOrdersLoading } = useCollection(ordersQuery);
+  const { data: orders } = useCollection(ordersQuery);
 
   const { register, control, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<OrderFormValues>({
     resolver: zodResolver(orderSchema),
@@ -82,12 +80,9 @@ export default function OrdersManagerPage() {
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
-  
-  // Watchers para lógica em tempo real
   const watchedItems = useWatch({ control, name: 'items' });
   const watchedPayment = watch('paymentMethod');
 
-  // Cálculo de Total Automático (Auditado para decimais)
   const totalValue = useMemo(() => {
     return watchedItems?.reduce((acc, item) => {
       const q = Number(item.quantity) || 0;
@@ -96,7 +91,6 @@ export default function OrdersManagerPage() {
     }, 0) || 0;
   }, [watchedItems]);
 
-  // Reset de campos de cartão se mudar forma de pagamento
   useEffect(() => {
     if (watchedPayment !== 'Cartão de Crédito' && watchedPayment !== 'Cartão de Débito') {
       setValue('machine', undefined);
@@ -148,7 +142,6 @@ export default function OrdersManagerPage() {
               </DialogHeader>
 
               <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-8 max-h-[75vh] overflow-y-auto no-scrollbar">
-                {/* Seção Cliente e Datas */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="md:col-span-2 space-y-2">
                     <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Cliente (Busca Híbrida)*</Label>
@@ -169,7 +162,6 @@ export default function OrdersManagerPage() {
                         {clients?.map(c => <option key={c.id} value={c.name} />)}
                       </datalist>
                     </div>
-                    {errors.client && <p className="text-[10px] text-destructive uppercase font-bold">{errors.client.message}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Entrega</Label>
@@ -177,7 +169,6 @@ export default function OrdersManagerPage() {
                   </div>
                 </div>
 
-                {/* Seção Vendedor e Status */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Vendedor Responsável</Label>
@@ -204,7 +195,6 @@ export default function OrdersManagerPage() {
                   </div>
                 </div>
 
-                {/* Seção Itens e Escopo */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] flex items-center gap-2">
@@ -238,7 +228,6 @@ export default function OrdersManagerPage() {
                   ))}
                 </div>
 
-                {/* Seção Pagamento Condicional */}
                 <div className="pt-6 border-t border-white/5 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
@@ -260,49 +249,6 @@ export default function OrdersManagerPage() {
                         )}
                       />
                     </div>
-                    
-                    {(watchedPayment?.includes('Cartão')) && (
-                      <div className="grid grid-cols-2 gap-3 p-4 bg-primary/5 border border-primary/20 rounded-2xl animate-in fade-in slide-in-from-top-2">
-                        <div className="space-y-2">
-                          <Label className="text-[8px] uppercase text-primary font-black">Maquininha</Label>
-                          <Controller
-                            name="machine"
-                            control={control}
-                            render={({ field }) => (
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <SelectTrigger className="bg-black/40 border-white/10 h-10 text-[10px]">
-                                  <SelectValue placeholder="Selecione" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                  {['SICOOB/SIPAG', 'PagBank', 'Stone', 'Mercado Pago'].map(m => (
-                                    <SelectItem key={m} value={m}>{m}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-[8px] uppercase text-primary font-black">Parcelas</Label>
-                          <Controller
-                            name="installments"
-                            control={control}
-                            render={({ field }) => (
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <SelectTrigger className="bg-black/40 border-white/10 h-10 text-[10px]">
-                                  <SelectValue placeholder="1x" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                  {Array.from({length: 12}, (_, i) => `${i+1}x`).map(p => (
-                                    <SelectItem key={p} value={p}>{p}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                          />
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -311,7 +257,6 @@ export default function OrdersManagerPage() {
                   <Textarea {...register('observations')} className="bg-black/40 border-white/10 rounded-2xl min-h-[100px]" placeholder="Instruções extras de acabamento ou instalação..." />
                 </div>
 
-                {/* Rodapé do Form com Totalizador */}
                 <div className="flex flex-col md:flex-row items-center justify-between gap-6 pt-6 border-t border-white/5">
                   <div className="text-center md:text-left">
                     <p className="text-[10px] uppercase text-muted-foreground font-black tracking-widest mb-1">Total da OS</p>
@@ -328,19 +273,16 @@ export default function OrdersManagerPage() {
           </Dialog>
         </div>
 
-        {/* Histórico em Tempo Real com Color-Coding */}
         <div className="space-y-6">
           <div className="flex items-center justify-between border-b border-white/5 pb-4">
             <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.5em] flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-primary/40 animate-pulse"></span>
+              <span className="w-2 h-2 rounded-full bg-primary/40"></span>
               Histórico de Produção Cloud
             </h3>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {isOrdersLoading ? (
-              <div className="col-span-full flex flex-col items-center py-20 opacity-20"><Loader2 className="w-10 h-10 animate-spin" /></div>
-            ) : orders && orders.length > 0 ? (
+            {orders && orders.length > 0 ? (
               orders.map(order => (
                 <OrderCard 
                   key={order.id} 
