@@ -73,31 +73,23 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
     <div 
       onClick={handleContainerClick}
       className={cn(
-        "group relative flex flex-col rounded-[2.5rem] bg-[#121212] border border-zinc-800/50 p-6 md:p-8 transition-all duration-300 cursor-pointer overflow-hidden min-h-[220px] gap-y-6",
-        "hover:scale-[1.02] hover:bg-[#161616] will-change-transform",
-        isCompleted 
-          ? "hover:border-[#00FF00] hover:shadow-[0_0_30px_-5px_rgba(0,255,0,0.3)]" 
-          : "hover:border-primary hover:shadow-[0_0_30px_-5px_rgba(255,95,31,0.3)]"
+        "group relative flex flex-col rounded-2xl bg-[#121212] border border-zinc-800/50 p-4 transition-all duration-200 cursor-pointer overflow-hidden gap-y-3",
+        "hover:border-primary/50 hover:bg-[#161616]",
+        isCompleted && "opacity-60 grayscale-[0.5]"
       )}
     >
-      {/* Background Glow */}
-      <div className={cn(
-        "absolute -right-20 -top-20 w-48 h-48 blur-[100px] opacity-10 transition-opacity group-hover:opacity-20",
-        isCompleted ? "bg-[#00FF00]" : "bg-primary"
-      )} />
-
       {/* Header Compacto */}
-      <div className="flex items-center justify-between gap-4 z-10 border-b border-white/5 pb-4">
-        <div className="flex items-center gap-2 opacity-50">
-          <Hash className="w-4 h-4 text-zinc-400" />
-          <span className="text-xs font-black tracking-widest uppercase text-zinc-400">
+      <div className="flex items-center justify-between gap-2 z-10 border-b border-white/5 pb-2">
+        <div className="flex items-center gap-1.5">
+          <Hash className="w-3 h-3 text-zinc-500" />
+          <span className="text-[10px] font-bold uppercase text-zinc-500">
             {order.id}
           </span>
         </div>
         
-        <div className="flex items-center gap-3 text-primary">
-          <Calendar className="w-5 h-5" />
-          <span className="text-xl font-black uppercase tracking-widest text-white whitespace-nowrap">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-3.5 h-3.5 text-primary" />
+          <span className="text-xs font-bold text-white uppercase">
             {order.deliveryDate ? (
               new Date(order.deliveryDate + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
             ) : '--/--'}
@@ -107,49 +99,49 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
         <button 
           onClick={handleConcludeClick}
           className={cn(
-            "w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-90",
+            "w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-90",
             isCompleted 
-              ? "bg-[#00FF00] text-black" 
-              : "bg-zinc-900 border border-zinc-800 text-zinc-400 hover:bg-[#00FF00] hover:text-black hover:border-[#00FF00]"
+              ? "bg-green-500 text-black" 
+              : "bg-zinc-800 text-zinc-400 hover:bg-green-500 hover:text-black"
           )}
         >
-          <Check className="w-5 h-5" />
+          <Check className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Corpo Espaçoso */}
-      <div className="flex-1 flex flex-col justify-center py-2">
-        <h4 className="text-2xl md:text-3xl font-black text-white leading-tight uppercase tracking-tight line-clamp-2">
+      {/* Corpo Clean */}
+      <div className="flex-1 flex flex-col justify-center py-1">
+        <h4 className="text-sm font-bold text-white uppercase tracking-tight truncate">
           {order.client}
         </h4>
-        <p className="text-sm md:text-base text-zinc-500 italic line-clamp-2 mt-3 leading-relaxed">
+        <p className="text-[10px] text-zinc-500 truncate mt-1">
           {order.description}
         </p>
       </div>
 
-      {/* Rodapé - Barra de Ações */}
-      <div className="mt-auto flex items-center gap-4 pt-4 border-t border-white/5">
+      {/* Rodapé Clean */}
+      <div className="mt-auto flex items-center gap-2 pt-2 border-t border-white/5">
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
             <button className={cn(
-              "flex-1 flex items-center justify-between px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-[0.4em] transition-all active:scale-[0.98] border shadow-lg group/btn",
+              "flex-1 flex items-center justify-between px-3 py-2 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all active:scale-95 border",
               isCompleted 
-                ? "bg-[#00FF00] text-black border-[#00FF00]/20" 
-                : "bg-primary text-black border-primary/20"
+                ? "bg-zinc-800 text-zinc-400 border-zinc-700" 
+                : "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
             )}>
-              <span className="flex-1 text-center">{order.status}</span>
-              <ChevronDown className="w-4 h-4 opacity-50" />
+              <span className="truncate">{order.status}</span>
+              <ChevronDown className="w-3 h-3 opacity-50" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent 
             align="center"
-            className="bg-zinc-900 border-zinc-800 text-white min-w-[240px] rounded-2xl shadow-2xl z-[150] p-2"
+            className="bg-zinc-900 border-zinc-800 text-white min-w-[160px] rounded-xl z-[150]"
           >
             {statusOptions.map((s) => (
               <DropdownMenuItem 
                 key={s} 
                 onClick={(e) => handleStatusClick(e as any, s)}
-                className="text-[10px] uppercase font-black tracking-widest focus:bg-primary focus:text-black p-4 rounded-xl cursor-pointer"
+                className="text-[10px] uppercase font-bold tracking-widest focus:bg-primary focus:text-black p-2.5 cursor-pointer"
               >
                 {s}
               </DropdownMenuItem>
@@ -159,9 +151,9 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
 
         <button 
           onClick={handleDeleteClick}
-          className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 transition-all hover:bg-destructive hover:text-white hover:border-destructive hover:shadow-[0_0_20px_rgba(255,0,0,0.4)] active:scale-90 shrink-0"
+          className="w-9 h-9 rounded-lg bg-zinc-800/50 border border-zinc-700 flex items-center justify-center text-zinc-500 transition-all hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 shrink-0"
         >
-          <Trash2 className="w-6 h-6" />
+          <Trash2 className="w-4 h-4" />
         </button>
       </div>
     </div>

@@ -135,34 +135,30 @@ export default function OrdersManagerPage() {
         toast({ title: "Protocolo Atualizado", description: `OS #${editingOrder.id} salva com sucesso.` });
       } else {
         await createOrder(payload);
-        toast({ title: "OS Protocolada", description: `Novo protocolo para ${data.client} criado.` });
+        toast({ title: "OS Protocolada", description: `Novo protocolo criado.` });
       }
       setIsModalOpen(false);
       setEditingOrder(null);
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Erro ao salvar",
-        description: error.message || "Falha na comunicação com o banco."
-      });
+      // Erro tratado pelo global listener
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDeleteOrder = useCallback(async (orderId: string) => {
-    const confirmDelete = window.confirm(`ATENÇÃO: Tem certeza que deseja excluir permanentemente a OS #${orderId}? Essa ação não pode ser desfeita.`);
+    const confirmDelete = window.confirm(`Deseja excluir permanentemente a OS #${orderId}?`);
     
     if (confirmDelete) {
       try {
         await deleteOrder(orderId);
-        toast({ title: "OS Removida", description: "Protocolo excluído com sucesso." });
+        toast({ title: "OS Removida", description: "Protocolo excluído." });
         if (editingOrder && editingOrder.id === orderId) {
           setIsModalOpen(false);
           setEditingOrder(null);
         }
       } catch (error) {
-        toast({ variant: "destructive", title: "Erro ao excluir", description: "Não foi possível remover a OS." });
+        // Erro tratado pelo global listener
       }
     }
   }, [deleteOrder, editingOrder, toast]);
@@ -170,18 +166,17 @@ export default function OrdersManagerPage() {
   const handleQuickStatusChange = useCallback(async (orderId: string, newStatus: string) => {
     try {
       await updateOrder(orderId, { status: newStatus });
-      toast({ title: "Status Atualizado", description: `Protocolo movido para ${newStatus}.` });
     } catch (error) {
-      toast({ variant: "destructive", title: "Erro", description: "Não foi possível mudar o status." });
+      // Erro tratado pelo global listener
     }
-  }, [updateOrder, toast]);
+  }, [updateOrder]);
 
   const handleQuickConclude = useCallback(async (orderId: string) => {
     try {
       await updateOrder(orderId, { status: 'Concluído' });
-      toast({ title: "OS Concluída!", description: "Protocolo finalizado com sucesso." });
+      toast({ title: "OS Concluída!", description: "Protocolo finalizado." });
     } catch (error) {
-      toast({ variant: "destructive", title: "Erro", description: "Não foi possível concluir." });
+      // Erro tratado pelo global listener
     }
   }, [updateOrder, toast]);
 
@@ -192,43 +187,37 @@ export default function OrdersManagerPage() {
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col md:flex-row overflow-x-hidden relative">
       <DashboardSidebar />
       
-      <main className="flex-1 md:ml-64 p-4 md:p-10 space-y-12 mt-16 md:mt-0 z-10 pb-32">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
-          <div className="space-y-2">
-            <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter flex items-center gap-4">
-              <Zap className="text-primary w-10 h-10 animate-pulse" /> Gestão de Protocolos
+      <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-8 mt-16 md:mt-0 z-10 pb-20">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-1">
+            <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+              <Zap className="text-primary w-6 h-6" /> Gestão de OS
             </h2>
-            <p className="text-muted-foreground text-xs uppercase tracking-[0.5em] font-medium opacity-60">Terminal Kanban v2.5 • Conectividade Real-Time</p>
+            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em]">Fila de Produção Ativa</p>
           </div>
 
           <Button 
             onClick={() => { setEditingOrder(null); setIsModalOpen(true); }}
-            className="bg-primary text-black font-black uppercase tracking-widest px-10 h-16 rounded-3xl hover:shadow-[0_0_40px_rgba(255,95,31,0.6)] active:scale-95 transition-all gap-3 z-20 text-base"
+            className="bg-primary text-black font-black uppercase tracking-widest px-8 h-12 rounded-xl hover:shadow-[0_0_20px_rgba(255,95,31,0.4)] active:scale-95 transition-all gap-2 text-xs"
           >
-            <Plus className="w-6 h-6" /> Nova Ordem de Serviço
+            <Plus className="w-4 h-4" /> Nova OS
           </Button>
         </div>
 
         {/* Fila Ativa */}
-        <div className="space-y-6">
-          <div className="flex items-center gap-6 border-b border-white/5 pb-6">
-            <h3 className="text-sm font-black text-primary uppercase tracking-[0.6em] flex items-center gap-3">
-              <span className="w-3 h-3 rounded-full bg-primary animate-ping"></span>
-              Fila de Produção Ativa
-            </h3>
-            <span className="text-xs bg-white/5 px-3 py-1 rounded-full text-muted-foreground font-mono font-bold">
-              {activeOrders.length} Protocolos
-            </span>
+        <div className="space-y-4">
+          <div className="flex items-center gap-4 border-b border-white/5 pb-4">
+            <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.4em]">Ativos ({activeOrders.length})</h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
             <AnimatePresence mode="popLayout">
               {activeOrders.map(order => (
                 <motion.div 
                   key={order.id} 
                   layout 
-                  initial={{ opacity: 0, y: 10 }} 
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={{ opacity: 0, scale: 0.95 }} 
+                  animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
                 >
                   <OrderCard 
@@ -253,18 +242,12 @@ export default function OrdersManagerPage() {
         </div>
 
         {/* Fila Concluída */}
-        <div className="space-y-6 pt-10">
-          <div className="flex items-center gap-6 border-b border-white/5 pb-6">
-            <h3 className="text-sm font-black text-[#00FF00] uppercase tracking-[0.6em] flex items-center gap-3">
-              <PackageCheck className="w-5 h-5" />
-              Protocolos Concluídos
-            </h3>
-            <span className="text-xs bg-white/5 px-3 py-1 rounded-full text-muted-foreground font-mono font-bold">
-              {completedOrders.length} Finalizados
-            </span>
+        <div className="space-y-4 pt-8">
+          <div className="flex items-center gap-4 border-b border-white/5 pb-4">
+            <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em]">Concluídos ({completedOrders.length})</h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
             <AnimatePresence mode="popLayout">
               {completedOrders.map(order => (
                 <motion.div 
@@ -293,58 +276,57 @@ export default function OrdersManagerPage() {
         </div>
 
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
-          <DialogContent className="max-w-4xl bg-zinc-950 border-white/10 text-white rounded-[2.5rem] overflow-hidden p-0 shadow-2xl z-[100]">
-            <DialogHeader className="p-8 bg-white/[0.02] border-b border-white/5">
+          <DialogContent className="max-w-2xl bg-zinc-950 border-white/10 text-white rounded-3xl overflow-hidden p-0">
+            <DialogHeader className="p-6 border-b border-white/5">
               <div className="flex items-center justify-between">
-                <DialogTitle className="text-3xl font-black text-primary uppercase tracking-tighter">
-                  {editingOrder ? 'Ajustar Protocolo' : 'Entrada de Produção'}
+                <DialogTitle className="text-xl font-black text-primary uppercase tracking-tighter">
+                  {editingOrder ? 'Ajustar Protocolo' : 'Nova Ordem'}
                 </DialogTitle>
                 {editingOrder && (
                   <Button 
                     variant="ghost" 
                     type="button"
                     onClick={() => handleDeleteOrder(editingOrder.id)}
-                    className="text-destructive hover:bg-destructive/10 font-black uppercase tracking-widest gap-2"
+                    className="text-destructive hover:bg-destructive/10 font-bold uppercase text-[10px] tracking-widest gap-2"
                   >
-                    <Trash2 className="w-4 h-4" /> Excluir OS
+                    <Trash2 className="w-3.5 h-3.5" /> Excluir
                   </Button>
                 )}
               </div>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="p-8 space-y-10 max-h-[70vh] overflow-y-auto no-scrollbar">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="md:col-span-2 space-y-3">
-                  <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Cliente*</Label>
+            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6 max-h-[70vh] overflow-y-auto no-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Cliente*</Label>
                   <Input 
                     {...register('client')} 
                     list="client-suggestions"
-                    className={cn("bg-black/40 border-white/10 h-14 rounded-2xl focus:border-primary text-lg", errors.client && "border-destructive")} 
-                    placeholder="Nome da Empresa ou Cliente"
+                    className={cn("bg-black/40 border-white/10 h-10 rounded-xl", errors.client && "border-destructive")} 
                   />
                   <datalist id="client-suggestions">
                     {clients?.map(c => <option key={c.id} value={c.name} />)}
                   </datalist>
                 </div>
-                <div className="space-y-3">
-                  <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Prazo Entrega</Label>
-                  <Input type="date" {...register('deliveryDate')} className="bg-black/40 border-white/10 h-14 rounded-2xl text-lg" />
+                <div className="space-y-2">
+                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Prazo Entrega</Label>
+                  <Input type="date" {...register('deliveryDate')} className="bg-black/40 border-white/10 h-10 rounded-xl" />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-3">
-                  <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Vendedor</Label>
-                  <Input {...register('seller')} className="bg-black/40 border-white/10 h-14 rounded-2xl" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Vendedor</Label>
+                  <Input {...register('seller')} className="bg-black/40 border-white/10 h-10 rounded-xl" />
                 </div>
-                <div className="space-y-3">
-                  <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Status</Label>
+                <div className="space-y-2">
+                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Status</Label>
                   <Controller
                     name="status"
                     control={control}
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger className="bg-black/40 border-white/10 h-14 rounded-2xl">
+                        <SelectTrigger className="bg-black/40 border-white/10 h-10 rounded-xl">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-900 border-white/10 text-white z-[150]">
@@ -358,48 +340,43 @@ export default function OrdersManagerPage() {
                 </div>
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-black text-primary uppercase tracking-[0.4em] flex items-center gap-3">
-                    <Calculator className="w-4 h-4" /> Itens do Projeto
-                  </h3>
-                  <button type="button" onClick={() => append({ desc: 'Novo Item', size: '', quantity: 1, unitValue: 0 })} className="text-primary hover:text-primary/80 text-xs uppercase font-black tracking-widest flex items-center gap-2">
-                    <Plus className="w-4 h-4" /> Adicionar
+                  <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.4em]">Itens</h3>
+                  <button type="button" onClick={() => append({ desc: 'Novo Item', size: '', quantity: 1, unitValue: 0 })} className="text-primary text-[10px] font-black tracking-widest flex items-center gap-1">
+                    <Plus className="w-3 h-3" /> Adicionar
                   </button>
                 </div>
                 
                 {fields.map((field, index) => (
-                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 p-5 bg-white/[0.02] rounded-3xl border border-white/5 relative group">
-                    <div className="md:col-span-5">
-                      <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/10 h-12" placeholder="Descrição" />
+                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 p-3 bg-white/[0.02] rounded-xl border border-white/5 relative group">
+                    <div className="md:col-span-6">
+                      <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/10 h-8 text-xs" placeholder="Descrição" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/10 h-8 text-xs" placeholder="Qtd" />
                     </div>
                     <div className="md:col-span-3">
-                      <Input {...register(`items.${index}.size`)} className="bg-transparent border-white/10 h-12" placeholder="Medidas" />
+                      <Input type="number" step="0.01" {...register(`items.${index}.unitValue`, { valueAsNumber: true })} className="bg-transparent border-white/10 h-8 text-xs" placeholder="R$" />
                     </div>
-                    <div className="md:col-span-2">
-                      <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/10 h-12" placeholder="Qtd" />
-                    </div>
-                    <div className="md:col-span-2">
-                      <Input type="number" step="0.01" {...register(`items.${index}.unitValue`, { valueAsNumber: true })} className="bg-transparent border-white/10 h-12" placeholder="R$" />
-                    </div>
-                    <button type="button" onClick={() => remove(index)} className="absolute -right-2 -top-2 bg-destructive text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Trash2 className="w-3 h-3" />
+                    <button type="button" onClick={() => remove(index)} className="absolute -right-1 -top-1 bg-destructive text-white p-1 rounded-full opacity-0 group-hover:opacity-100">
+                      <Trash2 className="w-2.5 h-2.5" />
                     </button>
                   </div>
                 ))}
               </div>
 
-              <div className="flex flex-col md:flex-row items-center justify-end gap-8 pt-8 border-t border-white/5">
+              <div className="flex flex-col md:flex-row items-center justify-end gap-6 pt-6 border-t border-white/5">
                 <div className="text-right">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Total do Protocolo</p>
-                  <p className="text-4xl font-black text-white font-mono">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}</p>
+                  <p className="text-[8px] text-muted-foreground uppercase tracking-widest mb-1">Total</p>
+                  <p className="text-xl font-black text-white font-mono">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}</p>
                 </div>
                 <Button 
                   type="submit" 
                   disabled={isSubmitting}
-                  className="w-full md:w-80 h-20 bg-primary text-black font-black uppercase tracking-widest rounded-3xl shadow-[0_0_30px_rgba(255,95,31,0.4)] text-lg"
+                  className="w-full md:w-48 h-12 bg-primary text-black font-black uppercase tracking-widest rounded-xl text-xs"
                 >
-                  {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-6 h-6 mr-3" /> Salvar OS</>}
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar OS'}
                 </Button>
               </div>
             </form>
