@@ -13,30 +13,22 @@ import { Palette, Printer, Hammer, CheckCircle2, Plus, Loader2 } from 'lucide-re
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
-import { useFirestore, useUser, useCollection } from '@/firebase';
+import { useFirestore, useCollection } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useUser();
   const db = useFirestore();
 
   // Query memorizada para o hook
   const ordersQuery = useMemo(() => {
     if (!db) return null;
-    return query(collection(db, 'orders'), orderBy('created_at', 'desc'));
+    return query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
   }, [db]);
 
   const { data: orders, loading: ordersLoading } = useCollection(ordersQuery);
 
-  // Redirecionamento se não logado
-  React.useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login');
-    }
-  }, [user, authLoading, router]);
-
-  if (authLoading || (user && ordersLoading)) {
+  if (ordersLoading && db) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-10 h-10 text-primary animate-spin" />
@@ -44,8 +36,6 @@ export default function DashboardPage() {
       </div>
     );
   }
-
-  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex">
@@ -78,10 +68,10 @@ export default function DashboardPage() {
 
         {/* KPIs Section */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-          <DashboardStatCard label="Arte Final" value={orders.filter(o => o.status === 'Arte').length.toString()} icon={Palette} />
-          <DashboardStatCard label="Impressão" value={orders.filter(o => o.status === 'Impressão').length.toString()} icon={Printer} />
-          <DashboardStatCard label="Acabamento" value={orders.filter(o => o.status === 'Acabamento').length.toString()} icon={Hammer} />
-          <DashboardStatCard label="Concluído" value={orders.filter(o => o.status === 'Entregue').length.toString()} icon={CheckCircle2} />
+          <DashboardStatCard label="Arte Final" value={orders?.filter(o => o.status === 'Arte').length.toString() || '0'} icon={Palette} />
+          <DashboardStatCard label="Impressão" value={orders?.filter(o => o.status === 'Impressão').length.toString() || '0'} icon={Printer} />
+          <DashboardStatCard label="Acabamento" value={orders?.filter(o => o.status === 'Acabamento').length.toString() || '0'} icon={Hammer} />
+          <DashboardStatCard label="Concluído" value={orders?.filter(o => o.status === 'Entregue').length.toString() || '0'} icon={CheckCircle2} />
         </div>
 
         {/* Main Grid Layout */}
@@ -99,7 +89,7 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent className="pt-6">
                 <AnimatePresence mode="popLayout">
-                  {orders.length > 0 ? (
+                  {orders && orders.length > 0 ? (
                     <div className="space-y-4">
                       {orders.map((order, idx) => (
                         <motion.div
@@ -109,13 +99,13 @@ export default function DashboardPage() {
                           transition={{ delay: idx * 0.05 }}
                         >
                           <OrderCard order={{
-                            id: order.os_number?.toString() || order.id,
-                            client: order.client_name,
-                            description: order.items?.[0]?.desc || 'Sem descrição',
+                            id: order.id,
+                            client: order.client || 'Cliente não identificado',
+                            description: order.items?.[0]?.code || 'Sem descrição',
                             status: order.status,
-                            deliveryDate: order.deadline,
-                            value: order.total_value,
-                            isDelayed: false // Lógica pode ser adicionada comparando datas
+                            deliveryDate: order.deliveryDate,
+                            value: order.totalValue || 0,
+                            isDelayed: false
                           }} />
                         </motion.div>
                       ))}
