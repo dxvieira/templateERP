@@ -7,8 +7,8 @@ service cloud.firestore {
      * VISCOMM COMMAND CENTER - SECURE RULES
      * 
      * Core Philosophy:
-     * - Verified Identity: Only authenticated users (Password or Anonymous) can access.
-     * - Data Integrity: Document IDs must match the internal 'id' field.
+     * - Verified Identity: Only authenticated users (Password, Google or Anonymous) can access.
+     * - Data Integrity: Document IDs must match the internal 'id' field for creations and updates.
      */
 
     function isSignedIn() {
@@ -18,9 +18,15 @@ service cloud.firestore {
     // --- Collection Rules ---
 
     match /orders/{orderId} {
-      // Simplificando para 'read' e 'write' para cobrir todas as sub-operações de forma robusta
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.id == orderId;
+      allow update: if isSignedIn() && resource != null && request.resource.data.id == resource.data.id;
+      allow delete: if isSignedIn() && resource != null;
+    }
+
+    match /clients/{clientId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.id == clientId;
       allow update: if isSignedIn() && resource != null && request.resource.data.id == resource.data.id;
       allow delete: if isSignedIn() && resource != null;
     }
