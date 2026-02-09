@@ -31,12 +31,11 @@ import {
   FileDown, 
   Search, 
   Loader2,
-  CheckCircle2
+  FileText
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-// Validação
 const orderItemSchema = z.object({
   desc: z.string().min(1, 'Descrição é obrigatória'),
   quantity: z.number().min(1, 'Mínimo 1'),
@@ -51,8 +50,6 @@ const orderSchema = z.object({
   observations: z.string().optional(),
   status: z.enum(['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação']),
   paymentMethod: z.enum(['Dinheiro', 'Pix', 'Cartão', 'Boleto']),
-  cardMachine: z.string().optional(),
-  installments: z.string().optional(),
   items: z.array(orderItemSchema).min(1, 'Adicione pelo menos um item'),
 });
 
@@ -62,12 +59,6 @@ export default function NewOrderPage() {
   const router = useRouter();
   const firestore = useFirestore();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [currentDate, setCurrentDate] = useState('');
-
-  // Hydration safety for dates
-  useEffect(() => {
-    setCurrentDate(new Date().toISOString().split('T')[0]);
-  }, []);
 
   const { 
     register, 
@@ -90,7 +81,6 @@ export default function NewOrderPage() {
     name: "items"
   });
 
-  const paymentMethod = useWatch({ control, name: 'paymentMethod' });
   const watchedItems = useWatch({ control, name: 'items' });
 
   const total = useMemo(() => 
@@ -100,9 +90,8 @@ export default function NewOrderPage() {
 
   const generatePDF = (data: OrderFormValues, docId: string) => {
     const doc = new jsPDF();
-    const primaryColor = [255, 95, 31]; // #FF5F1F
+    const primaryColor = [255, 95, 31];
 
-    // Header
     doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     doc.rect(0, 0, 210, 40, 'F');
     
@@ -113,7 +102,6 @@ export default function NewOrderPage() {
     doc.setFontSize(12);
     doc.text(`ORDEM DE SERVIÇO #${docId.slice(-6).toUpperCase()}`, 15, 30);
 
-    // Client Info
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(10);
     doc.text('DADOS DO CLIENTE', 15, 50);
@@ -126,7 +114,6 @@ export default function NewOrderPage() {
     doc.text(`Emissão: ${data.emissionDate}`, 120, 60);
     doc.text(`Entrega: ${data.deliveryDate}`, 120, 65);
 
-    // Items Table
     autoTable(doc, {
       startY: 75,
       head: [['DESCRIÇÃO', 'QTD', 'VALOR UNIT.', 'SUBTOTAL']],
@@ -141,20 +128,11 @@ export default function NewOrderPage() {
       margin: { left: 15, right: 15 },
     });
 
-    // Footer & Totals
     const finalY = (doc as any).lastAutoTable.finalY + 10;
     doc.setFont('helvetica', 'bold');
     doc.text(`PAGAMENTO: ${data.paymentMethod.toUpperCase()}`, 15, finalY);
     doc.setFontSize(14);
     doc.text(`TOTAL GERAL: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}`, 130, finalY);
-
-    // Signature
-    doc.setDrawColor(200, 200, 200);
-    doc.line(40, finalY + 40, 90, finalY + 40);
-    doc.line(120, finalY + 40, 170, finalY + 40);
-    doc.setFontSize(8);
-    doc.text('ASSINATURA RESPONSÁVEL', 45, finalY + 45);
-    doc.text('ASSINATURA CLIENTE', 130, finalY + 45);
 
     doc.save(`OS_${data.client.replace(/\s+/g, '_')}_${docId.slice(-4)}.pdf`);
   };
@@ -186,45 +164,43 @@ export default function NewOrderPage() {
   }, [firestore, total, router]);
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex">
+    <div className="min-h-screen bg-[#0A0A0A] flex flex-col md:flex-row">
       <DashboardSidebar />
       
-      <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full hover:bg-white/10">
-              <ChevronLeft className="w-6 h-6 text-primary" />
-            </Button>
-            <div>
-              <h2 className="text-3xl font-black tracking-tighter text-white uppercase">Nova OS Digital</h2>
-              <p className="text-muted-foreground text-[10px] uppercase tracking-widest">Protocolo de Produção • VisComm</p>
-            </div>
+      <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-6 md:space-y-8 mt-16 md:mt-0">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full hover:bg-white/10 shrink-0">
+            <ChevronLeft className="w-6 h-6 text-primary" />
+          </Button>
+          <div>
+            <h2 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase flex items-center gap-2">
+              <FileText className="w-6 h-6 text-primary md:hidden" />
+              Lançar Protocolo
+            </h2>
+            <p className="text-muted-foreground text-[8px] md:text-[10px] uppercase tracking-widest">Nova Ordem de Serviço Digital</p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-12 gap-6 pb-20 md:pb-0">
           <div className="lg:col-span-8 space-y-6">
             <Card className="glass-card border-none">
-              <CardHeader>
-                <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Cliente e Vendas</CardTitle>
+              <CardHeader className="py-4">
+                <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Identificação</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Cliente / Empresa</Label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input 
-                      {...register('client')}
-                      placeholder="Nome do cliente..."
-                      className="bg-[#1E1E1E] border-white/5 pl-10 focus:ring-primary"
-                    />
-                  </div>
+                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Cliente</Label>
+                  <Input 
+                    {...register('client')}
+                    placeholder="Nome ou Empresa..."
+                    className="bg-white/5 border-white/5 h-12 focus:ring-primary text-base"
+                  />
                   {errors.client && <p className="text-[10px] text-destructive">{errors.client.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Vendedor Responsável</Label>
+                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Vendedor</Label>
                   <Select onValueChange={(v) => setValue('seller', v)}>
-                    <SelectTrigger className="bg-[#1E1E1E] border-white/5">
+                    <SelectTrigger className="bg-white/5 border-white/5 h-12">
                       <SelectValue placeholder="Selecione..." />
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-900 border-white/10 text-white">
@@ -239,64 +215,65 @@ export default function NewOrderPage() {
             </Card>
 
             <Card className="glass-card border-none">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Itens da Produção</CardTitle>
+              <CardHeader className="flex flex-row items-center justify-between py-4">
+                <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Escopo / Itens</CardTitle>
                 <Button 
                   type="button" 
                   variant="outline" 
                   size="sm" 
                   onClick={() => append({ desc: '', quantity: 1, unitValue: 0 })}
-                  className="border-primary/50 text-primary hover:bg-primary/10 rounded-full"
+                  className="border-primary/50 text-primary h-10 rounded-xl px-4"
                 >
-                  <Plus className="w-4 h-4 mr-2" /> Item
+                  <Plus className="w-4 h-4 mr-2" /> Adicionar
                 </Button>
               </CardHeader>
               <CardContent className="space-y-4">
                 {fields.map((field, index) => (
                   <motion.div 
                     layout
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
                     key={field.id} 
-                    className="flex flex-col md:flex-row gap-4 p-4 rounded-xl bg-white/5 border border-white/5 relative group"
+                    className="flex flex-col gap-4 p-4 rounded-xl bg-white/5 border border-white/5 relative"
                   >
-                    <div className="flex-[2] space-y-2">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Descrição</Label>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] uppercase text-muted-foreground">Descrição do Item</Label>
                       <Input 
                         {...register(`items.${index}.desc`)}
                         placeholder="Ex: Lona 440g c/ Ilhós"
-                        className="bg-[#1E1E1E] border-white/5 h-10"
+                        className="bg-[#1E1E1E] border-white/5 h-12 text-base"
                       />
                     </div>
-                    <div className="w-full md:w-20 space-y-2">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Qtd</Label>
-                      <Input 
-                        type="number"
-                        {...register(`items.${index}.quantity`, { valueAsNumber: true })}
-                        className="bg-[#1E1E1E] border-white/5 h-10 text-center"
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] uppercase text-muted-foreground">Quantidade</Label>
+                        <Input 
+                          type="number"
+                          {...register(`items.${index}.quantity`, { valueAsNumber: true })}
+                          className="bg-[#1E1E1E] border-white/5 h-12 text-center text-base"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] uppercase text-muted-foreground">Valor Unitário</Label>
+                        <Input 
+                          type="number"
+                          step="0.01"
+                          {...register(`items.${index}.unitValue`, { valueAsNumber: true })}
+                          className="bg-[#1E1E1E] border-white/5 h-12 text-base"
+                        />
+                      </div>
                     </div>
-                    <div className="w-full md:w-28 space-y-2">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Valor Unit.</Label>
-                      <Input 
-                        type="number"
-                        step="0.01"
-                        {...register(`items.${index}.unitValue`, { valueAsNumber: true })}
-                        className="bg-[#1E1E1E] border-white/5 h-10"
-                      />
-                    </div>
-                    <div className="flex items-end pb-1">
+                    {fields.length > 1 && (
                       <Button 
                         type="button" 
                         variant="ghost" 
                         size="icon" 
                         onClick={() => remove(index)}
-                        className="text-destructive hover:bg-destructive/10"
-                        disabled={fields.length === 1}
+                        className="text-destructive absolute top-2 right-2 h-10 w-10"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-5 h-5" />
                       </Button>
-                    </div>
+                    )}
                   </motion.div>
                 ))}
               </CardContent>
@@ -304,36 +281,20 @@ export default function NewOrderPage() {
           </div>
 
           <div className="lg:col-span-4 space-y-6">
-            <Card className="glass-card border-none sticky top-8">
-              <CardHeader>
-                <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Configuração e Fechamento</CardTitle>
+            <Card className="glass-card border-none sticky top-24">
+              <CardHeader className="py-4">
+                <CardTitle className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Fechamento</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Status Inicial</Label>
-                  <Select onValueChange={(v) => setValue('status', v as any)} defaultValue="Arte">
-                    <SelectTrigger className="bg-[#1E1E1E] border-white/5 h-12">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                      <SelectItem value="Arte">Arte Final</SelectItem>
-                      <SelectItem value="Impressão">Impressão</SelectItem>
-                      <SelectItem value="Serralheria">Serralheria</SelectItem>
-                      <SelectItem value="Acabamento">Acabamento</SelectItem>
-                      <SelectItem value="Instalação">Instalação</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Prazo de Entrega</Label>
+                  <Input type="date" {...register('deliveryDate')} className="bg-white/5 border-white/5 h-12 text-base" />
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Data de Entrega</Label>
-                  <Input type="date" {...register('deliveryDate')} className="bg-[#1E1E1E] border-white/5 h-12" />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Pagamento</Label>
+                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Forma de Pagamento</Label>
                   <Select onValueChange={(v) => setValue('paymentMethod', v as any)} defaultValue="Pix">
-                    <SelectTrigger className="bg-[#1E1E1E] border-white/5 h-12">
+                    <SelectTrigger className="bg-white/5 border-white/5 h-12">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-900 border-white/10 text-white">
@@ -345,28 +306,28 @@ export default function NewOrderPage() {
                   </Select>
                 </div>
 
-                <div className="pt-4 border-t border-white/5 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-muted-foreground uppercase">Valor Total</span>
-                    <span className="text-2xl font-black text-white">
+                <div className="pt-4 border-t border-white/5">
+                  <div className="flex justify-between items-center mb-6">
+                    <span className="text-[10px] text-muted-foreground uppercase font-black">Total Geral</span>
+                    <span className="text-3xl font-black text-white">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}
                     </span>
                   </div>
+                  
+                  <Button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest hover:shadow-[0_0_20px_rgba(255,95,31,0.5)] rounded-2xl active:scale-95 transition-transform"
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        Finalizar e Imprimir <FileDown className="w-5 h-5" />
+                      </span>
+                    )}
+                  </Button>
                 </div>
-
-                <Button 
-                  type="submit" 
-                  disabled={isSubmitting}
-                  className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest hover:shadow-[0_0_20px_rgba(255,95,31,0.5)] rounded-xl"
-                >
-                  {isSubmitting ? (
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      Salvar e Gerar PDF <FileDown className="w-5 h-5" />
-                    </span>
-                  )}
-                </Button>
               </CardContent>
             </Card>
           </div>
@@ -375,4 +336,3 @@ export default function NewOrderPage() {
     </div>
   );
 }
-

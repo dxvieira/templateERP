@@ -14,16 +14,16 @@ interface StatCardProps {
 
 export function DashboardStatCard({ label, value, icon: Icon, subtext }: StatCardProps) {
   return (
-    <Card className="glass-card p-5 flex flex-col gap-4 neon-hover-orange cursor-default">
+    <Card className="glass-card p-4 md:p-5 flex flex-col gap-3 md:gap-4 neon-hover-orange cursor-default h-full">
       <div className="flex items-center justify-between">
-        <div className="p-2 rounded-lg bg-primary/10">
-          <Icon className="w-5 h-5 text-primary" />
+        <div className="p-1.5 md:p-2 rounded-lg bg-primary/10">
+          <Icon className="w-4 h-4 md:w-5 md:h-5 text-primary" />
         </div>
-        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{label}</span>
+        <span className="text-[8px] md:text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-right">{label}</span>
       </div>
       <div>
-        <h3 className="text-3xl font-bold tracking-tighter text-white">{value}</h3>
-        {subtext && <p className="text-[10px] text-muted-foreground mt-1 uppercase tracking-tighter">{subtext}</p>}
+        <h3 className="text-xl md:text-3xl font-bold tracking-tighter text-white">{value}</h3>
+        {subtext && <p className="text-[8px] md:text-[10px] text-muted-foreground mt-1 uppercase tracking-tighter">{subtext}</p>}
       </div>
     </Card>
   );
