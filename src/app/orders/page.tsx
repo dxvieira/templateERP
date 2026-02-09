@@ -221,7 +221,7 @@ export default function OrdersManagerPage() {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
             <AnimatePresence mode="popLayout">
               {activeOrders.map(order => (
                 <motion.div 
@@ -264,7 +264,7 @@ export default function OrdersManagerPage() {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
             <AnimatePresence mode="popLayout">
               {completedOrders.map(order => (
                 <motion.div 
