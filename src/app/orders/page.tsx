@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -131,7 +132,7 @@ export default function OrdersManagerPage() {
     try {
       if (editingOrder) {
         await updateOrder(editingOrder.id, cleanedData);
-        toast({ title: "Protocolo Atualizado", description: `OS #${editingOrder.id.slice(-4)} salva com sucesso.` });
+        toast({ title: "Protocolo Atualizado", description: `OS #${editingOrder.id} salva com sucesso.` });
       } else {
         await createOrder(cleanedData);
         toast({ title: "OS Protocolada", description: `Novo protocolo para ${data.client} criado.` });
@@ -186,43 +187,45 @@ export default function OrdersManagerPage() {
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col md:flex-row overflow-x-hidden relative">
       <DashboardSidebar />
       
-      <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-12 mt-16 md:mt-0 z-10 pb-20">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-1">
-            <h2 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
-              <Zap className="text-primary w-8 h-8 animate-pulse" /> Gestão de Protocolos
+      <main className="flex-1 md:ml-64 p-4 md:p-10 space-y-16 mt-16 md:mt-0 z-10 pb-32">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+          <div className="space-y-2">
+            <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter flex items-center gap-4">
+              <Zap className="text-primary w-10 h-10 animate-pulse" /> Gestão de Protocolos
             </h2>
-            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em] font-medium">Terminal Kanban v2.0 • Sincronia Real</p>
+            <p className="text-muted-foreground text-xs uppercase tracking-[0.5em] font-medium opacity-60">Terminal Kanban v2.0 • Sincronia Real-Time</p>
           </div>
 
           <Button 
             onClick={() => { setEditingOrder(null); setIsModalOpen(true); }}
-            className="bg-primary text-black font-black uppercase tracking-widest px-8 h-14 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.6)] active:scale-95 transition-all gap-2 z-20"
+            className="bg-primary text-black font-black uppercase tracking-widest px-10 h-16 rounded-3xl hover:shadow-[0_0_40px_rgba(255,95,31,0.6)] active:scale-95 transition-all gap-3 z-20 text-base"
           >
-            <Plus className="w-5 h-5" /> Nova Ordem de Serviço
+            <Plus className="w-6 h-6" /> Nova Ordem de Serviço
           </Button>
         </div>
 
-        <div className="space-y-6">
-          <div className="flex items-center gap-4 border-b border-white/5 pb-4">
-            <h3 className="text-xs font-black text-primary uppercase tracking-[0.5em] flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+        {/* Fila Ativa */}
+        <div className="space-y-8">
+          <div className="flex items-center gap-6 border-b border-white/5 pb-6">
+            <h3 className="text-sm font-black text-primary uppercase tracking-[0.6em] flex items-center gap-3">
+              <span className="w-3 h-3 rounded-full bg-primary animate-ping"></span>
               Fila de Produção Ativa
             </h3>
-            <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded-full text-muted-foreground font-mono">
+            <span className="text-xs bg-white/5 px-3 py-1 rounded-full text-muted-foreground font-mono font-bold">
               {activeOrders.length} Protocolos
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
             <AnimatePresence mode="popLayout">
               {activeOrders.map(order => (
                 <motion.div 
                   key={order.id} 
                   layout 
-                  initial={{ opacity: 0, scale: 0.9 }} 
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8, x: 20 }}
+                  initial={{ opacity: 0, y: 20 }} 
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, x: -20 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 >
                   <OrderCard 
                     order={{
@@ -233,7 +236,7 @@ export default function OrdersManagerPage() {
                       deliveryDate: order.deliveryDate || 'N/A',
                       value: order.totalValue || 0
                     }} 
-                    onClick={(o) => setEditingOrder(order)}
+                    onClick={() => setEditingOrder(order)}
                     onStatusChange={handleQuickStatusChange}
                     onQuickConclude={handleQuickConclude}
                     onDelete={handleDeleteOrder}
@@ -241,22 +244,23 @@ export default function OrdersManagerPage() {
                 </motion.div>
               ))}
             </AnimatePresence>
-            {activeOrders.length === 0 && !isLoading && <div className="col-span-full"><EmptyState /></div>}
+            {activeOrders.length === 0 && !isLoading && <div className="col-span-full py-12"><EmptyState /></div>}
           </div>
         </div>
 
-        <div className="space-y-6 pt-8">
-          <div className="flex items-center gap-4 border-b border-white/5 pb-4">
-            <h3 className="text-xs font-black text-[#00FF00] uppercase tracking-[0.5em] flex items-center gap-2">
-              <PackageCheck className="w-4 h-4" />
+        {/* Concluídos */}
+        <div className="space-y-8 pt-12">
+          <div className="flex items-center gap-6 border-b border-white/5 pb-6">
+            <h3 className="text-sm font-black text-[#00FF00] uppercase tracking-[0.6em] flex items-center gap-3">
+              <PackageCheck className="w-5 h-5" />
               Protocolos Concluídos
             </h3>
-            <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded-full text-muted-foreground font-mono">
+            <span className="text-xs bg-white/5 px-3 py-1 rounded-full text-muted-foreground font-mono font-bold">
               {completedOrders.length} Finalizados
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
             <AnimatePresence mode="popLayout">
               {completedOrders.map(order => (
                 <motion.div 
@@ -274,7 +278,7 @@ export default function OrdersManagerPage() {
                       deliveryDate: order.deliveryDate || 'N/A',
                       value: order.totalValue || 0
                     }} 
-                    onClick={(o) => setEditingOrder(order)}
+                    onClick={() => setEditingOrder(order)}
                     onStatusChange={handleQuickStatusChange}
                     onDelete={handleDeleteOrder}
                   />
@@ -285,50 +289,50 @@ export default function OrdersManagerPage() {
         </div>
 
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
-          <DialogContent className="max-w-4xl bg-zinc-950 border-white/10 text-white rounded-3xl overflow-hidden p-0 shadow-2xl z-[9999]">
-            <DialogHeader className="p-6 bg-white/[0.02] border-b border-white/5">
-              <DialogTitle className="text-2xl font-black text-primary uppercase tracking-tighter">
+          <DialogContent className="max-w-4xl bg-zinc-950 border-white/10 text-white rounded-[2.5rem] overflow-hidden p-0 shadow-2xl z-[9999]">
+            <DialogHeader className="p-8 bg-white/[0.02] border-b border-white/5">
+              <DialogTitle className="text-3xl font-black text-primary uppercase tracking-tighter">
                 {editingOrder ? 'Ajustar Protocolo' : 'Entrada de Produção'}
               </DialogTitle>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-8 max-h-[75vh] overflow-y-auto no-scrollbar">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="md:col-span-2 space-y-2">
-                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Cliente*</Label>
+            <form onSubmit={handleSubmit(onSubmit)} className="p-8 space-y-10 max-h-[75vh] overflow-y-auto no-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="md:col-span-2 space-y-3">
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Cliente*</Label>
                   <Input 
                     {...register('client')} 
                     list="client-suggestions"
-                    className={cn("bg-black/40 border-white/10 h-12 rounded-xl focus:border-primary", errors.client && "border-destructive")} 
+                    className={cn("bg-black/40 border-white/10 h-14 rounded-2xl focus:border-primary text-lg", errors.client && "border-destructive")} 
                     placeholder="Nome da Empresa ou Cliente"
                   />
                   <datalist id="client-suggestions">
                     {clients?.map(c => <option key={c.id} value={c.name} />)}
                   </datalist>
-                  {errors.client && <p className="text-[10px] text-destructive uppercase font-bold">{errors.client.message}</p>}
+                  {errors.client && <p className="text-xs text-destructive uppercase font-bold tracking-widest">{errors.client.message}</p>}
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Prazo Entrega</Label>
-                  <Input type="date" {...register('deliveryDate')} className="bg-black/40 border-white/10 h-12 rounded-xl" />
+                <div className="space-y-3">
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Prazo Entrega</Label>
+                  <Input type="date" {...register('deliveryDate')} className="bg-black/40 border-white/10 h-14 rounded-2xl text-lg" />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Vendedor</Label>
-                  <Input {...register('seller')} className="bg-black/40 border-white/10 h-12 rounded-xl" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-3">
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Vendedor</Label>
+                  <Input {...register('seller')} className="bg-black/40 border-white/10 h-14 rounded-2xl" />
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Status</Label>
+                <div className="space-y-3">
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Status</Label>
                   <Controller
                     name="status"
                     control={control}
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger className="bg-black/40 border-white/10 h-12 rounded-xl">
+                        <SelectTrigger className="bg-black/40 border-white/10 h-14 rounded-2xl">
                           <SelectValue placeholder="Status" />
                         </SelectTrigger>
-                        <SelectContent className="bg-zinc-900 border-white/10 text-white z-[100]">
+                        <SelectContent className="bg-zinc-900 border-white/10 text-white z-[10000]">
                           {['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Concluído'].map(s => (
                             <SelectItem key={s} value={s}>{s}</SelectItem>
                           ))}
@@ -339,63 +343,63 @@ export default function OrdersManagerPage() {
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] flex items-center gap-2">
-                    <Calculator className="w-3 h-3" /> Itens do Projeto
+                  <h3 className="text-xs font-black text-primary uppercase tracking-[0.4em] flex items-center gap-3">
+                    <Calculator className="w-4 h-4" /> Itens do Projeto
                   </h3>
                   <button 
                     type="button" 
                     onClick={() => append({ desc: 'Novo Item', size: '', quantity: 1, unitValue: 0 })} 
-                    className="text-primary hover:text-primary/80 text-[10px] uppercase font-black tracking-widest flex items-center gap-1 transition-colors"
+                    className="text-primary hover:text-primary/80 text-xs uppercase font-black tracking-widest flex items-center gap-2 transition-colors"
                   >
-                    <Plus className="w-3 h-3" /> Adicionar Item
+                    <Plus className="w-4 h-4" /> Adicionar Item
                   </button>
                 </div>
                 
                 {fields.map((field, index) => (
-                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 p-4 bg-white/[0.02] rounded-2xl border border-white/5 relative group">
+                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 p-6 bg-white/[0.02] rounded-3xl border border-white/5 relative group">
                     <div className="md:col-span-5">
-                      <Label className="text-[8px] uppercase text-muted-foreground mb-1 block font-bold">Descrição</Label>
-                      <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/10 h-10" />
+                      <Label className="text-[10px] uppercase text-muted-foreground mb-1 block font-bold">Descrição</Label>
+                      <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/10 h-12" />
                     </div>
                     <div className="md:col-span-3">
-                      <Label className="text-[8px] uppercase text-muted-foreground mb-1 block font-bold">Medidas</Label>
-                      <Input {...register(`items.${index}.size`)} className="bg-transparent border-white/10 h-10" />
+                      <Label className="text-[10px] uppercase text-muted-foreground mb-1 block font-bold">Medidas</Label>
+                      <Input {...register(`items.${index}.size`)} className="bg-transparent border-white/10 h-12" />
                     </div>
                     <div className="md:col-span-2">
-                      <Label className="text-[8px] uppercase text-muted-foreground mb-1 block font-bold">Qtd</Label>
-                      <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/10 h-10" />
+                      <Label className="text-[10px] uppercase text-muted-foreground mb-1 block font-bold">Qtd</Label>
+                      <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/10 h-12" />
                     </div>
                     <div className="md:col-span-2">
-                      <Label className="text-[8px] uppercase text-muted-foreground mb-1 block font-bold">R$ Unit.</Label>
-                      <Input type="number" step="0.01" {...register(`items.${index}.unitValue`, { valueAsNumber: true })} className="bg-transparent border-white/10 h-10" />
+                      <Label className="text-[10px] uppercase text-muted-foreground mb-1 block font-bold">R$ Unit.</Label>
+                      <Input type="number" step="0.01" {...register(`items.${index}.unitValue`, { valueAsNumber: true })} className="bg-transparent border-white/10 h-12" />
                     </div>
                     {fields.length > 1 && (
                       <button 
                         type="button" 
                         onClick={() => remove(index)} 
-                        className="absolute -right-2 -top-2 bg-destructive text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute -right-3 -top-3 bg-destructive text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-xl"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     )}
                   </div>
                 ))}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-white/5">
-                <div className="space-y-2">
-                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Pagamento</Label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-8 border-t border-white/5">
+                <div className="space-y-3">
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Pagamento</Label>
                   <Controller
                     name="paymentMethod"
                     control={control}
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger className="bg-black/40 border-white/10 h-12 rounded-xl">
+                        <SelectTrigger className="bg-black/40 border-white/10 h-14 rounded-2xl">
                           <SelectValue placeholder="Forma" />
                         </SelectTrigger>
-                        <SelectContent className="bg-zinc-900 border-white/10 text-white z-[100]">
+                        <SelectContent className="bg-zinc-900 border-white/10 text-white z-[10000]">
                           {['Dinheiro', 'Pix', 'Cartão de Crédito', 'Cartão de Débito', 'Boleto'].map(p => (
                             <SelectItem key={p} value={p}>{p}</SelectItem>
                           ))}
@@ -407,17 +411,17 @@ export default function OrdersManagerPage() {
 
                 {watchedPayment?.toLowerCase().includes('cartão') && (
                   <>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Maquininha</Label>
+                    <div className="space-y-3">
+                      <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Maquininha</Label>
                       <Controller
                         name="machine"
                         control={control}
                         render={({ field }) => (
                           <Select onValueChange={field.onChange} value={field.value}>
-                            <SelectTrigger className="bg-black/40 border-white/10 h-12 rounded-xl">
+                            <SelectTrigger className="bg-black/40 border-white/10 h-14 rounded-2xl">
                               <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
-                            <SelectContent className="bg-zinc-900 border-white/10 text-white z-[100]">
+                            <SelectContent className="bg-zinc-900 border-white/10 text-white z-[10000]">
                               {['SICOOB/SIPAG', 'PagBank'].map(m => (
                                 <SelectItem key={m} value={m}>{m}</SelectItem>
                               ))}
@@ -426,17 +430,17 @@ export default function OrdersManagerPage() {
                         )}
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Parcelas</Label>
+                    <div className="space-y-3">
+                      <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Parcelas</Label>
                       <Controller
                         name="installments"
                         control={control}
                         render={({ field }) => (
                           <Select onValueChange={field.onChange} value={field.value}>
-                            <SelectTrigger className="bg-black/40 border-white/10 h-12 rounded-xl">
+                            <SelectTrigger className="bg-black/40 border-white/10 h-14 rounded-2xl">
                               <SelectValue placeholder="1x" />
                             </SelectTrigger>
-                            <SelectContent className="bg-zinc-900 border-white/10 text-white z-[100]">
+                            <SelectContent className="bg-zinc-900 border-white/10 text-white z-[10000]">
                               {Array.from({ length: 12 }, (_, i) => `${i + 1}x`).map(p => (
                                 <SelectItem key={p} value={p}>{p}</SelectItem>
                               ))}
@@ -449,24 +453,24 @@ export default function OrdersManagerPage() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Observações</Label>
-                <Textarea {...register('observations')} className="bg-black/40 border-white/10 rounded-2xl min-h-[100px]" placeholder="Instruções adicionais de produção..." />
+              <div className="space-y-3">
+                <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Observações</Label>
+                <Textarea {...register('observations')} className="bg-black/40 border-white/10 rounded-3xl min-h-[120px] p-4" placeholder="Instruções adicionais de produção..." />
               </div>
 
-              <div className="flex flex-col md:flex-row items-center justify-between gap-6 pt-6 border-t border-white/5">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-8 pt-8 border-t border-white/5">
                 <div>
-                  <p className="text-[10px] uppercase text-muted-foreground font-black mb-1 tracking-widest">Total do Protocolo</p>
-                  <p className="text-4xl font-black text-white tracking-tighter">
+                  <p className="text-xs uppercase text-muted-foreground font-black mb-1 tracking-widest">Total do Protocolo</p>
+                  <p className="text-5xl font-black text-white tracking-tighter">
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}
                   </p>
                 </div>
                 <Button 
                   type="submit" 
                   disabled={isSubmitting}
-                  className="w-full md:w-64 h-16 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.4)] hover:shadow-[0_0_40px_rgba(255,95,31,0.6)] transition-all"
+                  className="w-full md:w-80 h-20 bg-primary text-black font-black uppercase tracking-widest rounded-3xl shadow-[0_0_30px_rgba(255,95,31,0.4)] hover:shadow-[0_0_60px_rgba(255,95,31,0.6)] transition-all text-lg"
                 >
-                  {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> {editingOrder ? 'Salvar Alterações' : 'Finalizar OS'}</>}
+                  {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-6 h-6 mr-3" /> {editingOrder ? 'Salvar Alterações' : 'Finalizar OS'}</>}
                 </Button>
               </div>
             </form>
