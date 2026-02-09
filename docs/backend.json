@@ -1,0 +1,33 @@
+
+{
+  "entities": {
+    "Order": {
+      "title": "Order",
+      "description": "Uma ordem de serviço no ERP VisComm",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "client": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { 
+          "type": "string",
+          "enum": ["Arte", "Impressão", "Acabamento", "Concluído"]
+        },
+        "deliveryDate": { "type": "string", "format": "date" },
+        "value": { "type": "number" },
+        "isPriority": { "type": "boolean" },
+        "isDelayed": { "type": "boolean" }
+      },
+      "required": ["client", "status", "deliveryDate"]
+    }
+  },
+  "auth": {
+    "providers": ["password"]
+  },
+  "firestore": {
+    "/orders/{orderId}": {
+      "schema": "#/backend/entities/Order",
+      "description": "Coleção de ordens de serviço do sistema"
+    }
+  }
+}

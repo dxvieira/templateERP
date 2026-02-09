@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,24 +11,19 @@
     --card-foreground: 0 0% 98%;
     --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
-    --primary: 288 100% 58%; /* #D026FF */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 18 100% 56%; /* #FF5F1F */
-    --secondary-foreground: 0 0% 100%;
+    --primary: 18 100% 56%; /* #FF5F1F Laranja Neon */
+    --primary-foreground: 0 0% 0%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
     --muted: 240 3.7% 15.9%;
     --muted-foreground: 240 5% 64.9%;
-    --accent: 288 100% 58%;
+    --accent: 18 100% 56%;
     --accent-foreground: 0 0% 98%;
-    --destructive: 18 100% 56%;
+    --destructive: 0 100% 50%; /* #FF0000 Vermelho Neon */
     --destructive-foreground: 0 0% 98%;
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
-    --ring: 288 100% 58%;
-    --chart-1: 288 100% 58%;
-    --chart-2: 170 100% 50%;
-    --chart-3: 30 100% 50%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --ring: 18 100% 56%;
     --radius: 0.75rem;
   }
 }
@@ -38,28 +34,35 @@
   }
   body {
     @apply bg-[#0A0A0A] text-foreground font-body;
-    background-image: 
-      radial-gradient(at 0% 0%, hsla(288, 100%, 58%, 0.1) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, hsla(18, 100%, 56%, 0.1) 0px, transparent 50%);
   }
 }
 
-.glass {
+/* Glassmorphism utility */
+.glass-card {
   @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl;
 }
 
-.neon-border-purple {
-  @apply border-primary/50 shadow-[0_0_15px_rgba(208,38,255,0.3)];
+/* Neon Interaction Utilities */
+.neon-hover-orange {
+  @apply transition-all duration-300 ease-in-out;
+}
+.neon-hover-orange:hover {
+  @apply border-primary/100 shadow-[0_0_20px_rgba(255,95,31,0.7)];
 }
 
-.neon-border-orange {
-  @apply border-secondary/50 shadow-[0_0_15px_rgba(255,95,31,0.3)];
+.neon-hover-red {
+  @apply transition-all duration-300 ease-in-out;
+}
+.neon-hover-red:hover {
+  @apply border-destructive/100 shadow-[0_0_20px_rgba(255,0,0,0.7)];
 }
 
-.neon-text-purple {
-  @apply text-primary drop-shadow-[0_0_8px_rgba(208,38,255,0.8)];
+/* Shake Animation for Login Errors */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
 }
-
-.neon-text-orange {
-  @apply text-secondary drop-shadow-[0_0_8px_rgba(255,95,31,0.8)];
+.animate-shake {
+  animation: shake 0.2s ease-in-out 0s 2;
 }
