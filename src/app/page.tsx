@@ -28,15 +28,6 @@ export default function DashboardPage() {
 
   const { data: orders, loading: ordersLoading } = useCollection(ordersQuery);
 
-  if (ordersLoading && db) {
-    return (
-      <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center gap-4">
-        <Loader2 className="w-10 h-10 text-primary animate-spin" />
-        <p className="text-[10px] text-primary uppercase tracking-[0.5em] animate-pulse">Sincronizando Terminal...</p>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex">
       <DashboardSidebar />
@@ -84,36 +75,45 @@ export default function DashboardPage() {
                 <CardTitle className="text-[10px] font-black text-primary uppercase tracking-[0.4em]">Monitor de Protocolos</CardTitle>
                 <div className="flex items-center gap-3">
                    <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_10px_#FF5F1F]" />
-                   <span className="text-[9px] text-primary font-black uppercase tracking-widest">Live Sync</span>
+                   <span className="text-[9px] text-primary font-black uppercase tracking-widest">
+                     {ordersLoading ? 'Sincronizando...' : 'Live Sync'}
+                   </span>
                 </div>
               </CardHeader>
               <CardContent className="pt-6">
-                <AnimatePresence mode="popLayout">
-                  {orders && orders.length > 0 ? (
-                    <div className="space-y-4">
-                      {orders.map((order, idx) => (
-                        <motion.div
-                          key={order.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: idx * 0.05 }}
-                        >
-                          <OrderCard order={{
-                            id: order.id,
-                            client: order.client || 'Cliente não identificado',
-                            description: order.items?.[0]?.code || 'Sem descrição',
-                            status: order.status,
-                            deliveryDate: order.deliveryDate,
-                            value: order.totalValue || 0,
-                            isDelayed: false
-                          }} />
-                        </motion.div>
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState />
-                  )}
-                </AnimatePresence>
+                {ordersLoading ? (
+                  <div className="flex flex-col items-center justify-center py-20 gap-4">
+                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Carregando dados da rede...</p>
+                  </div>
+                ) : (
+                  <AnimatePresence mode="popLayout">
+                    {orders && orders.length > 0 ? (
+                      <div className="space-y-4">
+                        {orders.map((order, idx) => (
+                          <motion.div
+                            key={order.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.05 }}
+                          >
+                            <OrderCard order={{
+                              id: order.id,
+                              client: order.client || 'Cliente não identificado',
+                              description: order.items?.[0]?.code || 'Sem descrição',
+                              status: order.status,
+                              deliveryDate: order.deliveryDate,
+                              value: order.totalValue || 0,
+                              isDelayed: false
+                            }} />
+                          </motion.div>
+                        ))}
+                      </div>
+                    ) : (
+                      <EmptyState />
+                    )}
+                  </AnimatePresence>
+                )}
               </CardContent>
             </Card>
           </div>
