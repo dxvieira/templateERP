@@ -88,10 +88,7 @@
       },
       "required": [
         "id",
-        "client",
-        "status",
-        "deliveryDate",
-        "totalValue"
+        "client"
       ]
     },
     "Client": {

@@ -46,25 +46,25 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { useToast } from '@/hooks/use-toast';
 
-// Schemas
+// Schemas relaxados - Apenas client é obrigatório
 const orderItemSchema = z.object({
-  desc: z.string().min(1, 'Descrição é obrigatória'),
+  desc: z.string().default(''),
   size: z.string().optional().default(''),
-  quantity: z.number().min(1, 'Mínimo 1'),
-  unitValue: z.number().min(0, 'Valor inválido'),
+  quantity: z.number().optional().default(1),
+  unitValue: z.number().optional().default(0),
 });
 
 const orderSchema = z.object({
   client: z.string().min(1, 'Cliente é obrigatório'),
-  emissionDate: z.string().min(1, 'Data de emissão é obrigatória'),
-  deliveryDate: z.string().min(1, 'Data de entrega é obrigatória'),
-  seller: z.string().min(1, 'Selecione um vendedor'),
+  emissionDate: z.string().optional().default(() => new Date().toISOString().split('T')[0]),
+  deliveryDate: z.string().optional().default(''),
+  seller: z.string().optional().default('Carlos'),
   observations: z.string().optional().default(''),
-  status: z.enum(['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Entregue']),
-  paymentMethod: z.string().min(1, 'Selecione o pagamento'),
+  status: z.enum(['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Entregue']).default('Arte'),
+  paymentMethod: z.string().optional().default('Pix'),
   machine: z.string().optional().default(''),
   installments: z.string().optional().default('1x'),
-  items: z.array(orderItemSchema).min(1, 'Adicione pelo menos um item'),
+  items: z.array(orderItemSchema).optional().default([]),
 });
 
 type OrderFormValues = z.infer<typeof orderSchema>;
@@ -133,18 +133,18 @@ export default function OrdersManagementPage() {
       reset({
         client: editingOrder.client,
         emissionDate: editingOrder.emissionDate || new Date().toISOString().split('T')[0],
-        deliveryDate: editingOrder.deliveryDate,
+        deliveryDate: editingOrder.deliveryDate || '',
         seller: editingOrder.seller || 'Carlos',
         observations: editingOrder.observations || '',
-        status: editingOrder.status,
+        status: editingOrder.status || 'Arte',
         paymentMethod: editingOrder.paymentMethod || 'Pix',
         machine: editingOrder.machine || '',
         installments: editingOrder.installments || '1x',
-        items: editingOrder.items.map((item: any) => ({
-          desc: item.desc,
+        items: (editingOrder.items || []).map((item: any) => ({
+          desc: item.desc || '',
           size: item.size || '',
-          quantity: item.quantity,
-          unitValue: item.unitValue
+          quantity: item.quantity || 1,
+          unitValue: item.unitValue || 0
         }))
       });
       setIsModalOpen(true);
@@ -169,21 +169,23 @@ export default function OrdersManagementPage() {
       doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
       doc.line(15, 52, 60, 52);
       doc.text(`Cliente: ${data.client}`, 15, 60);
-      doc.text(`Vendedor: ${data.seller}`, 15, 65);
-      doc.text(`Pagamento: ${data.paymentMethod} ${data.machine ? `(${data.machine})` : ''}`, 15, 70);
-      doc.text(`Emissão: ${data.emissionDate}`, 120, 60);
-      doc.text(`Entrega: ${data.deliveryDate}`, 120, 65);
+      doc.text(`Vendedor: ${data.seller || 'Não informado'}`, 15, 65);
+      doc.text(`Pagamento: ${data.paymentMethod || 'Não informado'} ${data.machine ? `(${data.machine})` : ''}`, 15, 70);
+      doc.text(`Emissão: ${data.emissionDate || '-'}`, 120, 60);
+      doc.text(`Entrega: ${data.deliveryDate || '-'}`, 120, 65);
       
+      const tableBody = (data.items || []).map(item => [
+        item.desc || '-',
+        item.size || '-',
+        item.quantity || 0,
+        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitValue || 0),
+        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((item.quantity || 0) * (item.unitValue || 0)),
+      ]);
+
       autoTable(doc, {
         startY: 80,
         head: [['DESCRIÇÃO', 'MEDIDA', 'QTD', 'UNIT.', 'SUB']],
-        body: data.items.map(item => [
-          item.desc,
-          item.size || '-',
-          item.quantity,
-          new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitValue),
-          new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.quantity * item.unitValue),
-        ]),
+        body: tableBody.length > 0 ? tableBody : [['Sem itens registrados', '-', '-', '-', '-']],
         headStyles: { fillColor: primaryColor, textColor: [255, 255, 255] },
         alternateRowStyles: { fillColor: [245, 245, 245] },
       });
@@ -253,7 +255,9 @@ export default function OrdersManagementPage() {
         }));
       });
 
-      setTimeout(() => generatePDF(data, orderRef.id, currentTotal), 1000);
+      if (currentTotal > 0) {
+        setTimeout(() => generatePDF(data, orderRef.id, currentTotal), 1000);
+      }
       toast({
         title: "Protocolo Lançado",
         description: `Nova OS gerada para ${data.client}.`,
@@ -270,7 +274,7 @@ export default function OrdersManagementPage() {
     toast({
       variant: "destructive",
       title: "Erro de Validação",
-      description: "Verifique os campos obrigatórios.",
+      description: "O nome do cliente é obrigatório.",
     });
   };
 
@@ -327,7 +331,7 @@ export default function OrdersManagementPage() {
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Cliente</Label>
+                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Cliente *</Label>
                         <Input 
                           {...register('client')}
                           list="clients-suggestions"
@@ -346,8 +350,8 @@ export default function OrdersManagementPage() {
                           name="seller"
                           control={control}
                           render={({ field }) => (
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <SelectTrigger className={`bg-black/40 border-white/10 h-12 ${errors.seller ? 'border-destructive' : ''}`}>
+                            <Select onValueChange={field.onChange} value={field.value || 'Carlos'}>
+                              <SelectTrigger className="bg-black/40 border-white/10 h-12">
                                 <SelectValue placeholder="Selecione..." />
                               </SelectTrigger>
                               <SelectContent className="bg-zinc-900 border-white/10 text-white">
@@ -369,7 +373,7 @@ export default function OrdersManagementPage() {
                         <Input 
                           type="date" 
                           {...register('deliveryDate')} 
-                          className={`bg-black/40 border-white/10 h-12 ${errors.deliveryDate ? 'border-destructive' : ''}`} 
+                          className="bg-black/40 border-white/10 h-12" 
                         />
                       </div>
                     </CardContent>
@@ -397,7 +401,7 @@ export default function OrdersManagementPage() {
                               <Input 
                                 {...register(`items.${index}.desc`)}
                                 placeholder="Ex: Banner Frontlight"
-                                className={`bg-black/20 border-white/10 h-12 ${errors.items?.[index]?.desc ? 'border-destructive' : ''}`}
+                                className="bg-black/20 border-white/10 h-12"
                               />
                             </div>
                             <div className="space-y-1">
@@ -457,7 +461,7 @@ export default function OrdersManagementPage() {
                           name="paymentMethod"
                           control={control}
                           render={({ field }) => (
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value || 'Pix'}>
                               <SelectTrigger className="bg-black/40 border-white/10 h-12">
                                 <SelectValue />
                               </SelectTrigger>
@@ -503,7 +507,7 @@ export default function OrdersManagementPage() {
                           name="status"
                           control={control}
                           render={({ field }) => (
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value || 'Arte'}>
                               <SelectTrigger className="bg-black/40 border-white/10 h-12">
                                 <SelectValue />
                               </SelectTrigger>
@@ -541,7 +545,7 @@ export default function OrdersManagementPage() {
                           disabled={isUserLoading}
                           className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl"
                         >
-                          {editingOrder ? 'Salvar' : 'Finalizar'} 
+                          {editingOrder ? 'Salvar Alterações' : 'Finalizar OS'} 
                           <FileDown className="w-5 h-5 ml-2" />
                         </Button>
                       </div>
