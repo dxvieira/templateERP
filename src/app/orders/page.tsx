@@ -44,11 +44,11 @@ const orderSchema = z.object({
   installments: z.string().optional(),
   observations: z.string().default(''),
   items: z.array(z.object({
-    desc: z.string().min(1, 'Descrição obrigatória'),
+    desc: z.string().default('Novo Item'),
     size: z.string().default(''),
-    quantity: z.coerce.number().min(0),
-    unitValue: z.coerce.number().min(0),
-  })).min(1, 'Adicione pelo menos um item'),
+    quantity: z.coerce.number().min(0).default(1),
+    unitValue: z.coerce.number().min(0).default(0),
+  })).min(1),
 });
 
 type OrderFormValues = z.infer<typeof orderSchema>;
@@ -59,7 +59,6 @@ export default function OrdersManagerPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
   
-  // Consome o hook centralizador para garantir reatividade
   const { orders, createOrder, isLoading } = useOrders();
 
   const clientsQuery = useMemoFirebase(() => 
@@ -73,13 +72,12 @@ export default function OrdersManagerPage() {
       client: '',
       status: 'Arte',
       paymentMethod: 'Pix',
-      items: [{ desc: '', size: '', quantity: 1, unitValue: 0 }]
+      items: [{ desc: 'Novo Item', size: '', quantity: 1, unitValue: 0 }]
     }
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
   
-  // Observa mudanças para cálculo em tempo real
   const watchedItems = useWatch({ control, name: 'items' });
   const watchedPayment = watch('paymentMethod');
 
@@ -91,7 +89,6 @@ export default function OrdersManagerPage() {
     }, 0) || 0;
   }, [watchedItems]);
 
-  // Limpa campos de cartão se trocar a forma de pagamento
   useEffect(() => {
     if (!watchedPayment?.toLowerCase().includes('cartão')) {
       setValue('machine', undefined);
@@ -101,6 +98,7 @@ export default function OrdersManagerPage() {
 
   const onSubmit = async (data: OrderFormValues) => {
     setIsSubmitting(true);
+    console.log('Dados validados para envio:', data);
     
     try {
       await createOrder({
@@ -110,7 +108,7 @@ export default function OrdersManagerPage() {
       
       toast({ 
         title: "OS Protocolada", 
-        description: `Protocolo gerado com sucesso para ${data.client}.` 
+        description: `Protocolo para ${data.client} criado com sucesso.` 
       });
       
       setIsModalOpen(false);
@@ -128,11 +126,11 @@ export default function OrdersManagerPage() {
   };
 
   const onError = (formErrors: any) => {
-    console.error('Erros de Validação:', formErrors);
+    console.error('Erros de Validação Detalhados:', formErrors);
     toast({
       variant: "destructive",
       title: "Erro de Validação",
-      description: "Verifique os campos obrigatórios (Nome do Cliente e Descrição do Item)."
+      description: "Por favor, verifique o nome do cliente (campo obrigatório)."
     });
   };
 
@@ -206,6 +204,7 @@ export default function OrdersManagerPage() {
                   <datalist id="client-suggestions">
                     {clients?.map(c => <option key={c.id} value={c.name} />)}
                   </datalist>
+                  {errors.client && <p className="text-[10px] text-destructive uppercase font-bold">{errors.client.message}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Prazo Entrega</Label>
@@ -244,30 +243,42 @@ export default function OrdersManagerPage() {
                   <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] flex items-center gap-2">
                     <Calculator className="w-3 h-3" /> Itens do Projeto
                   </h3>
-                  <Button type="button" onClick={() => append({ desc: '', size: '', quantity: 1, unitValue: 0 })} size="sm" variant="outline" className="border-primary/50 text-primary rounded-lg text-[9px] uppercase font-black">
-                    + Adicionar Item
-                  </Button>
+                  <button 
+                    type="button" 
+                    onClick={() => append({ desc: 'Novo Item', size: '', quantity: 1, unitValue: 0 })} 
+                    className="text-primary hover:text-primary/80 text-[10px] uppercase font-black tracking-widest flex items-center gap-1 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" /> Adicionar Item
+                  </button>
                 </div>
                 
                 {fields.map((field, index) => (
                   <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 p-4 bg-white/[0.02] rounded-2xl border border-white/5 relative group">
                     <div className="md:col-span-5">
-                      <Label className="text-[8px] uppercase text-muted-foreground mb-1 block">Descrição</Label>
+                      <Label className="text-[8px] uppercase text-muted-foreground mb-1 block font-bold">Descrição</Label>
                       <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/10 h-10" />
                     </div>
                     <div className="md:col-span-3">
-                      <Label className="text-[8px] uppercase text-muted-foreground mb-1 block">Medidas</Label>
+                      <Label className="text-[8px] uppercase text-muted-foreground mb-1 block font-bold">Medidas</Label>
                       <Input {...register(`items.${index}.size`)} className="bg-transparent border-white/10 h-10" />
                     </div>
                     <div className="md:col-span-2">
-                      <Label className="text-[8px] uppercase text-muted-foreground mb-1 block">Qtd</Label>
+                      <Label className="text-[8px] uppercase text-muted-foreground mb-1 block font-bold">Qtd</Label>
                       <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/10 h-10" />
                     </div>
                     <div className="md:col-span-2">
-                      <Label className="text-[8px] uppercase text-muted-foreground mb-1 block">R$ Unit.</Label>
+                      <Label className="text-[8px] uppercase text-muted-foreground mb-1 block font-bold">R$ Unit.</Label>
                       <Input type="number" step="0.01" {...register(`items.${index}.unitValue`, { valueAsNumber: true })} className="bg-transparent border-white/10 h-10" />
                     </div>
-                    <button type="button" onClick={() => remove(index)} className="absolute -right-2 -top-2 bg-destructive text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-3.5 h-3.5" /></button>
+                    {fields.length > 1 && (
+                      <button 
+                        type="button" 
+                        onClick={() => remove(index)} 
+                        className="absolute -right-2 -top-2 bg-destructive text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -339,7 +350,7 @@ export default function OrdersManagerPage() {
 
               <div className="space-y-2">
                 <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Observações</Label>
-                <Textarea {...register('observations')} className="bg-black/40 border-white/10 rounded-2xl" />
+                <Textarea {...register('observations')} className="bg-black/40 border-white/10 rounded-2xl min-h-[100px]" placeholder="Instruções adicionais de produção..." />
               </div>
 
               <div className="flex flex-col md:flex-row items-center justify-between gap-6 pt-6 border-t border-white/5">
@@ -352,7 +363,7 @@ export default function OrdersManagerPage() {
                 <Button 
                   type="submit" 
                   disabled={isSubmitting}
-                  className="w-full md:w-64 h-16 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.4)]"
+                  className="w-full md:w-64 h-16 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.4)] hover:shadow-[0_0_40px_rgba(255,95,31,0.6)] transition-all"
                 >
                   {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Finalizar OS</>}
                 </Button>
