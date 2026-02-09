@@ -28,7 +28,7 @@ import {
   DialogHeader, 
   DialogTitle 
 } from '@/components/ui/dialog';
-import { Plus, Trash2, FileText, Save, Calculator, Loader2, PackageCheck, Zap } from 'lucide-react';
+import { Plus, Trash2, Save, Calculator, Loader2, PackageCheck, Zap } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useOrders } from '@/hooks/use-orders';
@@ -125,17 +125,18 @@ export default function OrdersManagerPage() {
   const onSubmit = async (data: OrderFormValues) => {
     setIsSubmitting(true);
     
-    const cleanedData = { ...data, totalValue };
-    
+    // Limpeza de undefined para Firestore
+    const payload = { ...data, totalValue };
+    Object.keys(payload).forEach(key => payload[key as keyof typeof payload] === undefined && delete payload[key as keyof typeof payload]);
+
     try {
       if (editingOrder) {
-        await updateOrder(editingOrder.id, cleanedData);
+        await updateOrder(editingOrder.id, payload);
         toast({ title: "Protocolo Atualizado", description: `OS #${editingOrder.id} salva com sucesso.` });
       } else {
-        await createOrder(cleanedData);
+        await createOrder(payload);
         toast({ title: "OS Protocolada", description: `Novo protocolo para ${data.client} criado.` });
       }
-      
       setIsModalOpen(false);
       setEditingOrder(null);
     } catch (error: any) {
@@ -156,14 +157,11 @@ export default function OrdersManagerPage() {
       try {
         await deleteOrder(orderId);
         toast({ title: "OS Removida", description: "Protocolo excluído com sucesso." });
-        
-        // Se estivermos com o modal dessa ordem aberto, fechamos.
         if (editingOrder && editingOrder.id === orderId) {
           setIsModalOpen(false);
           setEditingOrder(null);
         }
       } catch (error) {
-        console.error("Erro ao deletar:", error);
         toast({ variant: "destructive", title: "Erro ao excluir", description: "Não foi possível remover a OS." });
       }
     }
@@ -194,7 +192,7 @@ export default function OrdersManagerPage() {
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col md:flex-row overflow-x-hidden relative">
       <DashboardSidebar />
       
-      <main className="flex-1 md:ml-64 p-4 md:p-10 space-y-16 mt-16 md:mt-0 z-10 pb-32">
+      <main className="flex-1 md:ml-64 p-4 md:p-10 space-y-12 mt-16 md:mt-0 z-10 pb-32">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
           <div className="space-y-2">
             <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter flex items-center gap-4">
@@ -211,7 +209,8 @@ export default function OrdersManagerPage() {
           </Button>
         </div>
 
-        <div className="space-y-8">
+        {/* Fila Ativa */}
+        <div className="space-y-6">
           <div className="flex items-center gap-6 border-b border-white/5 pb-6">
             <h3 className="text-sm font-black text-primary uppercase tracking-[0.6em] flex items-center gap-3">
               <span className="w-3 h-3 rounded-full bg-primary animate-ping"></span>
@@ -222,16 +221,15 @@ export default function OrdersManagerPage() {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
             <AnimatePresence mode="popLayout">
               {activeOrders.map(order => (
                 <motion.div 
                   key={order.id} 
                   layout 
-                  initial={{ opacity: 0, y: 20 }} 
+                  initial={{ opacity: 0, y: 10 }} 
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
                 >
                   <OrderCard 
                     order={{
@@ -239,7 +237,7 @@ export default function OrdersManagerPage() {
                       client: order.client,
                       description: order.items?.[0]?.desc || 'Sem descrição',
                       status: order.status,
-                      deliveryDate: order.deliveryDate || 'N/A',
+                      deliveryDate: order.deliveryDate || '',
                       value: order.totalValue || 0
                     }} 
                     onClick={() => setEditingOrder(order)}
@@ -250,11 +248,12 @@ export default function OrdersManagerPage() {
                 </motion.div>
               ))}
             </AnimatePresence>
-            {activeOrders.length === 0 && !isLoading && <div className="col-span-full py-12"><EmptyState /></div>}
+            {activeOrders.length === 0 && !isLoading && <div className="col-span-full"><EmptyState /></div>}
           </div>
         </div>
 
-        <div className="space-y-8 pt-12">
+        {/* Fila Concluída */}
+        <div className="space-y-6 pt-10">
           <div className="flex items-center gap-6 border-b border-white/5 pb-6">
             <h3 className="text-sm font-black text-[#00FF00] uppercase tracking-[0.6em] flex items-center gap-3">
               <PackageCheck className="w-5 h-5" />
@@ -265,7 +264,7 @@ export default function OrdersManagerPage() {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
             <AnimatePresence mode="popLayout">
               {completedOrders.map(order => (
                 <motion.div 
@@ -280,7 +279,7 @@ export default function OrdersManagerPage() {
                       client: order.client,
                       description: order.items?.[0]?.desc || 'Sem descrição',
                       status: order.status,
-                      deliveryDate: order.deliveryDate || 'N/A',
+                      deliveryDate: order.deliveryDate || '',
                       value: order.totalValue || 0
                     }} 
                     onClick={() => setEditingOrder(order)}
@@ -304,7 +303,7 @@ export default function OrdersManagerPage() {
                   <Button 
                     variant="ghost" 
                     type="button"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteOrder(editingOrder.id); }}
+                    onClick={() => handleDeleteOrder(editingOrder.id)}
                     className="text-destructive hover:bg-destructive/10 font-black uppercase tracking-widest gap-2"
                   >
                     <Trash2 className="w-4 h-4" /> Excluir OS
@@ -313,7 +312,7 @@ export default function OrdersManagerPage() {
               </div>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="p-8 space-y-10 max-h-[75vh] overflow-y-auto no-scrollbar">
+            <form onSubmit={handleSubmit(onSubmit)} className="p-8 space-y-10 max-h-[70vh] overflow-y-auto no-scrollbar">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div className="md:col-span-2 space-y-3">
                   <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Cliente*</Label>
@@ -326,7 +325,6 @@ export default function OrdersManagerPage() {
                   <datalist id="client-suggestions">
                     {clients?.map(c => <option key={c.id} value={c.name} />)}
                   </datalist>
-                  {errors.client && <p className="text-xs text-destructive font-black uppercase tracking-widest">{errors.client.message}</p>}
                 </div>
                 <div className="space-y-3">
                   <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Prazo Entrega</Label>
@@ -347,7 +345,7 @@ export default function OrdersManagerPage() {
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} value={field.value}>
                         <SelectTrigger className="bg-black/40 border-white/10 h-14 rounded-2xl">
-                          <SelectValue placeholder="Status" />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-900 border-white/10 text-white z-[150]">
                           {['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Concluído'].map(s => (
@@ -365,123 +363,43 @@ export default function OrdersManagerPage() {
                   <h3 className="text-xs font-black text-primary uppercase tracking-[0.4em] flex items-center gap-3">
                     <Calculator className="w-4 h-4" /> Itens do Projeto
                   </h3>
-                  <button 
-                    type="button" 
-                    onClick={() => append({ desc: 'Novo Item', size: '', quantity: 1, unitValue: 0 })} 
-                    className="text-primary hover:text-primary/80 text-xs uppercase font-black tracking-widest flex items-center gap-2 transition-colors"
-                  >
-                    <Plus className="w-4 h-4" /> Adicionar Item
+                  <button type="button" onClick={() => append({ desc: 'Novo Item', size: '', quantity: 1, unitValue: 0 })} className="text-primary hover:text-primary/80 text-xs uppercase font-black tracking-widest flex items-center gap-2">
+                    <Plus className="w-4 h-4" /> Adicionar
                   </button>
                 </div>
                 
                 {fields.map((field, index) => (
-                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 p-6 bg-white/[0.02] rounded-3xl border border-white/5 relative group">
+                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 p-5 bg-white/[0.02] rounded-3xl border border-white/5 relative group">
                     <div className="md:col-span-5">
-                      <Label className="text-[10px] uppercase text-muted-foreground mb-1 block font-bold">Descrição</Label>
-                      <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/10 h-12" />
+                      <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/10 h-12" placeholder="Descrição" />
                     </div>
                     <div className="md:col-span-3">
-                      <Label className="text-[10px] uppercase text-muted-foreground mb-1 block font-bold">Medidas</Label>
-                      <Input {...register(`items.${index}.size`)} className="bg-transparent border-white/10 h-12" />
+                      <Input {...register(`items.${index}.size`)} className="bg-transparent border-white/10 h-12" placeholder="Medidas" />
                     </div>
                     <div className="md:col-span-2">
-                      <Label className="text-[10px] uppercase text-muted-foreground mb-1 block font-bold">Qtd</Label>
-                      <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/10 h-12" />
+                      <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/10 h-12" placeholder="Qtd" />
                     </div>
                     <div className="md:col-span-2">
-                      <Label className="text-[10px] uppercase text-muted-foreground mb-1 block font-bold">R$ Unit.</Label>
-                      <Input type="number" step="0.01" {...register(`items.${index}.unitValue`, { valueAsNumber: true })} className="bg-transparent border-white/10 h-12" />
+                      <Input type="number" step="0.01" {...register(`items.${index}.unitValue`, { valueAsNumber: true })} className="bg-transparent border-white/10 h-12" placeholder="R$" />
                     </div>
-                    {fields.length > 1 && (
-                      <button 
-                        type="button" 
-                        onClick={() => remove(index)} 
-                        className="absolute -right-3 -top-3 bg-destructive text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-xl"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button type="button" onClick={() => remove(index)} className="absolute -right-2 -top-2 bg-destructive text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
                   </div>
                 ))}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-8 border-t border-white/5">
-                <div className="space-y-3">
-                  <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Pagamento</Label>
-                  <Controller
-                    name="paymentMethod"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger className="bg-black/40 border-white/10 h-14 rounded-2xl">
-                          <SelectValue placeholder="Forma" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-zinc-900 border-white/10 text-white z-[150]">
-                          {['Dinheiro', 'Pix', 'Cartão de Crédito', 'Cartão de Débito', 'Boleto'].map(p => (
-                            <SelectItem key={p} value={p}>{p}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-
-                {watchedPayment?.toLowerCase().includes('cartão') && (
-                  <>
-                    <div className="space-y-3">
-                      <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Maquininha</Label>
-                      <Controller
-                        name="machine"
-                        control={control}
-                        render={({ field }) => (
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <SelectTrigger className="bg-black/40 border-white/10 h-14 rounded-2xl">
-                              <SelectValue placeholder="Selecione" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-zinc-900 border-white/10 text-white z-[150]">
-                              {['SICOOB/SIPAG', 'PagBank'].map(m => (
-                                <SelectItem key={m} value={m}>{m}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Parcelas</Label>
-                      <Controller
-                        name="installments"
-                        control={control}
-                        render={({ field }) => (
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <SelectTrigger className="bg-black/40 border-white/10 h-14 rounded-2xl">
-                              <SelectValue placeholder="1x" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-zinc-900 border-white/10 text-white z-[150]">
-                              {Array.from({ length: 12 }, (_, i) => `${i + 1}x`).map(p => (
-                                <SelectItem key={p} value={p}>{p}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="space-y-3">
-                <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Observações</Label>
-                <Textarea {...register('observations')} className="bg-black/40 border-white/10 rounded-3xl min-h-[120px] p-4" placeholder="Instruções adicionais de produção..." />
-              </div>
-
               <div className="flex flex-col md:flex-row items-center justify-end gap-8 pt-8 border-t border-white/5">
+                <div className="text-right">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Total do Protocolo</p>
+                  <p className="text-4xl font-black text-white font-mono">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}</p>
+                </div>
                 <Button 
                   type="submit" 
                   disabled={isSubmitting}
-                  className="w-full md:w-80 h-20 bg-primary text-black font-black uppercase tracking-widest rounded-3xl shadow-[0_0_30px_rgba(255,95,31,0.4)] hover:shadow-[0_0_60px_rgba(255,95,31,0.6)] transition-all text-lg"
+                  className="w-full md:w-80 h-20 bg-primary text-black font-black uppercase tracking-widest rounded-3xl shadow-[0_0_30px_rgba(255,95,31,0.4)] text-lg"
                 >
-                  {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-6 h-6 mr-3" /> {editingOrder ? 'Salvar Alterações' : 'Finalizar OS'}</>}
+                  {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-6 h-6 mr-3" /> Salvar OS</>}
                 </Button>
               </div>
             </form>
