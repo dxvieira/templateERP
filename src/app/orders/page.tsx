@@ -6,8 +6,8 @@ import { useForm, useFieldArray, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, doc, serverTimestamp, query, orderBy, setDoc, updateDoc } from 'firebase/firestore';
-import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
+import { collection, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { useFirestore, useCollection, useMemoFirebase, useUser, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { EmptyState } from '@/components/dashboard/EmptyState';
@@ -33,24 +33,20 @@ import {
 import { 
   Plus, 
   Trash2, 
-  FileDown, 
   Loader2,
   FileText,
   Save
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { useToast } from '@/hooks/use-toast';
 
-// Schema relaxado: Apenas o nome do cliente é obrigatório.
-// Coerção agressiva para garantir que campos vazios ou nulos virem 0 e não quebrem a validação.
+// Schema ultra-relaxado: Apenas o cliente é obrigatório.
 const orderItemSchema = z.object({
-  desc: z.string().default(''),
+  desc: z.string().optional().default(''),
   size: z.string().optional().default(''),
-  quantity: z.preprocess((val) => (val === '' || val === undefined ? 1 : Number(val)), z.number().default(1)),
-  unitValue: z.preprocess((val) => (val === '' || val === undefined ? 0 : Number(val)), z.number().default(0)),
+  quantity: z.number().optional().default(1),
+  unitValue: z.number().optional().default(0),
 });
 
 const orderSchema = z.object({
@@ -115,7 +111,7 @@ export default function OrdersManagementPage() {
     name: "items"
   });
 
-  // Monitoramento reativo dos itens para cálculo do total em tempo real
+  // Reatividade instantânea com useWatch
   const watchedItems = useWatch({
     control,
     name: 'items',
@@ -213,11 +209,8 @@ export default function OrdersManagementPage() {
     }
   };
 
-  const onSubmit = async (data: OrderFormValues) => {
-    if (!firestore || !user) {
-      toast({ variant: "destructive", title: "Erro de Conexão", description: "Verifique sua autenticação." });
-      return;
-    }
+  const onSubmit = (data: OrderFormValues) => {
+    if (!firestore || !user) return;
     
     const currentTotal = total;
     const commonData = {
@@ -228,46 +221,21 @@ export default function OrdersManagementPage() {
       isDelayed: editingOrder?.isDelayed || false
     };
 
-    // Fechar o modal imediatamente para UX instantânea
+    // UX Instantânea: Fecha o modal e limpa estado imediatamente
     setIsModalOpen(false);
 
     if (editingOrder) {
       const orderRef = doc(firestore, 'orders', editingOrder.id);
-      const updatePayload = { ...commonData, id: editingOrder.id };
-      
-      console.log('Atualizando OS:', editingOrder.id, updatePayload);
-      
-      updateDoc(orderRef, updatePayload).catch(async (error) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: orderRef.path,
-          operation: 'update',
-          requestResourceData: updatePayload
-        }));
-      });
-      
-      toast({ title: "Protocolo Atualizado", description: `Alterações salvas para ${data.client}.` });
+      updateDocumentNonBlocking(orderRef, { ...commonData, id: editingOrder.id });
+      toast({ title: "Protocolo Atualizado", description: "As alterações foram sincronizadas." });
     } else {
       const orderRef = doc(collection(firestore, 'orders'));
-      const newOrderData = { 
-        ...commonData, 
-        createdAt: serverTimestamp(),
-        id: orderRef.id 
-      };
-
-      console.log('Criando Nova OS:', orderRef.id, newOrderData);
-
-      setDoc(orderRef, newOrderData).catch(async (error) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: orderRef.path,
-          operation: 'create',
-          requestResourceData: newOrderData
-        }));
-      });
-
-      if (currentTotal > 0) {
-        setTimeout(() => generatePDF(data, orderRef.id, currentTotal), 1500);
-      }
-      toast({ title: "Protocolo Lançado", description: `Nova OS gerada para ${data.client}.` });
+      const newOrderData = { ...commonData, createdAt: serverTimestamp(), id: orderRef.id };
+      setDocumentNonBlocking(orderRef, newOrderData, { merge: true });
+      
+      toast({ title: "Protocolo Criado", description: "Nova OS adicionada ao sistema." });
+      // Gera PDF após um pequeno delay para não travar a UI
+      setTimeout(() => generatePDF(data, orderRef.id, currentTotal), 1000);
     }
 
     setEditingOrder(null);
@@ -275,11 +243,11 @@ export default function OrdersManagementPage() {
   };
 
   const onError = (formErrors: any) => {
-    console.error('Validation Errors:', formErrors);
+    console.error('Validation Error Details:', formErrors);
     toast({
       variant: "destructive",
-      title: "Erro de Validação",
-      description: "Certifique-se de que o Nome do Cliente foi preenchido.",
+      title: "Falha na OS",
+      description: "Verifique o nome do cliente e tente novamente.",
     });
   };
 
@@ -424,7 +392,7 @@ export default function OrdersManagementPage() {
                                 <Label className="text-[8px] uppercase text-muted-foreground">Qtd</Label>
                                 <Input 
                                   type="number"
-                                  {...register(`items.${index}.quantity`)}
+                                  {...register(`items.${index}.quantity`, { valueAsNumber: true })}
                                   className="bg-black/20 border-white/10 h-12 px-2"
                                 />
                               </div>
@@ -433,7 +401,7 @@ export default function OrdersManagementPage() {
                                 <Input 
                                   type="number"
                                   step="0.01"
-                                  {...register(`items.${index}.unitValue`)}
+                                  {...register(`items.${index}.unitValue`, { valueAsNumber: true })}
                                   className="bg-black/20 border-white/10 h-12 px-2"
                                 />
                               </div>
