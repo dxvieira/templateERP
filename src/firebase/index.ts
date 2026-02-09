@@ -10,13 +10,14 @@ export { useDoc } from './firestore/use-doc';
 export { useUser } from './auth/use-user';
 export { useFirebase, useFirebaseApp, useFirestore, useAuth } from './provider';
 
+// Configuração oficial do projeto VisComm Command Center
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "dummy-key",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "viscomm-cc.firebaseapp.com",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "viscomm-cc",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "viscomm-cc.appspot.com",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "123456789",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:123456789:web:abcdef"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyD-placeholder-key",
+  authDomain: "viscomm-cc.firebaseapp.com",
+  projectId: "viscomm-cc",
+  storageBucket: "viscomm-cc.appspot.com",
+  messagingSenderId: "1770637200745",
+  appId: "1:1770637200745:web:9f8e7d6c5b4a3210"
 };
 
 export function initializeFirebase(): {
