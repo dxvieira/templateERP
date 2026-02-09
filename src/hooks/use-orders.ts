@@ -6,13 +6,13 @@ import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebas
 
 /**
  * Hook central de dados para Ordens de Serviço.
- * Fornece a lista de ordens em tempo real para qualquer componente.
+ * Fonte única de verdade para Dashboard, Histórico e Monitoramento.
  */
 export function useOrders() {
   const { firestore } = useFirestore();
   const { user } = useUser();
 
-  // Memoiza a query para evitar loops de renderização e garantir performance
+  // Memoização da query para evitar loops e garantir reatividade real-time
   const ordersQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
@@ -27,6 +27,13 @@ export function useOrders() {
     orders: orders || [],
     isLoading,
     error,
-    totalCount: orders?.length || 0
+    totalCount: orders?.length || 0,
+    // KPIs calculados em tempo real a partir da fonte de dados
+    stats: {
+      arte: (orders || []).filter(o => o.status === 'Arte').length,
+      impressao: (orders || []).filter(o => o.status === 'Impressão').length,
+      acabamento: (orders || []).filter(o => o.status === 'Acabamento' || o.status === 'Serralheria').length,
+      concluido: (orders || []).filter(o => o.status === 'Entregue').length,
+    }
   };
 }

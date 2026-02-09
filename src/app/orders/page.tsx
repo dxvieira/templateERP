@@ -35,15 +35,15 @@ import {
   Trash2, 
   Loader2,
   FileText,
-  AlertCircle
+  AlertCircle,
+  Save
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
-// Schema ultra-flexível: Apenas o cliente é obrigatório. 
-// Coerce garante que campos numéricos vazios sejam tratados como 0.
+// Schema ultra-flexível: Apenas o cliente é obrigatório.
 const orderItemSchema = z.object({
   desc: z.string().optional().default(''),
   size: z.string().optional().default(''),
@@ -69,6 +69,7 @@ type OrderFormValues = z.infer<typeof orderSchema>;
 export default function OrdersManagementPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const { firestore } = useFirestore();
   const { user } = useUser();
@@ -180,11 +181,13 @@ export default function OrdersManagementPage() {
 
   const onSubmit = (data: OrderFormValues) => {
     if (!firestore || !user) {
-      toast({ variant: "destructive", title: "Erro de Sistema", description: "Conexão com banco não estabelecida." });
+      toast({ variant: "destructive", title: "Erro de Conexão", description: "O terminal não está autenticado." });
       return;
     }
+
+    setIsSubmitting(true);
     
-    // Payload consolidado
+    // Objeto de dados consolidado
     const orderData = {
       ...data,
       totalValue,
@@ -193,39 +196,45 @@ export default function OrdersManagementPage() {
       isDelayed: editingOrder?.isDelayed || false
     };
 
-    setIsModalOpen(false);
+    try {
+      if (editingOrder) {
+        // Atualizar OS existente
+        const orderRef = doc(firestore, 'orders', editingOrder.id);
+        updateDocumentNonBlocking(orderRef, { ...orderData, id: editingOrder.id });
+        toast({ title: "Sincronizado", description: "Protocolo atualizado no sistema." });
+      } else {
+        // Criar Nova OS
+        const orderRef = doc(collection(firestore, 'orders'));
+        const newOrderPayload = { 
+          ...orderData, 
+          createdAt: serverTimestamp(), 
+          id: orderRef.id 
+        };
+        setDocumentNonBlocking(orderRef, newOrderPayload, { merge: true });
+        toast({ title: "Sucesso!", description: "Nova Ordem de Serviço registrada." });
+        
+        // Gerar PDF em background
+        setTimeout(() => generatePDF(data, orderRef.id), 500);
+      }
 
-    if (editingOrder) {
-      // Atualização de registro existente
-      const orderRef = doc(firestore, 'orders', editingOrder.id);
-      const updatePayload = { ...orderData, id: editingOrder.id };
-      updateDocumentNonBlocking(orderRef, updatePayload);
-      toast({ title: "Sincronizado", description: "O protocolo foi atualizado no banco." });
-    } else {
-      // Criação de novo registro - CRÍTICO: Gerar o ID antes da gravação
-      const orderRef = doc(collection(firestore, 'orders'));
-      const newOrderPayload = { 
-        ...orderData, 
-        createdAt: serverTimestamp(), 
-        id: orderRef.id // O ID deve estar no payload para as Security Rules
-      };
-      setDocumentNonBlocking(orderRef, newOrderPayload, { merge: true });
-      toast({ title: "Protocolo Criado", description: "A nova ordem está ativa no monitor." });
-      
-      // PDF gerado em background
-      setTimeout(() => generatePDF(data, orderRef.id), 1000);
+      // Finalizar UI
+      setIsModalOpen(false);
+      setEditingOrder(null);
+      reset();
+    } catch (err) {
+      console.error("Erro ao salvar OS:", err);
+      toast({ variant: "destructive", title: "Erro Crítico", description: "Não foi possível persistir os dados." });
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setEditingOrder(null);
-    reset();
   };
 
-  const onValidationErrors = (formErrors: any) => {
+  const onValidationError = (formErrors: any) => {
     console.error('Falha de Validação:', formErrors);
     toast({
       variant: "destructive",
-      title: "Erro de Formulário",
-      description: "Verifique o nome do cliente antes de finalizar.",
+      title: "Dados Incompletos",
+      description: "O nome do cliente é obrigatório.",
     });
   };
 
@@ -238,7 +247,7 @@ export default function OrdersManagementPage() {
             <h2 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase flex items-center gap-2">
               <FileText className="text-primary" /> Gestão de Protocolos
             </h2>
-            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em]">Fluxo Cloud Ativo</p>
+            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em]">Monitoramento Real-time</p>
           </div>
 
           <Dialog open={isModalOpen} onOpenChange={(open) => {
@@ -255,10 +264,10 @@ export default function OrdersManagementPage() {
             </DialogTrigger>
             <DialogContent className="max-w-5xl bg-zinc-950 border-white/10 text-white p-0 rounded-3xl overflow-hidden shadow-2xl">
               <DialogHeader className="p-6 border-b border-white/5 bg-white/[0.02]">
-                <DialogTitle className="text-xl font-black uppercase text-primary tracking-tighter">Terminal VisComm - Registro</DialogTitle>
+                <DialogTitle className="text-xl font-black uppercase text-primary tracking-tighter">Lançamento de Protocolo</DialogTitle>
               </DialogHeader>
 
-              <form onSubmit={handleSubmit(onSubmit, onValidationErrors)} className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 max-h-[75vh] overflow-y-auto custom-scrollbar">
+              <form onSubmit={handleSubmit(onSubmit, onValidationError)} className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 max-h-[75vh] overflow-y-auto custom-scrollbar">
                 <div className="lg:col-span-8 space-y-8">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -267,8 +276,8 @@ export default function OrdersManagementPage() {
                         <Input 
                           {...register('client')} 
                           list="clients-list" 
-                          placeholder="Nome ou Razão Social"
-                          className={cn("bg-black/40 h-12 border-white/10 focus:border-primary/50 transition-colors", errors.client && "border-destructive ring-1 ring-destructive")} 
+                          placeholder="Nome do Cliente"
+                          className={cn("bg-black/40 h-12 border-white/10", errors.client && "border-destructive")} 
                         />
                         {errors.client && <AlertCircle className="w-4 h-4 text-destructive absolute right-3 top-4" />}
                       </div>
@@ -277,14 +286,14 @@ export default function OrdersManagementPage() {
                       </datalist>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Responsável</Label>
+                      <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Vendedor</Label>
                       <Controller
                         name="seller"
                         control={control}
                         render={({ field }) => (
                           <Select onValueChange={field.onChange} value={field.value}>
                             <SelectTrigger className="bg-black/40 h-12 border-white/10">
-                              <SelectValue placeholder="Selecione..." />
+                              <SelectValue />
                             </SelectTrigger>
                             <SelectContent className="bg-zinc-900 border-white/10 text-white">
                               <SelectItem value="Carlos">Carlos Eduardo</SelectItem>
@@ -299,34 +308,34 @@ export default function OrdersManagementPage() {
 
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Escopo da Produção</h3>
+                      <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">Itens da Produção</h3>
                       <Button type="button" size="sm" onClick={() => append({ desc: '', size: '', quantity: 1, unitValue: 0 })} className="border-primary/50 text-primary hover:bg-primary/10" variant="outline">
-                        + Item
+                        + Material
                       </Button>
                     </div>
                     
                     <div className="space-y-3">
                       {fields.map((field, index) => (
-                        <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 p-4 bg-white/[0.02] border border-white/5 rounded-2xl relative group">
+                        <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 p-4 bg-white/[0.02] border border-white/5 rounded-2xl relative">
                           <div className="md:col-span-5 space-y-1">
-                            <Label className="text-[8px] uppercase opacity-50">Material/Serviço</Label>
-                            <Input {...register(`items.${index}.desc`)} placeholder="Lona, Adesivo..." className="bg-transparent border-white/5 h-10" />
+                            <Label className="text-[8px] uppercase opacity-50">Descrição</Label>
+                            <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/5 h-10" />
                           </div>
                           <div className="md:col-span-3 space-y-1">
-                            <Label className="text-[8px] uppercase opacity-50">Medidas</Label>
-                            <Input {...register(`items.${index}.size`)} placeholder="2.0x1.0m" className="bg-transparent border-white/5 h-10" />
+                            <Label className="text-[8px] uppercase opacity-50">Medida</Label>
+                            <Input {...register(`items.${index}.size`)} placeholder="ex: 1x2m" className="bg-transparent border-white/5 h-10" />
                           </div>
                           <div className="md:col-span-2 space-y-1">
                             <Label className="text-[8px] uppercase opacity-50">Qtd</Label>
                             <Input type="number" {...register(`items.${index}.quantity`)} className="bg-transparent border-white/5 h-10" />
                           </div>
                           <div className="md:col-span-2 space-y-1">
-                            <Label className="text-[8px] uppercase opacity-50">R$ Unit.</Label>
+                            <Label className="text-[8px] uppercase opacity-50">Unit.</Label>
                             <Input type="number" step="0.01" {...register(`items.${index}.unitValue`)} className="bg-transparent border-white/5 h-10" />
                           </div>
                           {fields.length > 1 && (
-                            <Button type="button" onClick={() => remove(index)} className="absolute -right-2 -top-2 bg-destructive text-white h-6 w-6 rounded-full p-0 flex items-center justify-center shadow-lg" variant="ghost">
-                              <Trash2 className="w-3 h-3" />
+                            <Button type="button" onClick={() => remove(index)} className="absolute -right-2 -top-2 bg-destructive h-6 w-6 rounded-full p-0 flex items-center justify-center">
+                              <Trash2 className="w-3 h-3 text-white" />
                             </Button>
                           )}
                         </div>
@@ -339,7 +348,7 @@ export default function OrdersManagementPage() {
                   <Card className="bg-white/5 border-none p-5 space-y-6 rounded-2xl">
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Status do Protocolo</Label>
+                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Status Atual</Label>
                         <Controller
                           name="status"
                           control={control}
@@ -352,7 +361,6 @@ export default function OrdersManagementPage() {
                                 <SelectItem value="Arte">Arte Final</SelectItem>
                                 <SelectItem value="Impressão">Impressão</SelectItem>
                                 <SelectItem value="Acabamento">Acabamento</SelectItem>
-                                <SelectItem value="Serralheria">Serralheria</SelectItem>
                                 <SelectItem value="Entregue">Entregue</SelectItem>
                               </SelectContent>
                             </Select>
@@ -361,7 +369,7 @@ export default function OrdersManagementPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Previsão de Entrega</Label>
+                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Entrega Prevista</Label>
                         <Input type="date" {...register('deliveryDate')} className="bg-black/40 h-12 border-white/10" />
                       </div>
 
@@ -376,11 +384,10 @@ export default function OrdersManagementPage() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                <SelectItem value="Pix">Pix / Transferência</SelectItem>
-                                <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                                <SelectItem value="Pix">Pix / Dinheiro</SelectItem>
                                 <SelectItem value="Cartão Crédito">Cartão Crédito</SelectItem>
                                 <SelectItem value="Cartão Débito">Cartão Débito</SelectItem>
-                                <SelectItem value="Boleto">Boleto Bancário</SelectItem>
+                                <SelectItem value="Boleto">Boleto</SelectItem>
                               </SelectContent>
                             </Select>
                           )}
@@ -389,7 +396,7 @@ export default function OrdersManagementPage() {
 
                       {isCardPayment && (
                         <div className="p-4 border border-primary/30 rounded-2xl space-y-4 bg-primary/5">
-                          <div className="space-y-2">
+                          <div className="space-y-1">
                             <Label className="text-[8px] uppercase opacity-70">Maquininha</Label>
                             <Controller
                               name="machine"
@@ -402,13 +409,12 @@ export default function OrdersManagementPage() {
                                   <SelectContent className="bg-zinc-900 text-white">
                                     <SelectItem value="PagBank">PagBank</SelectItem>
                                     <SelectItem value="SIPAG">SIPAG / SICOOB</SelectItem>
-                                    <SelectItem value="Stone">Stone</SelectItem>
                                   </SelectContent>
                                 </Select>
                               )}
                             />
                           </div>
-                          <div className="space-y-2">
+                          <div className="space-y-1">
                             <Label className="text-[8px] uppercase opacity-70">Parcelas</Label>
                             <Controller
                               name="installments"
@@ -438,8 +444,16 @@ export default function OrdersManagementPage() {
                           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}
                         </span>
                       </div>
-                      <Button type="submit" className="w-full h-16 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.4)]">
-                        Finalizar OS
+                      <Button 
+                        type="submit" 
+                        disabled={isSubmitting}
+                        className="w-full h-16 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.4)] transition-all hover:scale-[1.02] active:scale-95"
+                      >
+                        {isSubmitting ? (
+                          <><Loader2 className="w-5 h-5 animate-spin mr-2" /> Salvando...</>
+                        ) : (
+                          <><Save className="w-5 h-5 mr-2" /> Finalizar OS</>
+                        )}
                       </Button>
                     </div>
                   </Card>
@@ -476,7 +490,7 @@ export default function OrdersManagementPage() {
           {ordersLoading && (
             <div className="col-span-full flex flex-col items-center justify-center py-20 gap-4 opacity-50">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <p className="text-[10px] uppercase tracking-widest">Acessando Nuvem VisComm...</p>
+              <p className="text-[10px] uppercase tracking-widest">Sincronizando Cloud...</p>
             </div>
           )}
           {!ordersLoading && orders.length === 0 && <div className="col-span-full"><EmptyState /></div>}

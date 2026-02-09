@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useMemo, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { DashboardStatCard } from '@/components/dashboard/DashboardStatCard';
 import { OrderCard } from '@/components/dashboard/OrderCard';
@@ -16,7 +16,7 @@ import { useUser } from '@/firebase';
 export default function DashboardPage() {
   const router = useRouter();
   const { user, isUserLoading } = useUser();
-  const { orders, isLoading } = useOrders();
+  const { orders, isLoading, stats } = useOrders();
 
   // Proteção de rota
   useEffect(() => {
@@ -25,30 +25,11 @@ export default function DashboardPage() {
     }
   }, [user, isUserLoading, router]);
 
-  // KPIs dinâmicos baseados nas ordens em tempo real
-  const stats = useMemo(() => {
-    const counts = {
-      arte: 0,
-      impressao: 0,
-      acabamento: 0,
-      concluido: 0
-    };
-
-    orders.forEach(order => {
-      if (order.status === 'Arte') counts.arte++;
-      else if (order.status === 'Impressão') counts.impressao++;
-      else if (order.status === 'Acabamento' || order.status === 'Serralheria') counts.acabamento++;
-      else if (order.status === 'Entregue') counts.concluido++;
-    });
-
-    return counts;
-  }, [orders]);
-
   if (isUserLoading || isLoading) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-10 h-10 text-primary animate-spin" />
-        <p className="text-[10px] uppercase tracking-[0.5em] text-primary/50">Carregando Terminal...</p>
+        <p className="text-[10px] uppercase tracking-[0.5em] text-primary/50">Acessando Terminal...</p>
       </div>
     );
   }
@@ -86,7 +67,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between border-b border-white/5 pb-4">
             <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.5em] flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-primary/40 animate-pulse"></span>
-              Protocolos Recentes
+              Fila de Produção Ativa
             </h3>
           </div>
 
