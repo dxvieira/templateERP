@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -148,50 +148,54 @@ export default function OrdersManagementPage() {
   }, [editingOrder, reset]);
 
   const generatePDF = (data: OrderFormValues, docId: string, orderTotal: number) => {
-    const doc = new jsPDF();
-    const primaryColor = [255, 95, 31];
-    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.rect(0, 0, 210, 40, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'bold');
-    doc.text('VISCOMM COMMAND CENTER', 15, 20);
-    doc.setFontSize(12);
-    doc.text(`ORDEM DE SERVIÇO #${docId.slice(-6).toUpperCase()}`, 15, 30);
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(10);
-    doc.text('DADOS DO CLIENTE', 15, 50);
-    doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.line(15, 52, 60, 52);
-    doc.text(`Cliente: ${data.client}`, 15, 60);
-    doc.text(`Vendedor: ${data.seller}`, 15, 65);
-    doc.text(`Pagamento: ${data.paymentMethod} ${data.machine ? `(${data.machine})` : ''}`, 15, 70);
-    doc.text(`Emissão: ${data.emissionDate}`, 120, 60);
-    doc.text(`Entrega: ${data.deliveryDate}`, 120, 65);
-    
-    autoTable(doc, {
-      startY: 80,
-      head: [['DESCRIÇÃO', 'MEDIDA', 'QTD', 'UNIT.', 'SUB']],
-      body: data.items.map(item => [
-        item.desc,
-        item.size,
-        item.quantity,
-        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitValue),
-        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.quantity * item.unitValue),
-      ]),
-      headStyles: { fillColor: primaryColor, textColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: [245, 245, 245] },
-    });
-    
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
-    doc.setFont('helvetica', 'bold');
-    doc.text(`TOTAL GERAL: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(orderTotal)}`, 130, finalY);
-    if (data.observations) {
-      doc.setFont('helvetica', 'normal');
-      doc.text('OBSERVAÇÕES:', 15, finalY + 15);
-      doc.text(data.observations, 15, finalY + 22, { maxWidth: 180 });
+    try {
+      const doc = new jsPDF();
+      const primaryColor = [255, 95, 31];
+      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.rect(0, 0, 210, 40, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(22);
+      doc.setFont('helvetica', 'bold');
+      doc.text('VISCOMM COMMAND CENTER', 15, 20);
+      doc.setFontSize(12);
+      doc.text(`ORDEM DE SERVIÇO #${docId.slice(-6).toUpperCase()}`, 15, 30);
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(10);
+      doc.text('DADOS DO CLIENTE', 15, 50);
+      doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.line(15, 52, 60, 52);
+      doc.text(`Cliente: ${data.client}`, 15, 60);
+      doc.text(`Vendedor: ${data.seller}`, 15, 65);
+      doc.text(`Pagamento: ${data.paymentMethod} ${data.machine ? `(${data.machine})` : ''}`, 15, 70);
+      doc.text(`Emissão: ${data.emissionDate}`, 120, 60);
+      doc.text(`Entrega: ${data.deliveryDate}`, 120, 65);
+      
+      autoTable(doc, {
+        startY: 80,
+        head: [['DESCRIÇÃO', 'MEDIDA', 'QTD', 'UNIT.', 'SUB']],
+        body: data.items.map(item => [
+          item.desc,
+          item.size,
+          item.quantity,
+          new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitValue),
+          new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.quantity * item.unitValue),
+        ]),
+        headStyles: { fillColor: primaryColor, textColor: [255, 255, 255] },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+      });
+      
+      const finalY = (doc as any).lastAutoTable.finalY + 10;
+      doc.setFont('helvetica', 'bold');
+      doc.text(`TOTAL GERAL: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(orderTotal)}`, 130, finalY);
+      if (data.observations) {
+        doc.setFont('helvetica', 'normal');
+        doc.text('OBSERVAÇÕES:', 15, finalY + 15);
+        doc.text(data.observations, 15, finalY + 22, { maxWidth: 180 });
+      }
+      doc.save(`OS_${data.client.replace(/\s+/g, '_')}_${docId.slice(-4)}.pdf`);
+    } catch (e) {
+      console.error("PDF Generation error", e);
     }
-    doc.save(`OS_${data.client.replace(/\s+/g, '_')}_${docId.slice(-4)}.pdf`);
   };
 
   const onSubmit = async (data: OrderFormValues) => {
@@ -208,7 +212,7 @@ export default function OrdersManagementPage() {
 
     if (editingOrder) {
       const orderRef = doc(firestore, 'orders', editingOrder.id);
-      updateDoc(orderRef, orderData).catch(async (e) => {
+      updateDoc(orderRef, orderData).catch(async () => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: orderRef.path,
           operation: 'update',
@@ -228,7 +232,7 @@ export default function OrdersManagementPage() {
         id: orderRef.id 
       };
 
-      setDoc(orderRef, newOrderData).catch(async (e) => {
+      setDoc(orderRef, newOrderData).catch(async () => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: orderRef.path,
           operation: 'create',
@@ -236,7 +240,7 @@ export default function OrdersManagementPage() {
         }));
       });
 
-      setTimeout(() => generatePDF(data, orderRef.id, currentTotal), 500);
+      setTimeout(() => generatePDF(data, orderRef.id, currentTotal), 1000);
       toast({
         title: "Protocolo Lançado",
         description: `Nova OS gerada para ${data.client}.`,
@@ -249,11 +253,10 @@ export default function OrdersManagementPage() {
   };
 
   const onError = (errors: any) => {
-    console.error('Form errors:', errors);
     toast({
       variant: "destructive",
       title: "Erro de Validação",
-      description: "Por favor, preencha todos os campos obrigatórios, incluindo a data de entrega.",
+      description: "Por favor, verifique os campos destacados em vermelho.",
     });
   };
 
@@ -326,17 +329,24 @@ export default function OrdersManagementPage() {
                       </div>
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Vendedor Responsável</Label>
-                        <Select onValueChange={(v) => setValue('seller', v)} defaultValue={editingOrder?.seller || "Carlos"}>
-                          <SelectTrigger className="bg-black/40 border-white/10 h-12">
-                            <SelectValue placeholder="Selecione..." />
-                          </SelectTrigger>
-                          <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                            <SelectItem value="Carlos">Carlos Eduardo</SelectItem>
-                            <SelectItem value="Mariana">Mariana Silva</SelectItem>
-                            <SelectItem value="Roberto">Roberto Costa</SelectItem>
-                            <SelectItem value="Avulso">Venda Avulsa</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Controller
+                          name="seller"
+                          control={control}
+                          render={({ field }) => (
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <SelectTrigger className={`bg-black/40 border-white/10 h-12 ${errors.seller ? 'border-destructive' : ''}`}>
+                                <SelectValue placeholder="Selecione..." />
+                              </SelectTrigger>
+                              <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                <SelectItem value="Carlos">Carlos Eduardo</SelectItem>
+                                <SelectItem value="Mariana">Mariana Silva</SelectItem>
+                                <SelectItem value="Roberto">Roberto Costa</SelectItem>
+                                <SelectItem value="Avulso">Venda Avulsa</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                        {errors.seller && <p className="text-[10px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" /> {errors.seller.message}</p>}
                       </div>
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase text-muted-foreground">Emissão</Label>
@@ -349,7 +359,7 @@ export default function OrdersManagementPage() {
                           {...register('deliveryDate')} 
                           className={`bg-black/40 border-white/10 h-12 ${errors.deliveryDate ? 'border-destructive' : ''}`} 
                         />
-                        {errors.deliveryDate && <p className="text-[10px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" /> Obrigatório</p>}
+                        {errors.deliveryDate && <p className="text-[10px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" /> {errors.deliveryDate.message || 'Obrigatório'}</p>}
                       </div>
                     </CardContent>
                   </Card>
@@ -376,7 +386,7 @@ export default function OrdersManagementPage() {
                               <Input 
                                 {...register(`items.${index}.desc`)}
                                 placeholder="Ex: Banner Frontlight"
-                                className="bg-black/20 border-white/10 h-12"
+                                className={`bg-black/20 border-white/10 h-12 ${errors.items?.[index]?.desc ? 'border-destructive' : ''}`}
                               />
                             </div>
                             <div className="space-y-1">
@@ -420,6 +430,7 @@ export default function OrdersManagementPage() {
                           )}
                         </div>
                       ))}
+                      {errors.items && <p className="text-[10px] text-destructive text-center">{errors.items.message || 'Adicione itens válidos'}</p>}
                     </CardContent>
                   </Card>
                 </div>
@@ -432,21 +443,24 @@ export default function OrdersManagementPage() {
                     <CardContent className="space-y-6">
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase text-muted-foreground">Forma de Pagamento</Label>
-                        <Select 
-                          onValueChange={(v) => setValue('paymentMethod', v as any)} 
-                          defaultValue={editingOrder?.paymentMethod || "Pix"}
-                        >
-                          <SelectTrigger className="bg-black/40 border-white/10 h-12">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                            <SelectItem value="Dinheiro">Dinheiro (Espécie)</SelectItem>
-                            <SelectItem value="Pix">Pix / Transferência</SelectItem>
-                            <SelectItem value="Cartão Crédito">Cartão de Crédito</SelectItem>
-                            <SelectItem value="Cartão Débito">Cartão de Débito</SelectItem>
-                            <SelectItem value="Boleto">Boleto Bancário</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Controller
+                          name="paymentMethod"
+                          control={control}
+                          render={({ field }) => (
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <SelectTrigger className="bg-black/40 border-white/10 h-12">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                <SelectItem value="Dinheiro">Dinheiro (Espécie)</SelectItem>
+                                <SelectItem value="Pix">Pix / Transferência</SelectItem>
+                                <SelectItem value="Cartão Crédito">Cartão de Crédito</SelectItem>
+                                <SelectItem value="Cartão Débito">Cartão de Débito</SelectItem>
+                                <SelectItem value="Boleto">Boleto Bancário</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
                       </div>
 
                       {isCardPayment && (
@@ -462,29 +476,41 @@ export default function OrdersManagementPage() {
                           <div className="space-y-3">
                             <div className="space-y-1">
                               <Label className="text-[8px] uppercase text-muted-foreground">Maquininha</Label>
-                              <Select onValueChange={(v) => setValue('machine', v)} defaultValue={editingOrder?.machine || "PagBank"}>
-                                <SelectTrigger className="bg-black/20 border-white/5 h-10">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                  <SelectItem value="PagBank">PagBank (Moderninha)</SelectItem>
-                                  <SelectItem value="SIPAG">SIPAG / SICOOB</SelectItem>
-                                  <SelectItem value="Stone">Stone / Ton</SelectItem>
-                                </SelectContent>
-                              </Select>
+                              <Controller
+                                name="machine"
+                                control={control}
+                                render={({ field }) => (
+                                  <Select onValueChange={field.onChange} value={field.value || 'PagBank'}>
+                                    <SelectTrigger className="bg-black/20 border-white/5 h-10">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                      <SelectItem value="PagBank">PagBank (Moderninha)</SelectItem>
+                                      <SelectItem value="SIPAG">SIPAG / SICOOB</SelectItem>
+                                      <SelectItem value="Stone">Stone / Ton</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                              />
                             </div>
                             <div className="space-y-1">
                               <Label className="text-[8px] uppercase text-muted-foreground">Parcelamento</Label>
-                              <Select onValueChange={(v) => setValue('installments', v)} defaultValue={editingOrder?.installments || "1x"}>
-                                <SelectTrigger className="bg-black/20 border-white/5 h-10">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                  {Array.from({ length: 12 }, (_, i) => (
-                                    <SelectItem key={i + 1} value={`${i + 1}x`}>{i + 1}x sem juros</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <Controller
+                                name="installments"
+                                control={control}
+                                render={({ field }) => (
+                                  <Select onValueChange={field.onChange} value={field.value || '1x'}>
+                                    <SelectTrigger className="bg-black/20 border-white/5 h-10">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                      {Array.from({ length: 12 }, (_, i) => (
+                                        <SelectItem key={i + 1} value={`${i + 1}x`}>{i + 1}x sem juros</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                              />
                             </div>
                           </div>
                         </motion.div>
@@ -492,19 +518,25 @@ export default function OrdersManagementPage() {
 
                       <div className="space-y-2">
                         <Label className="text-[10px] uppercase text-muted-foreground">Status Atual</Label>
-                        <Select onValueChange={(v) => setValue('status', v as any)} defaultValue={editingOrder?.status || "Arte"}>
-                          <SelectTrigger className="bg-black/40 border-white/10 h-12">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                            <SelectItem value="Arte">Arte Final</SelectItem>
-                            <SelectItem value="Impressão">Impressão</SelectItem>
-                            <SelectItem value="Serralheria">Serralheria</SelectItem>
-                            <SelectItem value="Acabamento">Acabamento</SelectItem>
-                            <SelectItem value="Instalação">Instalação</SelectItem>
-                            <SelectItem value="Entregue">Entregue</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Controller
+                          name="status"
+                          control={control}
+                          render={({ field }) => (
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <SelectTrigger className="bg-black/40 border-white/10 h-12">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                <SelectItem value="Arte">Arte Final</SelectItem>
+                                <SelectItem value="Impressão">Impressão</SelectItem>
+                                <SelectItem value="Serralheria">Serralheria</SelectItem>
+                                <SelectItem value="Acabamento">Acabamento</SelectItem>
+                                <SelectItem value="Instalação">Instalação</SelectItem>
+                                <SelectItem value="Entregue">Entregue</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
                       </div>
 
                       <div className="space-y-2">
