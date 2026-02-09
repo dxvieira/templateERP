@@ -10,7 +10,8 @@ import {
   TrendingUp, 
   Package,
   Menu,
-  X
+  X,
+  Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,7 @@ import { useRouter, usePathname } from 'next/navigation';
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: ClipboardList, label: 'Gestão de Protocolos', path: '/orders' },
+  { icon: Users, label: 'Meus Clientes', path: '/clients' },
   { icon: TrendingUp, label: 'Analytics', path: '#' },
   { icon: Package, label: 'Estoque', path: '#' },
   { icon: Bell, label: 'Notificações', path: '#' },

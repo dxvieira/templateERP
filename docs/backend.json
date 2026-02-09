@@ -91,6 +91,42 @@
         "totalValue"
       ]
     },
+    "Client": {
+      "title": "Client",
+      "description": "Customer information.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "address": {
+          "type": "object",
+          "properties": {
+            "zip": { "type": "string" },
+            "street": { "type": "string" },
+            "neighborhood": { "type": "string" },
+            "city": { "type": "string" },
+            "state": { "type": "string" },
+            "number": { "type": "string" },
+            "complement": { "type": "string" }
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "name", "phone"]
+    },
     "Kpi": {
       "title": "Kpi",
       "description": "Performance indicators.",
@@ -129,6 +165,12 @@
         "$ref": "#/backend/entities/Order"
       },
       "description": "Stores customer orders."
+    },
+    "/clients/{clientId}": {
+      "schema": {
+        "$ref": "#/backend/entities/Client"
+      },
+      "description": "Stores customer contact information."
     },
     "/kpis/{kpiId}": {
       "schema": {
