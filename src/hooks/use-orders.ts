@@ -66,6 +66,7 @@ export function useOrders() {
           updatedAt: serverTimestamp(),
         };
 
+        // Limpa campos undefined para evitar erro no Firebase
         Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
 
         transaction.set(orderRef, payload);
@@ -93,6 +94,7 @@ export function useOrders() {
       updatedAt: serverTimestamp(),
     };
 
+    // Limpa campos undefined para evitar erro no Firebase
     Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
 
     try {
@@ -110,10 +112,12 @@ export function useOrders() {
   const deleteOrder = useCallback(async (orderId: string) => {
     if (!firestore) throw new Error("Firestore não inicializado");
     
+    // O ID da ordem é o ID do documento
     const orderRef = doc(firestore, 'orders', orderId);
     try {
       await deleteDoc(orderRef);
     } catch (err: any) {
+      console.error('Erro ao deletar documento:', err);
       errorEmitter.emit('permission-error', new FirestorePermissionError({
         path: orderRef.path,
         operation: 'delete'

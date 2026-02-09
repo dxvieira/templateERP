@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useForm, useFieldArray, useWatch, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -149,40 +149,43 @@ export default function OrdersManagerPage() {
     }
   };
 
-  const handleDeleteOrder = async (orderId: string) => {
+  const handleDeleteOrder = useCallback(async (orderId: string) => {
     const confirmDelete = window.confirm(`ATENÇÃO: Tem certeza que deseja excluir permanentemente a OS #${orderId}? Essa ação não pode ser desfeita.`);
     
     if (confirmDelete) {
       try {
         await deleteOrder(orderId);
         toast({ title: "OS Removida", description: "Protocolo excluído com sucesso." });
+        
+        // Se estivermos com o modal dessa ordem aberto, fechamos.
         if (editingOrder && editingOrder.id === orderId) {
           setIsModalOpen(false);
           setEditingOrder(null);
         }
       } catch (error) {
+        console.error("Erro ao deletar:", error);
         toast({ variant: "destructive", title: "Erro ao excluir", description: "Não foi possível remover a OS." });
       }
     }
-  };
+  }, [deleteOrder, editingOrder, toast]);
 
-  const handleQuickStatusChange = async (orderId: string, newStatus: string) => {
+  const handleQuickStatusChange = useCallback(async (orderId: string, newStatus: string) => {
     try {
       await updateOrder(orderId, { status: newStatus });
       toast({ title: "Status Atualizado", description: `Protocolo movido para ${newStatus}.` });
     } catch (error) {
       toast({ variant: "destructive", title: "Erro", description: "Não foi possível mudar o status." });
     }
-  };
+  }, [updateOrder, toast]);
 
-  const handleQuickConclude = async (orderId: string) => {
+  const handleQuickConclude = useCallback(async (orderId: string) => {
     try {
       await updateOrder(orderId, { status: 'Concluído' });
       toast({ title: "OS Concluída!", description: "Protocolo finalizado com sucesso." });
     } catch (error) {
       toast({ variant: "destructive", title: "Erro", description: "Não foi possível concluir." });
     }
-  };
+  }, [updateOrder, toast]);
 
   const activeOrders = useMemo(() => orders.filter(o => o.status !== 'Concluído' && o.status !== 'Entregue'), [orders]);
   const completedOrders = useMemo(() => orders.filter(o => o.status === 'Concluído' || o.status === 'Entregue'), [orders]);
@@ -300,7 +303,8 @@ export default function OrdersManagerPage() {
                 {editingOrder && (
                   <Button 
                     variant="ghost" 
-                    onClick={(e) => { e.stopPropagation(); handleDeleteOrder(editingOrder.id); }}
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteOrder(editingOrder.id); }}
                     className="text-destructive hover:bg-destructive/10 font-black uppercase tracking-widest gap-2"
                   >
                     <Trash2 className="w-4 h-4" /> Excluir OS
@@ -322,6 +326,7 @@ export default function OrdersManagerPage() {
                   <datalist id="client-suggestions">
                     {clients?.map(c => <option key={c.id} value={c.name} />)}
                   </datalist>
+                  {errors.client && <p className="text-xs text-destructive font-black uppercase tracking-widest">{errors.client.message}</p>}
                 </div>
                 <div className="space-y-3">
                   <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Prazo Entrega</Label>

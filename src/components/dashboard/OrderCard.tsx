@@ -41,16 +41,19 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
   const isCompleted = order.status === 'Entregue' || order.status === 'Concluído';
 
   const handleStatusClick = (e: React.MouseEvent, status: string) => {
+    e.preventDefault();
     e.stopPropagation(); 
     onStatusChange?.(order.id, status);
   };
 
   const handleConcludeClick = (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation(); 
     onQuickConclude?.(order.id);
   };
 
   const handleDeleteClick = (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation(); 
     if (onDelete) {
       onDelete(order.id);
@@ -77,16 +80,16 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
         isCompleted ? "bg-[#00FF00]" : "bg-primary"
       )} />
 
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 z-10">
         <div className="flex items-center gap-1.5 opacity-50">
           <Hash className="w-3 h-3 text-zinc-400" />
-          <span className="text-[10px] font-black tracking-widest uppercase">
+          <span className="text-[10px] font-black tracking-widest uppercase text-zinc-400">
             {order.id}
           </span>
         </div>
         
         <div className="flex items-center gap-3">
-          {!isCompleted ? (
+          {!isCompleted && (
             <button 
               onClick={handleConcludeClick}
               title="Concluir Pedido"
@@ -94,16 +97,13 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
             >
               <Check className="w-6 h-6" />
             </button>
-          ) : (
-            <div className="w-12 h-12 rounded-full bg-[#00FF00]/10 flex items-center justify-center text-[#00FF00] border border-[#00FF00]/20">
-              <PackageCheck className="w-6 h-6" />
-            </div>
           )}
           
           <button 
             onClick={handleDeleteClick}
-            title="Excluir Pedido"
-            className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 transition-all hover:bg-destructive hover:text-white hover:border-destructive hover:shadow-[0_0_15px_rgba(255,0,0,0.4)] active:scale-90 z-10"
+            type="button"
+            title="Excluir Definitivamente"
+            className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 transition-all hover:bg-destructive hover:text-white hover:border-destructive hover:shadow-[0_0_20px_rgba(255,0,0,0.5)] active:scale-90"
           >
             <Trash2 className="w-6 h-6" />
           </button>
@@ -130,7 +130,7 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
         </p>
       </div>
 
-      <div className="mt-auto">
+      <div className="mt-auto z-10">
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
             <button className={cn(
