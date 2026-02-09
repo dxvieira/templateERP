@@ -5,8 +5,7 @@ import {
   Calendar, 
   Check, 
   ChevronDown, 
-  PackageCheck,
-  Clock
+  PackageCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -51,7 +50,7 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
     <div 
       onClick={() => onClick?.(order)}
       className={cn(
-        "group relative flex flex-col rounded-3xl bg-[#121212] border border-zinc-800/50 p-5 transition-all duration-300 cursor-pointer overflow-hidden",
+        "group relative flex flex-col rounded-3xl bg-[#121212] border border-zinc-800/50 p-5 transition-all duration-300 cursor-pointer overflow-hidden min-h-[220px]",
         "hover:scale-[1.02] hover:bg-[#161616]",
         isCompleted 
           ? "hover:border-[#00FF00] hover:shadow-[0_0_30px_-10px_rgba(0,255,0,0.5)]" 
@@ -108,8 +107,8 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
         </p>
       </div>
 
-      {/* Rodapé: Seletor (Badge) e Valor */}
-      <div className="flex items-end justify-between gap-4 mt-auto">
+      {/* Rodapé: Seletor (Badge) */}
+      <div className="flex items-center justify-start mt-auto">
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
             <button className={cn(
@@ -134,13 +133,6 @@ export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-
-        <div className="text-right">
-          <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-0.5">Total</div>
-          <div className="text-xl font-black text-white tracking-tighter">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.value)}
-          </div>
-        </div>
       </div>
     </div>
   );
