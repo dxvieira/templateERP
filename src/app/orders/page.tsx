@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -14,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Select, 
   SelectContent, 
@@ -27,7 +27,7 @@ import {
   DialogHeader, 
   DialogTitle 
 } from '@/components/ui/dialog';
-import { Plus, Trash2, FileText, Save, Calculator, Loader2 } from 'lucide-react';
+import { Plus, Trash2, FileText, Save, Calculator, Loader2, PackageCheck, Zap } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useOrders } from '@/hooks/use-orders';
@@ -54,11 +54,12 @@ type OrderFormValues = z.infer<typeof orderSchema>;
 
 export default function OrdersManagerPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const firestore = useFirestore();
   const { toast } = useToast();
   
-  const { orders, createOrder, isLoading } = useOrders();
+  const { orders, createOrder, updateOrder, isLoading } = useOrders();
 
   const clientsQuery = useMemoFirebase(() => 
     firestore ? query(collection(firestore, 'clients'), orderBy('name', 'asc')) : null
@@ -88,6 +89,7 @@ export default function OrdersManagerPage() {
     }, 0) || 0;
   }, [watchedItems]);
 
+  // Limpa campos de cartão se mudar de forma de pagamento
   useEffect(() => {
     if (!watchedPayment?.toLowerCase().includes('cartão')) {
       setValue('machine', undefined);
@@ -95,101 +97,193 @@ export default function OrdersManagerPage() {
     }
   }, [watchedPayment, setValue]);
 
+  // Carrega dados no form ao editar
+  useEffect(() => {
+    if (editingOrder) {
+      reset({
+        client: editingOrder.client,
+        clientId: editingOrder.clientId || '',
+        deliveryDate: editingOrder.deliveryDate || '',
+        seller: editingOrder.seller || 'Vendedor Geral',
+        status: editingOrder.status,
+        paymentMethod: editingOrder.paymentMethod || 'Pix',
+        machine: editingOrder.machine,
+        installments: editingOrder.installments,
+        observations: editingOrder.observations || '',
+        items: editingOrder.items || [{ desc: 'Novo Item', size: '', quantity: 1, unitValue: 0 }]
+      });
+      setIsModalOpen(true);
+    } else {
+      reset({
+        client: '',
+        status: 'Arte',
+        paymentMethod: 'Pix',
+        items: [{ desc: 'Novo Item', size: '', quantity: 1, unitValue: 0 }]
+      });
+    }
+  }, [editingOrder, reset]);
+
   const onSubmit = async (data: OrderFormValues) => {
     setIsSubmitting(true);
     
-    // Filtra campos undefined que o Firestore não aceita
     const cleanedData = Object.fromEntries(
-      Object.entries(data).filter(([_, v]) => v !== undefined)
+      Object.entries({ ...data, totalValue }).filter(([_, v]) => v !== undefined)
     );
     
     try {
-      await createOrder({
-        ...cleanedData,
-        totalValue,
-      });
-      
-      toast({ 
-        title: "OS Protocolada", 
-        description: `Protocolo para ${data.client} criado com sucesso.` 
-      });
+      if (editingOrder) {
+        await updateOrder(editingOrder.id, cleanedData);
+        toast({ title: "Protocolo Atualizado", description: `OS #${editingOrder.id.slice(-4)} salva com sucesso.` });
+      } else {
+        await createOrder(cleanedData);
+        toast({ title: "OS Protocolada", description: `Novo protocolo para ${data.client} criado.` });
+      }
       
       setIsModalOpen(false);
-      reset();
+      setEditingOrder(null);
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Erro ao salvar",
-        description: error.message || "Não foi possível salvar no banco de dados."
+        description: error.message || "Falha na comunicação com o banco."
       });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const onError = (formErrors: any) => {
-    console.error('Erros de Validação:', formErrors);
-    toast({
-      variant: "destructive",
-      title: "Erro de Validação",
-      description: "Verifique os campos obrigatórios (Cliente)."
-    });
+  const handleQuickStatusChange = async (orderId: string, newStatus: string) => {
+    try {
+      await updateOrder(orderId, { status: newStatus });
+      toast({ title: "Status Atualizado", description: `Protocolo movido para ${newStatus}.` });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Erro", description: "Não foi possível mudar o status." });
+    }
   };
+
+  const handleQuickConclude = async (orderId: string) => {
+    try {
+      await updateOrder(orderId, { status: 'Concluído' });
+      toast({ title: "OS Concluída!", description: "Protocolo finalizado com sucesso." });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Erro", description: "Não foi possível concluir." });
+    }
+  };
+
+  const activeOrders = useMemo(() => orders.filter(o => o.status !== 'Concluído' && o.status !== 'Entregue'), [orders]);
+  const completedOrders = useMemo(() => orders.filter(o => o.status === 'Concluído' || o.status === 'Entregue'), [orders]);
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col md:flex-row overflow-x-hidden relative">
       <DashboardSidebar />
       
-      <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-8 mt-16 md:mt-0 z-10">
+      <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-12 mt-16 md:mt-0 z-10 pb-20">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-1">
             <h2 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
-              <FileText className="text-primary w-8 h-8" /> Gestão de Protocolos
+              <Zap className="text-primary w-8 h-8 animate-pulse" /> Gestão de Protocolos
             </h2>
-            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em] font-medium">Histórico de Produção em Tempo Real</p>
+            <p className="text-muted-foreground text-[10px] uppercase tracking-[0.4em] font-medium">Terminal Kanban v2.0 • Sincronia Real</p>
           </div>
 
           <Button 
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => { setEditingOrder(null); setIsModalOpen(true); }}
             className="bg-primary text-black font-black uppercase tracking-widest px-8 h-14 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.6)] active:scale-95 transition-all gap-2 z-20"
           >
             <Plus className="w-5 h-5" /> Nova Ordem de Serviço
           </Button>
         </div>
 
+        {/* Seção: Fila de Produção */}
         <div className="space-y-6">
-          <div className="flex items-center justify-between border-b border-white/5 pb-4">
-            <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.5em] flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-primary/40"></span>
-              Fila de Protocolos Cloud
+          <div className="flex items-center gap-4 border-b border-white/5 pb-4">
+            <h3 className="text-xs font-black text-primary uppercase tracking-[0.5em] flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+              Fila de Produção Ativa
             </h3>
+            <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded-full text-muted-foreground font-mono">
+              {activeOrders.length} Protocolos
+            </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {orders.map(order => (
-              <OrderCard 
-                key={order.id} 
-                order={{
-                  id: order.id,
-                  client: order.client,
-                  description: order.items?.[0]?.desc || 'Sem descrição',
-                  status: order.status,
-                  deliveryDate: order.deliveryDate || 'N/A',
-                  value: order.totalValue || 0
-                }} 
-              />
-            ))}
-            {orders.length === 0 && !isLoading && <div className="col-span-full"><EmptyState /></div>}
+            <AnimatePresence mode="popLayout">
+              {activeOrders.map(order => (
+                <motion.div 
+                  key={order.id} 
+                  layout 
+                  initial={{ opacity: 0, scale: 0.9 }} 
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8, x: 20 }}
+                >
+                  <OrderCard 
+                    order={{
+                      id: order.id,
+                      client: order.client,
+                      description: order.items?.[0]?.desc || 'Sem descrição',
+                      status: order.status,
+                      deliveryDate: order.deliveryDate || 'N/A',
+                      value: order.totalValue || 0
+                    }} 
+                    onClick={(o) => setEditingOrder(order)}
+                    onStatusChange={handleQuickStatusChange}
+                    onQuickConclude={handleQuickConclude}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            {activeOrders.length === 0 && !isLoading && <div className="col-span-full"><EmptyState /></div>}
           </div>
         </div>
 
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        {/* Seção: Concluídos */}
+        <div className="space-y-6 pt-8">
+          <div className="flex items-center gap-4 border-b border-white/5 pb-4">
+            <h3 className="text-xs font-black text-[#00FF00] uppercase tracking-[0.5em] flex items-center gap-2">
+              <PackageCheck className="w-4 h-4" />
+              Protocolos Concluídos
+            </h3>
+            <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded-full text-muted-foreground font-mono">
+              {completedOrders.length} Finalizados
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <AnimatePresence mode="popLayout">
+              {completedOrders.map(order => (
+                <motion.div 
+                  key={order.id} 
+                  layout 
+                  initial={{ opacity: 0, scale: 0.9 }} 
+                  animate={{ opacity: 1, scale: 1 }}
+                >
+                  <OrderCard 
+                    order={{
+                      id: order.id,
+                      client: order.client,
+                      description: order.items?.[0]?.desc || 'Sem descrição',
+                      status: order.status,
+                      deliveryDate: order.deliveryDate || 'N/A',
+                      value: order.totalValue || 0
+                    }} 
+                    onClick={(o) => setEditingOrder(order)}
+                    onStatusChange={handleQuickStatusChange}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
           <DialogContent className="max-w-4xl bg-zinc-950 border-white/10 text-white rounded-3xl overflow-hidden p-0 shadow-2xl z-[9999]">
             <DialogHeader className="p-6 bg-white/[0.02] border-b border-white/5">
-              <DialogTitle className="text-2xl font-black text-primary uppercase tracking-tighter">Entrada de Produção</DialogTitle>
+              <DialogTitle className="text-2xl font-black text-primary uppercase tracking-tighter">
+                {editingOrder ? 'Ajustar Protocolo' : 'Entrada de Produção'}
+              </DialogTitle>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit(onSubmit, onError)} className="p-6 space-y-8 max-h-[75vh] overflow-y-auto no-scrollbar">
+            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-8 max-h-[75vh] overflow-y-auto no-scrollbar">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 space-y-2">
                   <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Cliente*</Label>
@@ -221,7 +315,7 @@ export default function OrdersManagerPage() {
                     name="status"
                     control={control}
                     render={({ field }) => (
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <SelectTrigger className="bg-black/40 border-white/10 h-12 rounded-xl">
                           <SelectValue placeholder="Status" />
                         </SelectTrigger>
@@ -288,7 +382,7 @@ export default function OrdersManagerPage() {
                     name="paymentMethod"
                     control={control}
                     render={({ field }) => (
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <SelectTrigger className="bg-black/40 border-white/10 h-12 rounded-xl">
                           <SelectValue placeholder="Forma" />
                         </SelectTrigger>
@@ -310,7 +404,7 @@ export default function OrdersManagerPage() {
                         name="machine"
                         control={control}
                         render={({ field }) => (
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <SelectTrigger className="bg-black/40 border-white/10 h-12 rounded-xl">
                               <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
@@ -329,7 +423,7 @@ export default function OrdersManagerPage() {
                         name="installments"
                         control={control}
                         render={({ field }) => (
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <SelectTrigger className="bg-black/40 border-white/10 h-12 rounded-xl">
                               <SelectValue placeholder="1x" />
                             </SelectTrigger>
@@ -363,7 +457,7 @@ export default function OrdersManagerPage() {
                   disabled={isSubmitting}
                   className="w-full md:w-64 h-16 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.4)] hover:shadow-[0_0_40px_rgba(255,95,31,0.6)] transition-all"
                 >
-                  {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> Finalizar OS</>}
+                  {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5 mr-2" /> {editingOrder ? 'Salvar Alterações' : 'Finalizar OS'}</>}
                 </Button>
               </div>
             </form>

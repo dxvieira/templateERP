@@ -1,7 +1,6 @@
-
 'use client';
 
-import { query, collection, orderBy, onSnapshot, doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { query, collection, orderBy, onSnapshot, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { useState, useEffect, useCallback } from 'react';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -9,7 +8,7 @@ import { FirestorePermissionError } from '@/firebase/errors';
 
 /**
  * Hook centralizador de Ordens de Serviço.
- * Gerencia a sincronização em tempo real (onSnapshot) e a criação de documentos.
+ * Gerencia a sincronização em tempo real (onSnapshot) e mutações.
  */
 export function useOrders() {
   const firestore = useFirestore();
@@ -17,13 +16,11 @@ export function useOrders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Memoização da query para evitar re-subscriptions desnecessárias
   const ordersQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
   }, [firestore, user]);
 
-  // Listener em tempo real
   useEffect(() => {
     if (!ordersQuery) {
       setIsLoading(false);
@@ -46,29 +43,24 @@ export function useOrders() {
     return () => unsubscribe();
   }, [ordersQuery]);
 
-  /**
-   * Cria uma nova ordem no Firestore.
-   */
   const createOrder = useCallback(async (data: any) => {
     if (!firestore) throw new Error("Firestore não inicializado");
     
     const orderRef = doc(collection(firestore, 'orders'));
-    
-    // Filtra campos undefined que o Firestore não aceita
-    const payload: any = {
+    const payload = {
       ...data,
       id: orderRef.id,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
 
+    // Limpa campos undefined para evitar erro do Firestore
     Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
 
     try {
       await setDoc(orderRef, payload);
       return payload;
     } catch (err: any) {
-      console.error('Erro na gravação Firestore:', err);
       errorEmitter.emit('permission-error', new FirestorePermissionError({
         path: orderRef.path,
         operation: 'create',
@@ -78,7 +70,29 @@ export function useOrders() {
     }
   }, [firestore]);
 
-  // KPIs calculados dinamicamente com base no estado 'orders' reativo
+  const updateOrder = useCallback(async (orderId: string, data: any) => {
+    if (!firestore) throw new Error("Firestore não inicializado");
+    
+    const orderRef = doc(firestore, 'orders', orderId);
+    const payload = {
+      ...data,
+      updatedAt: serverTimestamp(),
+    };
+
+    Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+
+    try {
+      await updateDoc(orderRef, payload);
+    } catch (err: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: orderRef.path,
+        operation: 'update',
+        requestResourceData: payload
+      }));
+      throw err;
+    }
+  }, [firestore]);
+
   const stats = {
     total: orders.length,
     arte: orders.filter(o => o.status === 'Arte').length,
@@ -87,5 +101,5 @@ export function useOrders() {
     concluido: orders.filter(o => o.status === 'Entregue' || o.status === 'Concluído').length,
   };
 
-  return { orders, stats, isLoading, createOrder };
+  return { orders, stats, isLoading, createOrder, updateOrder };
 }
