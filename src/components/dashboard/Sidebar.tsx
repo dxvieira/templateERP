@@ -11,12 +11,14 @@ import {
   Package,
   Menu,
   X,
-  Users
+  Users,
+  LogOut
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useRouter, usePathname } from 'next/navigation';
+import { useAuth, initiateSignOut } from '@/firebase';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -32,11 +34,19 @@ export const DashboardSidebar = memo(() => {
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  const auth = useAuth();
 
   const handleNavigation = useCallback((path: string) => {
     if (path !== '#') router.push(path);
     setIsOpen(false);
   }, [router]);
+
+  const handleLogout = () => {
+    if (auth) {
+      initiateSignOut(auth);
+      router.push('/login');
+    }
+  };
 
   return (
     <>
@@ -80,7 +90,7 @@ export const DashboardSidebar = memo(() => {
             </div>
           </div>
 
-          <nav className="flex-1 space-y-1.5">
+          <nav className="flex-1 space-y-1.5 overflow-y-auto no-scrollbar">
             {navItems.map((item) => (
               <button
                 key={item.label}
@@ -105,8 +115,16 @@ export const DashboardSidebar = memo(() => {
           </nav>
 
           <Separator className="my-6 bg-white/5" />
+          
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-4 h-12 rounded-xl text-destructive hover:bg-destructive/10 transition-all duration-200 group"
+          >
+            <LogOut className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            <span className="text-sm tracking-tight whitespace-nowrap font-bold uppercase">Sair do Terminal</span>
+          </button>
 
-          <div className="pt-4 flex flex-col items-center gap-1 opacity-40">
+          <div className="pt-6 flex flex-col items-center gap-1 opacity-40">
             <p className="text-[8px] uppercase tracking-[0.4em] text-white font-black whitespace-nowrap">SISTEMA VISCOMM</p>
             <p className="text-[7px] uppercase tracking-[0.1em] text-muted-foreground font-mono">Build 2025.02.09</p>
           </div>

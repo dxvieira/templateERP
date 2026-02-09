@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { useMemo, memo } from 'react';
+import React, { useMemo, memo, useEffect } from 'react';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { DashboardStatCard } from '@/components/dashboard/DashboardStatCard';
 import { OrderCard } from '@/components/dashboard/OrderCard';
@@ -52,6 +52,13 @@ export default function DashboardPage() {
   const db = useFirestore();
   const { user, isUserLoading } = useUser();
 
+  // Basic Auth Check
+  useEffect(() => {
+    if (!isUserLoading && (!user || user.isAnonymous)) {
+      router.push('/login');
+    }
+  }, [user, isUserLoading, router]);
+
   const ordersQuery = useMemoFirebase(() => {
     if (!db || !user || isUserLoading) return null;
     return query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
@@ -59,14 +66,17 @@ export default function DashboardPage() {
 
   const { data: orders, isLoading: ordersLoading } = useCollection(ordersQuery);
 
-  const stats = useMemo(() => ({
-    arte: orders?.filter(o => o.status === 'Arte').length || 0,
-    impressao: orders?.filter(o => o.status === 'Impressão').length || 0,
-    acabamento: orders?.filter(o => o.status === 'Acabamento').length || 0,
-    concluido: orders?.filter(o => o.status === 'Entregue').length || 0,
-  }), [orders]);
+  const stats = useMemo(() => {
+    const validOrders = orders || [];
+    return {
+      arte: validOrders.filter(o => o.status === 'Arte').length || 0,
+      impressao: validOrders.filter(o => o.status === 'Impressão').length || 0,
+      acabamento: validOrders.filter(o => o.status === 'Acabamento').length || 0,
+      concluido: validOrders.filter(o => o.status === 'Entregue').length || 0,
+    };
+  }, [orders]);
 
-  if (isUserLoading) {
+  if (isUserLoading || (!user || user.isAnonymous)) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
         <Loader2 className="w-10 h-10 text-primary animate-spin" />
@@ -153,7 +163,7 @@ export default function DashboardPage() {
 
         <footer className="pt-8 pb-4 border-t border-white/5">
           <p className="text-[7px] md:text-[9px] text-muted-foreground/30 uppercase tracking-[0.5em] text-center whitespace-nowrap">
-            VISCOMM COMMAND CENTER • SECURE TERMINAL v1.0
+            VISCOMM COMMAND CENTER • SECURE TERMINAL v1.2
           </p>
         </footer>
       </main>
