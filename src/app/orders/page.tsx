@@ -56,7 +56,7 @@ type OrderFormValues = z.infer<typeof orderSchema>;
 export default function OrdersManagerPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { firestore } = useFirestore();
+  const firestore = useFirestore();
   const { toast } = useToast();
   
   // Consome o hook centralizador para garantir reatividade
@@ -93,18 +93,13 @@ export default function OrdersManagerPage() {
 
   // Limpa campos de cartão se trocar a forma de pagamento
   useEffect(() => {
-    if (!watchedPayment.toLowerCase().includes('cartão')) {
+    if (!watchedPayment?.toLowerCase().includes('cartão')) {
       setValue('machine', undefined);
       setValue('installments', undefined);
     }
   }, [watchedPayment, setValue]);
 
-  /**
-   * Handler de submissão do formulário.
-   * Executa a gravação e fornece feedback imediato.
-   */
   const onSubmit = async (data: OrderFormValues) => {
-    console.log('Botão Finalizar clicado. Dados coletados:', data);
     setIsSubmitting(true);
     
     try {
@@ -122,16 +117,23 @@ export default function OrdersManagerPage() {
       reset();
     } catch (error: any) {
       console.error('Falha na persistência:', error);
-      alert(`Erro crítico: ${error.message || 'Não foi possível salvar no banco de dados.'}`);
+      toast({
+        variant: "destructive",
+        title: "Erro ao salvar",
+        description: error.message || "Não foi possível salvar no banco de dados."
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Log de erros de validação (ajuda no debug de campos vazios)
   const onError = (formErrors: any) => {
-    console.error('Erros de Validação do Formulário:', formErrors);
-    alert('Erro de Validação: Verifique se o Nome do Cliente e pelo menos um Item foram preenchidos corretamente.');
+    console.error('Erros de Validação:', formErrors);
+    toast({
+      variant: "destructive",
+      title: "Erro de Validação",
+      description: "Verifique os campos obrigatórios (Nome do Cliente e Descrição do Item)."
+    });
   };
 
   return (
@@ -259,11 +261,11 @@ export default function OrdersManagerPage() {
                     </div>
                     <div className="md:col-span-2">
                       <Label className="text-[8px] uppercase text-muted-foreground mb-1 block">Qtd</Label>
-                      <Input type="number" {...register(`items.${index}.quantity`)} className="bg-transparent border-white/10 h-10" />
+                      <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/10 h-10" />
                     </div>
                     <div className="md:col-span-2">
                       <Label className="text-[8px] uppercase text-muted-foreground mb-1 block">R$ Unit.</Label>
-                      <Input type="number" step="0.01" {...register(`items.${index}.unitValue`)} className="bg-transparent border-white/10 h-10" />
+                      <Input type="number" step="0.01" {...register(`items.${index}.unitValue`, { valueAsNumber: true })} className="bg-transparent border-white/10 h-10" />
                     </div>
                     <button type="button" onClick={() => remove(index)} className="absolute -right-2 -top-2 bg-destructive text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
@@ -291,7 +293,7 @@ export default function OrdersManagerPage() {
                   />
                 </div>
 
-                {watchedPayment.toLowerCase().includes('cartão') && (
+                {watchedPayment?.toLowerCase().includes('cartão') && (
                   <>
                     <div className="space-y-2">
                       <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-black">Maquininha</Label>

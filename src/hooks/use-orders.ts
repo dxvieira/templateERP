@@ -12,7 +12,7 @@ import { FirestorePermissionError } from '@/firebase/errors';
  * Gerencia a sincronização em tempo real (onSnapshot) e a criação de documentos.
  */
 export function useOrders() {
-  const { firestore } = useFirestore();
+  const firestore = useFirestore();
   const { user } = useUser();
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);

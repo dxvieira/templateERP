@@ -52,7 +52,7 @@ type ClientFormValues = z.infer<typeof clientSchema>;
 export default function ClientsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
-  const { firestore } = useFirestore();
+  const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
 
