@@ -11,7 +11,7 @@ import { Palette, Printer, Hammer, CheckCircle2, Plus, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
-import { useFirestore, useCollection } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { ProductionChart } from '@/components/dashboard/ProductionChart';
 import { WarRoom } from '@/components/dashboard/WarRoom';
@@ -51,7 +51,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const db = useFirestore();
 
-  const ordersQuery = useMemo(() => {
+  const ordersQuery = useMemoFirebase(() => {
     if (!db) return null;
     return query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
   }, [db]);
@@ -70,7 +70,7 @@ export default function DashboardPage() {
       <DashboardSidebar />
       
       <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-6 md:space-y-8 mt-16 md:mt-0 max-w-full overflow-hidden">
-        <DashboardHeader onNewOrder={() => router.push('/orders/new')} />
+        <DashboardHeader onNewOrder={() => router.push('/orders')} />
 
         {/* KPI Cards: Carousel Mobile / Grid Desktop */}
         <div className="flex overflow-x-auto md:grid md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 pb-4 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 no-scrollbar snap-x">
@@ -92,7 +92,7 @@ export default function DashboardPage() {
           <div className="lg:col-span-8 order-2 lg:order-1 space-y-6 min-w-0">
             <Card className="glass-card border-none bg-black/20 overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between border-b border-white/5 pb-4 md:pb-6 gap-2">
-                <CardTitle className="text-[10px] font-black text-primary uppercase tracking-[0.4em] whitespace-nowrap">Protocolos Ativos</CardTitle>
+                <CardTitle className="text-[10px] font-black text-primary uppercase tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">Protocolos Ativos</CardTitle>
                 <div className="flex items-center gap-3 shrink-0">
                    <div className="w-2 h-2 rounded-full bg-primary/40 shadow-[0_0_10px_#FF5F1F] animate-pulse" />
                    <span className="text-[9px] text-primary/60 font-black uppercase tracking-widest hidden sm:inline whitespace-nowrap">

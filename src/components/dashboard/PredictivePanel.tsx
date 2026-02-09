@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { predictDelayWarnings, PredictDelayWarningsOutput } from '@/ai/flows/predictive-delay-warnings';
 
 interface PredictivePanelProps {
-  orders?: any[];
+  orders?: any[] | null;
 }
 
 export function PredictivePanel({ orders = [] }: PredictivePanelProps) {
@@ -17,7 +17,7 @@ export function PredictivePanel({ orders = [] }: PredictivePanelProps) {
 
   const productionData = useMemo(() => ({
     productionVelocity: 10, // Meta base de 10 pedidos/dia
-    orders: orders.map(o => ({
+    orders: (orders || []).map(o => ({
       id: o.id,
       client: o.client,
       status: o.status,
@@ -27,7 +27,7 @@ export function PredictivePanel({ orders = [] }: PredictivePanelProps) {
   }), [orders]);
 
   const handlePredict = async () => {
-    if (orders.length === 0) return;
+    if (!orders || orders.length === 0) return;
     setLoading(true);
     try {
       const result = await predictDelayWarnings(productionData);
@@ -87,7 +87,7 @@ export function PredictivePanel({ orders = [] }: PredictivePanelProps) {
       <CardFooter className="pt-2">
         <Button 
           onClick={handlePredict} 
-          disabled={loading || orders.length === 0}
+          disabled={loading || !orders || orders.length === 0}
           className="w-full bg-primary text-black hover:bg-primary/80 font-black uppercase tracking-widest text-[10px] h-12 rounded-xl"
         >
           {loading ? 'Analisando...' : 'Prever Atrasos'}

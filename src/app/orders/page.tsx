@@ -6,8 +6,8 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, addDoc, updateDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
-import { useFirestore, useCollection } from '@/firebase';
+import { collection, doc, setDoc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { EmptyState } from '@/components/dashboard/EmptyState';
@@ -73,8 +73,8 @@ export default function OrdersManagementPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
 
-  // Fetch Orders
-  const ordersQuery = useMemo(() => {
+  // Fetch Orders - MEMOIZED CORRECTLY
+  const ordersQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
   }, [firestore]);
@@ -176,7 +176,6 @@ export default function OrdersManagementPage() {
 
   const onSubmit = (data: OrderFormValues) => {
     if (!firestore) return;
-    setIsSubmitting(true);
     
     const currentTotal = total;
     const orderData = {
@@ -188,15 +187,9 @@ export default function OrdersManagementPage() {
     };
 
     if (editingOrder) {
-      // MODO EDIÇÃO
+      // MODO EDIÇÃO - NÃO BLOQUEANTE
       const orderRef = doc(firestore, 'orders', editingOrder.id);
       updateDoc(orderRef, orderData)
-        .then(() => {
-          toast({
-            title: "Protocolo Atualizado",
-            description: `A OS do cliente ${data.client} foi salva com sucesso.`,
-          });
-        })
         .catch(async (error) => {
           const permissionError = new FirestorePermissionError({
             path: `orders/${editingOrder.id}`,
@@ -204,38 +197,42 @@ export default function OrdersManagementPage() {
             requestResourceData: orderData,
           });
           errorEmitter.emit('permission-error', permissionError);
-        })
-        .finally(() => {
-          setIsSubmitting(false);
-          setEditingOrder(null);
         });
+      
+      toast({
+        title: "Protocolo Atualizado",
+        description: `A OS do cliente ${data.client} foi salva com sucesso.`,
+      });
     } else {
-      // MODO CRIAÇÃO
-      const newOrderData = { ...orderData, createdAt: serverTimestamp() };
-      addDoc(collection(firestore, 'orders'), newOrderData)
-        .then((docRef) => {
-          setTimeout(() => {
-            generatePDF(data, docRef.id, currentTotal);
-          }, 300);
-          toast({
-            title: "Protocolo Lançado",
-            description: `Nova OS gerada para ${data.client}. PDF em download.`,
-          });
-        })
+      // MODO CRIAÇÃO - NÃO BLOQUEANTE COM ID IMEDIATO
+      const ordersCol = collection(firestore, 'orders');
+      const orderRef = doc(ordersCol);
+      const newOrderData = { 
+        ...orderData, 
+        createdAt: serverTimestamp(),
+        id: orderRef.id 
+      };
+
+      setDoc(orderRef, newOrderData)
         .catch(async (error) => {
           const permissionError = new FirestorePermissionError({
-            path: 'orders',
+            path: `orders/${orderRef.id}`,
             operation: 'create',
             requestResourceData: newOrderData,
           });
           errorEmitter.emit('permission-error', permissionError);
-        })
-        .finally(() => {
-          setIsSubmitting(false);
         });
+
+      // Feedback e PDF imediato
+      generatePDF(data, orderRef.id, currentTotal);
+      toast({
+        title: "Protocolo Lançado",
+        description: `Nova OS gerada para ${data.client}. PDF em download.`,
+      });
     }
 
     setIsModalOpen(false);
+    setEditingOrder(null);
     if (!editingOrder) reset();
   };
 
@@ -263,7 +260,7 @@ export default function OrdersManagementPage() {
           >
             <div className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-primary" />
-              <h2 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase whitespace-nowrap">Gestão de Protocolos</h2>
+              <h2 className="text-xl md:text-3xl font-black tracking-tighter text-white uppercase whitespace-nowrap text-ellipsis overflow-hidden">Gestão de Protocolos</h2>
             </div>
             <p className="text-muted-foreground text-[8px] md:text-[10px] uppercase tracking-[0.4em] font-medium whitespace-nowrap">Monitoramento e Arquivo Digital</p>
           </motion.div>
@@ -496,7 +493,7 @@ export default function OrdersManagementPage() {
         </section>
 
         <footer className="pt-8 pb-4 border-t border-white/5 opacity-30">
-          <p className="text-[7px] md:text-[9px] text-muted-foreground uppercase tracking-[0.5em] text-center">
+          <p className="text-[7px] md:text-[9px] text-muted-foreground uppercase tracking-[0.5em] text-center whitespace-nowrap overflow-hidden">
             VISCOMM MANAGEMENT TERMINAL v1.1 • PROTOCOL ARCHIVE
           </p>
         </footer>

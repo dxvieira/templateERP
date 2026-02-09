@@ -7,12 +7,13 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 interface WarRoomProps {
-  orders?: any[];
+  orders?: any[] | null;
 }
 
 export function WarRoom({ orders = [] }: WarRoomProps) {
   // Filtra ordens marcadas como atrasadas ou com data de entrega passada
   const delayedOrders = React.useMemo(() => {
+    if (!orders) return [];
     const today = new Date().toISOString().split('T')[0];
     return orders.filter(order => order.isDelayed || (order.deliveryDate < today && order.status !== 'Entregue'));
   }, [orders]);

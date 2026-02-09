@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -18,7 +19,7 @@ import {
 import { cn } from "@/lib/utils"
 
 interface ProductionChartProps {
-  orders?: any[];
+  orders?: any[] | null;
 }
 
 const chartConfig = {
@@ -51,6 +52,15 @@ export function ProductionChart({ orders = [] }: ProductionChartProps) {
       Acabamento: 0,
       Entregue: 0,
     };
+
+    if (!orders) {
+      return [
+        { status: "arte", visitors: 0, fill: chartConfig.arte.color },
+        { status: "impressao", visitors: 0, fill: chartConfig.impressao.color },
+        { status: "acabamento", visitors: 0, fill: chartConfig.acabamento.color },
+        { status: "concluido", visitors: 0, fill: chartConfig.concluido.color },
+      ];
+    }
 
     orders.forEach((order) => {
       const status = order.status as keyof typeof counts;
