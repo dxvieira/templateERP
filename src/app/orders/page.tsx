@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
@@ -10,6 +9,7 @@ import { query, collection, orderBy } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { EmptyState } from '@/components/dashboard/EmptyState';
+import { DeleteConfirmationModal } from '@/components/dashboard/DeleteConfirmationModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -54,6 +54,8 @@ type OrderFormValues = z.infer<typeof orderSchema>;
 
 export default function OrdersManagerPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [orderIdToDelete, setOrderIdToDelete] = useState<string | null>(null);
   const [editingOrder, setEditingOrder] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const firestore = useFirestore();
@@ -141,20 +143,24 @@ export default function OrdersManagerPage() {
     }
   };
 
-  const handleDeleteOrder = useCallback(async (orderId: string) => {
-    const confirmDelete = window.confirm(`Deseja excluir permanentemente a OS #${orderId}?`);
-    if (confirmDelete) {
-      try {
-        await deleteOrder(orderId);
-        toast({ title: "OS Removida", description: "Protocolo excluído." });
-        if (editingOrder && editingOrder.id === orderId) {
-          setIsModalOpen(false);
-          setEditingOrder(null);
-        }
-      } catch (error) {
+  const openDeleteModal = useCallback((orderId: string) => {
+    setOrderIdToDelete(orderId);
+    setIsDeleteModalOpen(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!orderIdToDelete) return;
+    try {
+      await deleteOrder(orderIdToDelete);
+      toast({ title: "OS Removida", description: "Protocolo excluído permanentemente." });
+      setIsDeleteModalOpen(false);
+      setOrderIdToDelete(null);
+      if (editingOrder && editingOrder.id === orderIdToDelete) {
+        setIsModalOpen(false);
+        setEditingOrder(null);
       }
-    }
-  }, [deleteOrder, editingOrder, toast]);
+    } catch (error) {}
+  }, [deleteOrder, orderIdToDelete, editingOrder, toast]);
 
   const handleQuickStatusChange = useCallback(async (orderId: string, newStatus: string) => {
     try {
@@ -211,7 +217,7 @@ export default function OrdersManagerPage() {
                     onClick={() => setEditingOrder(order)}
                     onStatusChange={handleQuickStatusChange}
                     onQuickConclude={handleQuickConclude}
-                    onDelete={handleDeleteOrder}
+                    onDelete={openDeleteModal}
                   />
                 </motion.div>
               ))}
@@ -237,13 +243,21 @@ export default function OrdersManagerPage() {
                     }} 
                     onClick={() => setEditingOrder(order)}
                     onStatusChange={handleQuickStatusChange}
-                    onDelete={handleDeleteOrder}
+                    onDelete={openDeleteModal}
                   />
                 </motion.div>
               ))}
             </AnimatePresence>
           </div>
         </div>
+
+        {/* Modal de Confirmação de Exclusão */}
+        <DeleteConfirmationModal
+          isOpen={isDeleteModalOpen}
+          orderId={orderIdToDelete}
+          onClose={() => { setIsDeleteModalOpen(false); setOrderIdToDelete(null); }}
+          onConfirm={handleConfirmDelete}
+        />
 
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
           <DialogContent className="max-w-2xl bg-[#0F0F0F] border-white/5 text-white rounded-3xl overflow-hidden p-0">
@@ -254,7 +268,7 @@ export default function OrdersManagerPage() {
               {editingOrder && (
                 <Button 
                   variant="ghost" 
-                  onClick={() => handleDeleteOrder(editingOrder.id)}
+                  onClick={() => openDeleteModal(editingOrder.id)}
                   className="text-destructive hover:bg-destructive/10 font-black uppercase text-[9px] tracking-widest gap-2 h-8"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> Excluir
