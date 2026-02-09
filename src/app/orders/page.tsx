@@ -89,7 +89,6 @@ export default function OrdersManagerPage() {
     }, 0) || 0;
   }, [watchedItems]);
 
-  // Limpa campos de cartão se mudar de forma de pagamento
   useEffect(() => {
     if (!watchedPayment?.toLowerCase().includes('cartão')) {
       setValue('machine', undefined);
@@ -97,7 +96,6 @@ export default function OrdersManagerPage() {
     }
   }, [watchedPayment, setValue]);
 
-  // Carrega dados no form ao editar
   useEffect(() => {
     if (editingOrder) {
       reset({
@@ -194,7 +192,6 @@ export default function OrdersManagerPage() {
           </Button>
         </div>
 
-        {/* Seção: Fila de Produção */}
         <div className="space-y-6">
           <div className="flex items-center gap-4 border-b border-white/5 pb-4">
             <h3 className="text-xs font-black text-primary uppercase tracking-[0.5em] flex items-center gap-2">
@@ -236,7 +233,6 @@ export default function OrdersManagerPage() {
           </div>
         </div>
 
-        {/* Seção: Concluídos */}
         <div className="space-y-6 pt-8">
           <div className="flex items-center gap-4 border-b border-white/5 pb-4">
             <h3 className="text-xs font-black text-[#00FF00] uppercase tracking-[0.5em] flex items-center gap-2">
@@ -276,7 +272,7 @@ export default function OrdersManagerPage() {
         </div>
 
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
-          <DialogContent className="max-w-4xl bg-zinc-950 border-white/10 text-white rounded-3xl overflow-hidden p-0 shadow-2xl z-[9999]">
+          <DialogContent className="max-w-4xl bg-zinc-950 border-white/10 text-white rounded-3xl overflow-hidden p-0 shadow-2xl">
             <DialogHeader className="p-6 bg-white/[0.02] border-b border-white/5">
               <DialogTitle className="text-2xl font-black text-primary uppercase tracking-tighter">
                 {editingOrder ? 'Ajustar Protocolo' : 'Entrada de Produção'}
