@@ -125,9 +125,7 @@ export default function OrdersManagerPage() {
   const onSubmit = async (data: OrderFormValues) => {
     setIsSubmitting(true);
     
-    const cleanedData = Object.fromEntries(
-      Object.entries({ ...data, totalValue }).filter(([_, v]) => v !== undefined)
-    );
+    const cleanedData = { ...data, totalValue };
     
     try {
       if (editingOrder) {
@@ -151,6 +149,23 @@ export default function OrdersManagerPage() {
     }
   };
 
+  const handleDeleteOrder = async (orderId: string) => {
+    const confirmDelete = window.confirm(`ATENÇÃO: Tem certeza que deseja excluir permanentemente a OS #${orderId}? Essa ação não pode ser desfeita.`);
+    
+    if (confirmDelete) {
+      try {
+        await deleteOrder(orderId);
+        toast({ title: "OS Removida", description: "Protocolo excluído com sucesso." });
+        if (editingOrder && editingOrder.id === orderId) {
+          setIsModalOpen(false);
+          setEditingOrder(null);
+        }
+      } catch (error) {
+        toast({ variant: "destructive", title: "Erro ao excluir", description: "Não foi possível remover a OS." });
+      }
+    }
+  };
+
   const handleQuickStatusChange = async (orderId: string, newStatus: string) => {
     try {
       await updateOrder(orderId, { status: newStatus });
@@ -169,21 +184,6 @@ export default function OrdersManagerPage() {
     }
   };
 
-  const handleDeleteOrder = async (orderId: string) => {
-    if (window.confirm(`Tem certeza que deseja excluir permanentemente a OS #${orderId}? Essa ação não pode ser desfeita.`)) {
-      try {
-        await deleteOrder(orderId);
-        toast({ title: "OS Removida", description: "Protocolo excluído com sucesso." });
-        if (editingOrder && editingOrder.id === orderId) {
-          setIsModalOpen(false);
-          setEditingOrder(null);
-        }
-      } catch (error) {
-        toast({ variant: "destructive", title: "Erro ao excluir", description: "Não foi possível remover a OS." });
-      }
-    }
-  };
-
   const activeOrders = useMemo(() => orders.filter(o => o.status !== 'Concluído' && o.status !== 'Entregue'), [orders]);
   const completedOrders = useMemo(() => orders.filter(o => o.status === 'Concluído' || o.status === 'Entregue'), [orders]);
 
@@ -197,7 +197,7 @@ export default function OrdersManagerPage() {
             <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter flex items-center gap-4">
               <Zap className="text-primary w-10 h-10 animate-pulse" /> Gestão de Protocolos
             </h2>
-            <p className="text-muted-foreground text-xs uppercase tracking-[0.5em] font-medium opacity-60">Terminal Kanban v2.0 • Sincronia Real-Time</p>
+            <p className="text-muted-foreground text-xs uppercase tracking-[0.5em] font-medium opacity-60">Terminal Kanban v2.5 • Conectividade Real-Time</p>
           </div>
 
           <Button 
@@ -227,7 +227,7 @@ export default function OrdersManagerPage() {
                   layout 
                   initial={{ opacity: 0, y: 20 }} 
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.8, x: -20 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 >
                   <OrderCard 
@@ -291,7 +291,7 @@ export default function OrdersManagerPage() {
         </div>
 
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
-          <DialogContent className="max-w-4xl bg-zinc-950 border-white/10 text-white rounded-[2.5rem] overflow-hidden p-0 shadow-2xl z-[9999]">
+          <DialogContent className="max-w-4xl bg-zinc-950 border-white/10 text-white rounded-[2.5rem] overflow-hidden p-0 shadow-2xl z-[100]">
             <DialogHeader className="p-8 bg-white/[0.02] border-b border-white/5">
               <div className="flex items-center justify-between">
                 <DialogTitle className="text-3xl font-black text-primary uppercase tracking-tighter">
@@ -300,7 +300,7 @@ export default function OrdersManagerPage() {
                 {editingOrder && (
                   <Button 
                     variant="ghost" 
-                    onClick={() => handleDeleteOrder(editingOrder.id)}
+                    onClick={(e) => { e.stopPropagation(); handleDeleteOrder(editingOrder.id); }}
                     className="text-destructive hover:bg-destructive/10 font-black uppercase tracking-widest gap-2"
                   >
                     <Trash2 className="w-4 h-4" /> Excluir OS
@@ -322,7 +322,6 @@ export default function OrdersManagerPage() {
                   <datalist id="client-suggestions">
                     {clients?.map(c => <option key={c.id} value={c.name} />)}
                   </datalist>
-                  {errors.client && <p className="text-xs text-destructive uppercase font-bold tracking-widest">{errors.client.message}</p>}
                 </div>
                 <div className="space-y-3">
                   <Label className="text-xs uppercase tracking-widest text-muted-foreground font-black">Prazo Entrega</Label>
@@ -345,7 +344,7 @@ export default function OrdersManagerPage() {
                         <SelectTrigger className="bg-black/40 border-white/10 h-14 rounded-2xl">
                           <SelectValue placeholder="Status" />
                         </SelectTrigger>
-                        <SelectContent className="bg-zinc-900 border-white/10 text-white z-[10000]">
+                        <SelectContent className="bg-zinc-900 border-white/10 text-white z-[150]">
                           {['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Concluído'].map(s => (
                             <SelectItem key={s} value={s}>{s}</SelectItem>
                           ))}
@@ -412,7 +411,7 @@ export default function OrdersManagerPage() {
                         <SelectTrigger className="bg-black/40 border-white/10 h-14 rounded-2xl">
                           <SelectValue placeholder="Forma" />
                         </SelectTrigger>
-                        <SelectContent className="bg-zinc-900 border-white/10 text-white z-[10000]">
+                        <SelectContent className="bg-zinc-900 border-white/10 text-white z-[150]">
                           {['Dinheiro', 'Pix', 'Cartão de Crédito', 'Cartão de Débito', 'Boleto'].map(p => (
                             <SelectItem key={p} value={p}>{p}</SelectItem>
                           ))}
@@ -434,7 +433,7 @@ export default function OrdersManagerPage() {
                             <SelectTrigger className="bg-black/40 border-white/10 h-14 rounded-2xl">
                               <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
-                            <SelectContent className="bg-zinc-900 border-white/10 text-white z-[10000]">
+                            <SelectContent className="bg-zinc-900 border-white/10 text-white z-[150]">
                               {['SICOOB/SIPAG', 'PagBank'].map(m => (
                                 <SelectItem key={m} value={m}>{m}</SelectItem>
                               ))}
@@ -453,7 +452,7 @@ export default function OrdersManagerPage() {
                             <SelectTrigger className="bg-black/40 border-white/10 h-14 rounded-2xl">
                               <SelectValue placeholder="1x" />
                             </SelectTrigger>
-                            <SelectContent className="bg-zinc-900 border-white/10 text-white z-[10000]">
+                            <SelectContent className="bg-zinc-900 border-white/10 text-white z-[150]">
                               {Array.from({ length: 12 }, (_, i) => `${i + 1}x`).map(p => (
                                 <SelectItem key={p} value={p}>{p}</SelectItem>
                               ))}
@@ -471,13 +470,7 @@ export default function OrdersManagerPage() {
                 <Textarea {...register('observations')} className="bg-black/40 border-white/10 rounded-3xl min-h-[120px] p-4" placeholder="Instruções adicionais de produção..." />
               </div>
 
-              <div className="flex flex-col md:flex-row items-center justify-between gap-8 pt-8 border-t border-white/5">
-                <div>
-                  <p className="text-xs uppercase text-muted-foreground font-black mb-1 tracking-widest">Total do Protocolo</p>
-                  <p className="text-5xl font-black text-white tracking-tighter">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}
-                  </p>
-                </div>
+              <div className="flex flex-col md:flex-row items-center justify-end gap-8 pt-8 border-t border-white/5">
                 <Button 
                   type="submit" 
                   disabled={isSubmitting}
