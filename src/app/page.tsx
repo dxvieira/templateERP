@@ -1,3 +1,4 @@
+
 "use client"
 
 import React from 'react';
@@ -6,7 +7,6 @@ import { KPISection } from '@/components/dashboard/KPISection';
 import { ProductionChart } from '@/components/dashboard/ProductionChart';
 import { WarRoom } from '@/components/dashboard/WarRoom';
 import { OrderFeed } from '@/components/dashboard/OrderFeed';
-import { PredictivePanel } from '@/components/dashboard/PredictivePanel';
 import { motion } from 'framer-motion';
 
 export default function DashboardPage() {
@@ -68,10 +68,7 @@ export default function DashboardPage() {
             <div className="h-[350px]">
               <ProductionChart />
             </div>
-            <div className="h-[350px]">
-              <PredictivePanel />
-            </div>
-            <div className="h-[350px]">
+            <div className="h-[450px]">
               <WarRoom />
             </div>
           </motion.div>
@@ -81,7 +78,7 @@ export default function DashboardPage() {
         {/* Footer info */}
         <div className="pt-8 text-center md:text-left">
           <p className="text-[10px] text-muted-foreground uppercase tracking-[0.3em]">
-            © 2025 VisComm Command Center • Inteligência Artificial aplicada à Comunicação Visual
+            © 2025 VisComm Command Center • Eficiência em Comunicação Visual
           </p>
         </div>
       </main>
