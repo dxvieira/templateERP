@@ -37,7 +37,6 @@ import {
   Loader2,
   FileText,
   Save,
-  CreditCard,
   AlertCircle
 } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -46,21 +45,22 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { useToast } from '@/hooks/use-toast';
 
-// Schemas relaxados - Apenas client é obrigatório
+// Schemas relaxados - Apenas client é obrigatório. 
+// Usamos z.coerce para garantir que números sejam tratados corretamente mesmo se vierem vazios ou strings.
 const orderItemSchema = z.object({
   desc: z.string().default(''),
   size: z.string().optional().default(''),
-  quantity: z.number().optional().default(1),
-  unitValue: z.number().optional().default(0),
+  quantity: z.coerce.number().default(1),
+  unitValue: z.coerce.number().default(0),
 });
 
 const orderSchema = z.object({
   client: z.string().min(1, 'Cliente é obrigatório'),
-  emissionDate: z.string().optional().default(() => new Date().toISOString().split('T')[0]),
+  emissionDate: z.string().optional().default(new Date().toISOString().split('T')[0]),
   deliveryDate: z.string().optional().default(''),
   seller: z.string().optional().default('Carlos'),
   observations: z.string().optional().default(''),
-  status: z.enum(['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Entregue']).default('Arte'),
+  status: z.string().optional().default('Arte'),
   paymentMethod: z.string().optional().default('Pix'),
   machine: z.string().optional().default(''),
   installments: z.string().optional().default('1x'),
@@ -77,14 +77,14 @@ export default function OrdersManagementPage() {
   const { toast } = useToast();
 
   const ordersQuery = useMemoFirebase(() => {
-    if (!firestore || !user || isUserLoading) return null;
+    if (!firestore || !user) return null;
     return query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
-  }, [firestore, user, isUserLoading]);
+  }, [firestore, user]);
 
   const clientsQuery = useMemoFirebase(() => {
-    if (!firestore || !user || isUserLoading) return null;
+    if (!firestore || !user) return null;
     return query(collection(firestore, 'clients'), orderBy('name', 'asc'));
-  }, [firestore, user, isUserLoading]);
+  }, [firestore, user]);
 
   const { data: orders, isLoading: ordersLoading } = useCollection(ordersQuery);
   const { data: clientsList } = useCollection(clientsQuery);
@@ -123,7 +123,7 @@ export default function OrdersManagementPage() {
   
   const total = useMemo(() => 
     watchedItems?.reduce((acc, item) => 
-      acc + ((item.quantity || 0) * (item.unitValue || 0)), 0) || 0,
+      acc + ((Number(item.quantity) || 0) * (Number(item.unitValue) || 0)), 0) || 0,
   [watchedItems]);
 
   const isCardPayment = watchedPaymentMethod === 'Cartão Crédito' || watchedPaymentMethod === 'Cartão Débito';
@@ -205,14 +205,7 @@ export default function OrdersManagementPage() {
   };
 
   const onSubmit = async (data: OrderFormValues) => {
-    if (!firestore || !user) {
-      toast({
-        variant: "destructive",
-        title: "Erro de Conexão",
-        description: "Firebase não inicializado ou usuário offline.",
-      });
-      return;
-    }
+    if (!firestore || !user) return;
     
     const currentTotal = total;
     const commonData = {
@@ -222,6 +215,9 @@ export default function OrdersManagementPage() {
       isPriority: editingOrder?.isPriority || false,
       isDelayed: editingOrder?.isDelayed || false
     };
+
+    // Fechar o modal imediatamente para UX instantânea
+    setIsModalOpen(false);
 
     if (editingOrder) {
       const orderRef = doc(firestore, 'orders', editingOrder.id);
@@ -256,7 +252,7 @@ export default function OrdersManagementPage() {
       });
 
       if (currentTotal > 0) {
-        setTimeout(() => generatePDF(data, orderRef.id, currentTotal), 1000);
+        setTimeout(() => generatePDF(data, orderRef.id, currentTotal), 1500);
       }
       toast({
         title: "Protocolo Lançado",
@@ -264,7 +260,6 @@ export default function OrdersManagementPage() {
       });
     }
 
-    setIsModalOpen(false);
     setEditingOrder(null);
     reset();
   };
@@ -274,7 +269,7 @@ export default function OrdersManagementPage() {
     toast({
       variant: "destructive",
       title: "Erro de Validação",
-      description: "O nome do cliente é obrigatório.",
+      description: "Verifique o nome do cliente ou outros campos destacados.",
     });
   };
 
@@ -331,7 +326,9 @@ export default function OrdersManagementPage() {
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Cliente *</Label>
+                        <Label className={`text-[10px] uppercase tracking-widest font-bold ${errors.client ? 'text-destructive' : 'text-muted-foreground'}`}>
+                          Cliente *
+                        </Label>
                         <Input 
                           {...register('client')}
                           list="clients-suggestions"
@@ -417,7 +414,7 @@ export default function OrdersManagementPage() {
                                 <Label className="text-[8px] uppercase text-muted-foreground">Qtd</Label>
                                 <Input 
                                   type="number"
-                                  {...register(`items.${index}.quantity`, { valueAsNumber: true })}
+                                  {...register(`items.${index}.quantity`)}
                                   className="bg-black/20 border-white/10 h-12 px-2"
                                 />
                               </div>
@@ -426,7 +423,7 @@ export default function OrdersManagementPage() {
                                 <Input 
                                   type="number"
                                   step="0.01"
-                                  {...register(`items.${index}.unitValue`, { valueAsNumber: true })}
+                                  {...register(`items.${index}.unitValue`)}
                                   className="bg-black/20 border-white/10 h-12 px-2"
                                 />
                               </div>
