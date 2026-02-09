@@ -11,6 +11,7 @@ import { motion } from 'framer-motion';
 import { Palette, Printer, Hammer, CheckCircle2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { useRouter } from 'next/navigation';
 
 const mockOrders = [
   { id: '8901', client: 'Posto Central', description: 'Lona Frontlight 4x2m', status: 'Impressão', deliveryDate: '24 Out', value: 750 },
@@ -19,6 +20,8 @@ const mockOrders = [
 ];
 
 export default function DashboardPage() {
+  const router = useRouter();
+
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex">
       <DashboardSidebar />
@@ -31,7 +34,10 @@ export default function DashboardPage() {
             <p className="text-muted-foreground text-xs uppercase tracking-widest">Operação em tempo real • VisComm ERP</p>
           </div>
           
-          <Button className="bg-primary text-black font-black uppercase tracking-widest px-6 h-12 rounded-xl hover:shadow-[0_0_20px_rgba(255,95,31,0.6)] hover:bg-primary transition-all gap-2">
+          <Button 
+            onClick={() => router.push('/orders/new')}
+            className="bg-primary text-black font-black uppercase tracking-widest px-6 h-12 rounded-xl hover:shadow-[0_0_20px_rgba(255,95,31,0.6)] hover:bg-primary transition-all gap-2"
+          >
             <Plus className="w-5 h-5" />
             Novo Pedido
           </Button>
