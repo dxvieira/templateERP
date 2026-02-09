@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -16,6 +15,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
+import { cn } from "@/lib/utils"
 
 interface ProductionChartProps {
   orders?: any[];
@@ -77,10 +77,14 @@ export function ProductionChart({ orders = [] }: ProductionChartProps) {
   if (!mounted) return <div className="h-[300px] w-full bg-white/5 animate-pulse rounded-xl" />;
 
   return (
-    <Card className="glass border-white/5 h-full">
-      <CardHeader className="items-center pb-0">
-        <CardTitle className="text-sm font-semibold text-primary uppercase tracking-widest">Fluxo de Produção</CardTitle>
-        <CardDescription className="text-xs text-muted-foreground">Distribuição real de OS</CardDescription>
+    <Card className={cn("glass transition-all duration-500 neon-glow-primary overflow-hidden")}>
+      <CardHeader className="items-center pb-0 space-y-1">
+        <CardTitle className="text-sm md:text-base font-black text-primary uppercase tracking-[0.4em] whitespace-nowrap">
+          Fluxo de Produção
+        </CardTitle>
+        <CardDescription className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium opacity-60">
+          Distribuição real de OS
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex-1 pb-0">
         <ChartContainer
@@ -97,8 +101,8 @@ export function ProductionChart({ orders = [] }: ProductionChartProps) {
               dataKey="visitors"
               nameKey="status"
               innerRadius={60}
-              strokeWidth={5}
-              stroke="transparent"
+              strokeWidth={8}
+              stroke="#0A0A0A"
             >
               <Label
                 content={({ viewBox }) => {
@@ -113,16 +117,16 @@ export function ProductionChart({ orders = [] }: ProductionChartProps) {
                         <tspan
                           x={viewBox.cx}
                           y={viewBox.cy}
-                          className="fill-foreground text-3xl font-bold"
+                          className="fill-white text-3xl md:text-4xl font-black tracking-tighter"
                         >
                           {totalOrders.toLocaleString()}
                         </tspan>
                         <tspan
                           x={viewBox.cx}
                           y={(viewBox.cy || 0) + 24}
-                          className="fill-muted-foreground text-[10px] uppercase tracking-widest"
+                          className="fill-muted-foreground text-[8px] md:text-[10px] uppercase tracking-[0.2em] font-bold"
                         >
-                          Total Geral
+                          Protocolos
                         </tspan>
                       </text>
                     )
