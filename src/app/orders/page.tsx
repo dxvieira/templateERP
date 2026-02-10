@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
@@ -27,7 +28,7 @@ import {
   DialogHeader, 
   DialogTitle 
 } from '@/components/ui/dialog';
-import { Plus, Trash2, Save, Loader2, Zap } from 'lucide-react';
+import { Plus, Trash2, Save, Loader2, Zap, LayoutList } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useOrders } from '@/hooks/use-orders';
@@ -179,40 +180,43 @@ export default function OrdersManagerPage() {
   const completedOrders = useMemo(() => orders.filter(o => o.status === 'Concluído' || o.status === 'Entregue'), [orders]);
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex flex-col md:flex-row overflow-x-hidden relative">
+    <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden relative">
       <DashboardSidebar />
       
-      <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-6 mt-16 md:mt-0 z-10 pb-20">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-0.5">
-            <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-2">
-              <Zap className="text-primary w-5 h-5" /> Gestão de OS
+      <main className="flex-1 md:ml-64 p-6 md:p-16 space-y-12 mt-16 md:mt-0 z-10 pb-32">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5 pb-10">
+          <div className="space-y-2">
+            <h2 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+              <LayoutList className="text-primary w-8 h-8" /> Gestão de Protocolos
             </h2>
-            <p className="text-muted-foreground text-[9px] uppercase tracking-[0.3em]">Fluxo de Produção</p>
+            <p className="text-zinc-500 text-xs uppercase tracking-[0.5em] font-bold">Base de Dados Industrial</p>
           </div>
 
           <Button 
             onClick={() => { setEditingOrder(null); setIsModalOpen(true); }}
-            className="bg-primary text-black font-black uppercase tracking-widest px-6 h-11 rounded-xl hover:shadow-[0_0_15px_rgba(255,95,31,0.3)] transition-all gap-2 text-[10px]"
+            className="bg-primary text-black font-black uppercase tracking-widest px-10 h-16 rounded-2xl hover:shadow-[0_0_30px_rgba(255,95,31,0.3)] transition-all gap-3 text-xs"
           >
-            <Plus className="w-4 h-4" /> Nova Ordem
+            <Plus className="w-5 h-5" strokeWidth={3} /> Nova Ordem
           </Button>
         </div>
 
-        <div className="space-y-3">
-          <h3 className="text-[9px] font-black text-primary uppercase tracking-[0.3em] border-b border-white/5 pb-2">Ativos ({activeOrders.length})</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+        <div className="space-y-10">
+          <div className="flex items-center gap-4">
+            <div className="w-2 h-6 bg-primary rounded-full" />
+            <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.4em]">Fluxo Ativo ({activeOrders.length})</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <AnimatePresence mode="popLayout">
               {activeOrders.map(order => (
-                <motion.div key={order.id} layout initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
+                <motion.div key={order.id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}>
                   <OrderCard 
                     order={{
                       id: order.id,
                       client: order.client,
-                      description: order.items?.[0]?.desc || 'Sem descrição',
+                      description: order.items?.[0]?.desc || 'Sem descrição técnica',
                       status: order.status,
                       deliveryDate: order.deliveryDate || '',
-                      value: order.totalValue || 0
                     }} 
                     onClick={() => setEditingOrder(order)}
                     onStatusChange={handleQuickStatusChange}
@@ -226,9 +230,13 @@ export default function OrdersManagerPage() {
           </div>
         </div>
 
-        <div className="space-y-3 pt-4">
-          <h3 className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.3em] border-b border-white/5 pb-2">Concluídos ({completedOrders.length})</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+        <div className="space-y-10 pt-16">
+          <div className="flex items-center gap-4">
+            <div className="w-2 h-6 bg-zinc-800 rounded-full" />
+            <h3 className="text-xs font-black text-zinc-600 uppercase tracking-[0.4em]">Histórico Concluído ({completedOrders.length})</h3>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 opacity-60">
             <AnimatePresence mode="popLayout">
               {completedOrders.map(order => (
                 <motion.div key={order.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -236,10 +244,9 @@ export default function OrdersManagerPage() {
                     order={{
                       id: order.id,
                       client: order.client,
-                      description: order.items?.[0]?.desc || 'Sem descrição',
+                      description: order.items?.[0]?.desc || 'Sem descrição técnica',
                       status: order.status,
                       deliveryDate: order.deliveryDate || '',
-                      value: order.totalValue || 0
                     }} 
                     onClick={() => setEditingOrder(order)}
                     onStatusChange={handleQuickStatusChange}
@@ -259,56 +266,57 @@ export default function OrdersManagerPage() {
           onConfirm={handleConfirmDelete}
         />
 
+        {/* Modal de Cadastro/Edição reaproveitado */}
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
-          <DialogContent className="max-w-2xl bg-[#0F0F0F] border-white/5 text-white rounded-3xl overflow-hidden p-0">
-            <DialogHeader className="p-5 border-b border-white/5 flex flex-row items-center justify-between">
-              <DialogTitle className="text-lg font-black text-primary uppercase tracking-tighter">
+          <DialogContent className="max-w-3xl bg-[#0A0A0A] border-white/5 text-white rounded-[2.5rem] overflow-hidden p-0 shadow-2xl">
+            <DialogHeader className="p-10 border-b border-white/5 flex flex-row items-center justify-between bg-white/[0.01]">
+              <DialogTitle className="text-3xl font-black text-primary uppercase tracking-tighter">
                 {editingOrder ? 'Ajustar OS' : 'Nova OS'}
               </DialogTitle>
               {editingOrder && (
                 <Button 
                   variant="ghost" 
                   onClick={() => openDeleteModal(editingOrder.id)}
-                  className="text-destructive hover:bg-destructive/10 font-black uppercase text-[9px] tracking-widest gap-2 h-8"
+                  className="text-destructive hover:bg-destructive/10 font-black uppercase text-[10px] tracking-widest gap-2 h-10 px-6 rounded-xl border border-destructive/10"
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Excluir
+                  <Trash2 className="w-4 h-4" /> Excluir Protocolo
                 </Button>
               )}
             </DialogHeader>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto no-scrollbar">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-[9px] uppercase tracking-widest text-muted-foreground">Cliente*</Label>
-                  <Input {...register('client')} list="client-suggestions" className="bg-black/50 border-white/5 h-10 rounded-xl text-sm" />
+            <form onSubmit={handleSubmit(onSubmit)} className="p-10 md:p-14 space-y-12 max-h-[75vh] overflow-y-auto no-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div className="space-y-4">
+                  <Label className="text-[11px] uppercase tracking-widest text-zinc-500 font-black">Nome do Cliente*</Label>
+                  <Input {...register('client')} list="client-suggestions" className="bg-white/5 border-white/5 h-16 rounded-2xl text-lg focus:border-primary/50 transition-all" />
                   <datalist id="client-suggestions">
                     {clients?.map(c => <option key={c.id} value={c.name} />)}
                   </datalist>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[9px] uppercase tracking-widest text-muted-foreground">Prazo Entrega</Label>
-                  <Input type="date" {...register('deliveryDate')} className="bg-black/50 border-white/5 h-10 rounded-xl text-sm" />
+                <div className="space-y-4">
+                  <Label className="text-[11px] uppercase tracking-widest text-zinc-500 font-black">Data de Entrega</Label>
+                  <Input type="date" {...register('deliveryDate')} className="bg-white/5 border-white/5 h-16 rounded-2xl text-lg focus:border-primary/50 transition-all" />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-[9px] uppercase tracking-widest text-muted-foreground">Vendedor</Label>
-                  <Input {...register('seller')} className="bg-black/50 border-white/5 h-10 rounded-xl text-sm" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div className="space-y-4">
+                  <Label className="text-[11px] uppercase tracking-widest text-zinc-500 font-black">Responsável</Label>
+                  <Input {...register('seller')} className="bg-white/5 border-white/5 h-16 rounded-2xl text-lg focus:border-primary/50 transition-all" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[9px] uppercase tracking-widest text-muted-foreground">Status Inicial</Label>
+                <div className="space-y-4">
+                  <Label className="text-[11px] uppercase tracking-widest text-zinc-500 font-black">Status de Fluxo</Label>
                   <Controller
                     name="status"
                     control={control}
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger className="bg-black/50 border-white/5 h-10 rounded-xl text-sm">
+                        <SelectTrigger className="bg-white/5 border-white/5 h-16 rounded-2xl text-lg focus:border-primary/50">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent className="bg-zinc-950 border-white/10 text-white">
+                        <SelectContent className="bg-zinc-950 border-white/10 text-white p-2 rounded-xl">
                           {['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Concluído'].map(s => (
-                            <SelectItem key={s} value={s}>{s}</SelectItem>
+                            <SelectItem key={s} value={s} className="rounded-lg">{s}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -317,38 +325,31 @@ export default function OrdersManagerPage() {
                 </div>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-8">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-[9px] font-black text-primary uppercase tracking-[0.3em]">Itens da Produção</h3>
-                  <button type="button" onClick={() => append({ desc: 'Novo Item', size: '', quantity: 1, unitValue: 0 })} className="text-primary text-[9px] font-black tracking-widest flex items-center gap-1 hover:opacity-80 transition-opacity">
-                    <Plus className="w-3 h-3" /> Adicionar
+                  <h3 className="text-xs font-black text-primary uppercase tracking-[0.5em]">Detalhamento Técnico</h3>
+                  <button type="button" onClick={() => append({ desc: 'Novo Item', size: '', quantity: 1, unitValue: 0 })} className="text-primary text-[10px] font-black tracking-widest flex items-center gap-3 hover:opacity-80 transition-all bg-primary/10 px-4 py-2 rounded-full border border-primary/20">
+                    <Plus className="w-4 h-4" /> Adicionar Item
                   </button>
                 </div>
                 {fields.map((field, index) => (
-                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 p-3 bg-white/[0.01] rounded-xl border border-white/5 relative group">
-                    <div className="md:col-span-6">
-                      <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/5 h-8 text-xs" placeholder="Descrição" />
+                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-6 p-8 bg-white/[0.02] rounded-3xl border border-white/5 relative group">
+                    <div className="md:col-span-10">
+                      <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/5 h-14 text-base" placeholder="Especificação do Item" />
                     </div>
-                    <div className="md:col-span-2">
-                      <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-8 text-xs" placeholder="Qtd" />
+                    <div className="md:col-span-2 text-right">
+                       <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-14 text-center text-base" placeholder="Qtd" />
                     </div>
-                    <div className="md:col-span-3">
-                      <Input type="number" step="0.01" {...register(`items.${index}.unitValue`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-8 text-xs" placeholder="Unitário" />
-                    </div>
-                    <button type="button" onClick={() => remove(index)} className="absolute -right-2 -top-2 bg-destructive text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Trash2 className="w-2.5 h-2.5" />
+                    <button type="button" onClick={() => remove(index)} className="absolute -right-3 -top-3 bg-destructive text-white p-2.5 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-xl hover:scale-110">
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 ))}
               </div>
 
-              <div className="flex flex-col md:flex-row items-center justify-end gap-6 pt-6 border-t border-white/5">
-                <div className="text-right">
-                  <p className="text-[9px] text-muted-foreground uppercase tracking-widest">Total Estimado</p>
-                  <p className="text-xl font-black text-white font-mono">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}</p>
-                </div>
-                <Button type="submit" disabled={isSubmitting} className="w-full md:w-40 h-11 bg-primary text-black font-black uppercase tracking-widest rounded-xl text-[10px]">
-                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar Ordem'}
+              <div className="flex items-center justify-end pt-12 border-t border-white/5">
+                <Button type="submit" disabled={isSubmitting} className="w-full md:w-72 h-16 bg-primary text-black font-black uppercase tracking-widest rounded-2xl text-sm hover:shadow-[0_0_50px_rgba(255,95,31,0.5)] transition-all">
+                  {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Confirmar Protocolo'}
                 </Button>
               </div>
             </form>
