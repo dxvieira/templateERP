@@ -1,8 +1,8 @@
 
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { useForm, useFieldArray, useWatch, Controller } from 'react-hook-form';
+import React, { useState, useMemo, useCallback } from 'react';
+import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
@@ -29,14 +29,13 @@ import {
 } from '@/components/ui/dialog';
 import { 
   Plus, 
-  Trash2, 
   Loader2, 
   Search, 
   Filter, 
   X, 
   PackageOpen, 
   SlidersHorizontal,
-  LayoutList
+  ChevronDown
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useOrders } from '@/hooks/use-orders';
@@ -58,12 +57,8 @@ const orderSchema = z.object({
   seller: z.string().default('Vendedor Geral'),
   status: z.enum(['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Concluído']).default('Arte'),
   paymentMethod: z.string().default('Pix'),
-  machine: z.string().optional(),
-  installments: z.string().optional(),
-  observations: z.string().default(''),
   items: z.array(z.object({
     desc: z.string().default('Novo Item'),
-    size: z.string().default(''),
     quantity: z.coerce.number().min(0).default(1),
     unitValue: z.coerce.number().min(0).default(0),
   })).min(1),
@@ -78,7 +73,6 @@ export default function OrdersManagerPage() {
   const [editingOrder, setEditingOrder] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Estados de Busca e Filtro
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todos');
 
@@ -91,19 +85,17 @@ export default function OrdersManagerPage() {
   , [firestore]);
   const { data: clients } = useCollection(clientsQuery);
 
-  const { register, control, handleSubmit, reset, setValue, watch } = useForm<OrderFormValues>({
+  const { register, control, handleSubmit, reset, watch } = useForm<OrderFormValues>({
     resolver: zodResolver(orderSchema),
     defaultValues: {
       client: '',
       status: 'Arte',
-      paymentMethod: 'Pix',
-      items: [{ desc: 'Novo Item', size: '', quantity: 1, unitValue: 0 }]
+      items: [{ desc: 'Novo Item', quantity: 1, unitValue: 0 }]
     }
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
-  const watchedItems = useWatch({ control, name: 'items' });
-  const watchedPayment = watch('paymentMethod');
+  const watchedItems = watch('items');
 
   const totalValue = useMemo(() => {
     return watchedItems?.reduce((acc, item) => {
@@ -113,43 +105,9 @@ export default function OrdersManagerPage() {
     }, 0) || 0;
   }, [watchedItems]);
 
-  useEffect(() => {
-    if (!watchedPayment?.toLowerCase().includes('cartão')) {
-      setValue('machine', undefined);
-      setValue('installments', undefined);
-    }
-  }, [watchedPayment, setValue]);
-
-  useEffect(() => {
-    if (editingOrder) {
-      reset({
-        client: editingOrder.client,
-        clientId: editingOrder.clientId || '',
-        deliveryDate: editingOrder.deliveryDate || '',
-        seller: editingOrder.seller || 'Vendedor Geral',
-        status: editingOrder.status,
-        paymentMethod: editingOrder.paymentMethod || 'Pix',
-        machine: editingOrder.machine,
-        installments: editingOrder.installments,
-        observations: editingOrder.observations || '',
-        items: editingOrder.items || [{ desc: 'Novo Item', size: '', quantity: 1, unitValue: 0 }]
-      });
-      setIsModalOpen(true);
-    } else {
-      reset({
-        client: '',
-        status: 'Arte',
-        paymentMethod: 'Pix',
-        items: [{ desc: 'Novo Item', size: '', quantity: 1, unitValue: 0 }]
-      });
-    }
-  }, [editingOrder, reset]);
-
-  // --- LÓGICA DE FILTRAGEM E ORDENAÇÃO POR URGÊNCIA ---
   const processedOrders = useMemo(() => {
     let filtered = [...orders];
 
-    // 1. Filtro por Texto
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(o => 
@@ -158,12 +116,10 @@ export default function OrdersManagerPage() {
       );
     }
 
-    // 2. Filtro por Status
     if (statusFilter !== 'Todos') {
       filtered = filtered.filter(o => o.status === statusFilter);
     }
 
-    // 3. Ordenação por Urgência (Mais próximos primeiro)
     return filtered.sort((a, b) => {
       if (!a.deliveryDate) return 1;
       if (!b.deliveryDate) return -1;
@@ -198,8 +154,20 @@ export default function OrdersManagerPage() {
     } catch (error) {}
   }, [updateOrder, toast]);
 
+  const openEditModal = (order: any) => {
+    setEditingOrder(order);
+    reset({
+      client: order.client,
+      deliveryDate: order.deliveryDate || '',
+      seller: order.seller || 'Vendedor Geral',
+      status: order.status,
+      items: order.items || [{ desc: 'Novo Item', quantity: 1, unitValue: 0 }]
+    });
+    setIsModalOpen(true);
+  };
+
   return (
-    <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden relative">
+    <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden relative selection:bg-primary selection:text-black">
       <DashboardSidebar />
       
       <main className="flex-1 md:ml-64 p-6 md:p-12 space-y-10 mt-16 md:mt-0 z-10 pb-32">
@@ -209,7 +177,7 @@ export default function OrdersManagerPage() {
           <div className="space-y-4">
             <div className="flex items-center gap-3 text-primary">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(255,95,31,1)]" />
-              <span className="text-[11px] font-black uppercase tracking-[0.6em]">Central de Controle VisComm</span>
+              <span className="text-[11px] font-black uppercase tracking-[0.2em]">Gestão Total VisComm</span>
             </div>
             <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-white uppercase leading-none">
               Pedidos em <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-400">Pauta</span>
@@ -217,16 +185,16 @@ export default function OrdersManagerPage() {
           </div>
 
           <Button 
-            onClick={() => { setEditingOrder(null); setIsModalOpen(true); }}
-            className="bg-primary text-black font-black py-8 px-12 rounded-2xl transition-all duration-300 flex items-center gap-4 uppercase tracking-[0.2em] text-sm shadow-[0_10px_30px_-5px_rgba(255,95,31,0.3)] hover:shadow-[0_15px_40px_-5px_rgba(255,95,31,0.5)] active:scale-95"
+            onClick={() => { setEditingOrder(null); reset(); setIsModalOpen(true); }}
+            className="bg-primary text-black font-black py-8 px-12 rounded-full transition-all duration-300 flex items-center gap-4 uppercase tracking-widest text-xs shadow-[0_0_25px_rgba(255,95,31,0.3)] hover:bg-white hover:scale-105 active:scale-95"
           >
-            <Plus size={22} strokeWidth={3} />
-            Lançar Pedido
+            <Plus size={20} strokeWidth={3} />
+            Criar OS
           </Button>
         </div>
 
-        {/* COMMAND CENTER (BUSCA E FILTROS) */}
-        <div className="sticky top-20 md:top-4 z-40 bg-[#09090b]/80 backdrop-blur-xl border border-white/5 rounded-3xl p-4 shadow-2xl">
+        {/* COMMAND CENTER (BUSCA E FILTROS HÍBRIDOS) */}
+        <div className="sticky top-20 md:top-4 z-40 bg-[#09090b]/90 backdrop-blur-xl border border-zinc-800/80 rounded-3xl p-4 shadow-2xl">
           <div className="flex flex-col lg:flex-row gap-6 items-center">
             
             {/* BUSCA */}
@@ -234,10 +202,10 @@ export default function OrdersManagerPage() {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-primary transition-colors" size={20} />
               <input 
                 type="text"
-                placeholder="Buscar Cliente ou Nº do Pedido..."
+                placeholder="Buscar Cliente ou Nº da OS..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-zinc-600 outline-none transition-all focus:border-primary/50 focus:bg-white/10"
+                className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded-xl py-3 pl-12 pr-4 text-white placeholder-zinc-600 outline-none transition-all focus:border-primary/50"
               />
               {searchTerm && (
                 <button onClick={() => setSearchTerm('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-white">
@@ -246,15 +214,30 @@ export default function OrdersManagerPage() {
               )}
             </div>
 
-            <div className="hidden lg:block w-px h-10 bg-white/5" />
+            <div className="hidden lg:block w-px h-8 bg-zinc-800" />
 
-            {/* TABS DE FILTRO */}
-            <div className="w-full overflow-x-auto pb-2 lg:pb-0 neon-scrollbar">
-              <div className="flex items-center gap-2">
-                <span className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mr-2 flex items-center gap-2 whitespace-nowrap">
-                  <Filter size={12} /> Filtros Rápidos:
+            {/* SELETOR DE ETAPAS RESPONSIVO */}
+            <div className="w-full lg:flex-1">
+              {/* MOBILE: Select nativo estilizado */}
+              <div className="md:hidden relative w-full">
+                <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" size={16} />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full appearance-none bg-zinc-900/50 border border-zinc-700/50 rounded-xl py-3 pl-12 pr-10 text-white outline-none focus:border-primary"
+                >
+                  {PRODUCTION_STAGES.map(stage => (
+                    <option key={stage} value={stage} className="bg-zinc-900 text-white">{stage}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" size={16} />
+              </div>
+
+              {/* DESKTOP: Chips (botões) */}
+              <div className="hidden md:flex flex-wrap items-center gap-2">
+                <span className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mr-2 flex items-center gap-1">
+                  <Filter size={12} /> Etapas:
                 </span>
-                
                 {PRODUCTION_STAGES.map((stage) => {
                   const isActive = statusFilter === stage;
                   return (
@@ -262,10 +245,10 @@ export default function OrdersManagerPage() {
                       key={stage}
                       onClick={() => setStatusFilter(stage)}
                       className={`
-                        whitespace-nowrap px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all border
+                        px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all border
                         ${isActive 
-                          ? 'bg-primary text-black border-primary shadow-[0_0_20px_rgba(255,95,31,0.4)] scale-105' 
-                          : 'bg-white/5 text-zinc-500 border-white/5 hover:border-white/20 hover:text-white'
+                          ? 'bg-primary text-black border-primary shadow-[0_0_15px_rgba(255,95,31,0.4)] scale-105' 
+                          : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:border-zinc-600 hover:text-white'
                         }
                       `}
                     >
@@ -279,25 +262,24 @@ export default function OrdersManagerPage() {
         </div>
 
         {/* LISTAGEM DE RESULTADOS */}
-        <div className="space-y-8">
-          <div className="flex justify-between items-center px-4">
-            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.4em]">
+        <div className="space-y-6">
+          <div className="flex justify-between items-center px-2">
+            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">
               {processedOrders.length} {processedOrders.length === 1 ? 'Pedido Localizado' : 'Pedidos Localizados'}
             </p>
-            
-            <div className="flex items-center gap-2 text-[9px] text-zinc-600 uppercase font-bold bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
+            <div className="flex items-center gap-2 text-[10px] text-zinc-600 uppercase font-bold bg-zinc-900/50 px-3 py-1.5 rounded-full border border-zinc-800">
               <SlidersHorizontal size={12} className="text-primary" /> Ordenado por Urgência
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <AnimatePresence mode='popLayout'>
               {processedOrders.length > 0 ? (
                 processedOrders.map((order) => (
                   <motion.div
                     layout
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     key={order.id}
                   >
@@ -309,7 +291,7 @@ export default function OrdersManagerPage() {
                         status: order.status,
                         deliveryDate: order.deliveryDate || '',
                       }} 
-                      onClick={() => setEditingOrder(order)}
+                      onClick={() => openEditModal(order)}
                       onQuickConclude={handleQuickConclude}
                       onDelete={(id) => { setOrderIdToDelete(id); setIsDeleteModalOpen(true); }}
                     />
@@ -318,16 +300,15 @@ export default function OrdersManagerPage() {
               ) : (
                 <motion.div 
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                  className="col-span-full py-32 flex flex-col items-center justify-center text-zinc-600 border-2 border-dashed border-white/5 rounded-[3rem] bg-white/[0.01]"
+                  className="col-span-full py-32 flex flex-col items-center justify-center text-zinc-600 border border-dashed border-zinc-800 rounded-[3rem] bg-zinc-900/20"
                 >
                   <PackageOpen size={64} className="mb-6 text-zinc-800" />
-                  <h3 className="text-xl font-black text-white uppercase tracking-tighter">Fila Vazia</h3>
-                  <p className="text-xs uppercase tracking-widest mt-2">Nenhum pedido atende aos filtros atuais</p>
+                  <h3 className="text-xl font-black text-white uppercase tracking-tighter">Nenhum resultado</h3>
                   <button 
                     onClick={() => { setSearchTerm(''); setStatusFilter('Todos'); }}
-                    className="mt-10 px-8 py-4 text-[10px] font-black text-primary border border-primary/30 rounded-2xl hover:bg-primary/10 transition-all uppercase tracking-widest"
+                    className="mt-10 px-8 py-4 text-[10px] font-black text-primary border border-primary/30 rounded-full hover:bg-primary/10 transition-all uppercase tracking-widest"
                   >
-                    Resetar Filtros
+                    Limpar Busca
                   </button>
                 </motion.div>
               )}
@@ -335,7 +316,7 @@ export default function OrdersManagerPage() {
           </div>
         </div>
 
-        {/* MODAIS (EDIÇÃO E EXCLUSÃO) */}
+        {/* MODAIS */}
         <DeleteConfirmationModal
           isOpen={isDeleteModalOpen}
           orderId={orderIdToDelete}
@@ -350,13 +331,13 @@ export default function OrdersManagerPage() {
 
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
           <DialogContent className="max-w-3xl bg-[#0A0A0A] border-white/5 text-white rounded-[2.5rem] overflow-hidden p-0 shadow-2xl">
-            <DialogHeader className="p-10 border-b border-white/5 flex flex-row items-center justify-between bg-white/[0.01]">
+            <DialogHeader className="p-10 border-b border-white/5 flex flex-row items-center justify-between bg-zinc-900/30">
               <DialogTitle className="text-3xl font-black text-primary uppercase tracking-tighter">
-                {editingOrder ? 'Ajustar Pedido' : 'Novo Pedido'}
+                {editingOrder ? 'Ajustar Pedido' : 'Novo Registro'}
               </DialogTitle>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="p-10 md:p-14 space-y-12 max-h-[75vh] overflow-y-auto no-scrollbar">
+            <form onSubmit={handleSubmit(onSubmit)} className="p-10 md:p-14 space-y-12 max-h-[75vh] overflow-y-auto custom-scrollbar">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                 <div className="space-y-4">
                   <Label className="text-[11px] uppercase tracking-widest text-zinc-500 font-black">Cliente*</Label>
@@ -373,7 +354,7 @@ export default function OrdersManagerPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                 <div className="space-y-4">
-                  <Label className="text-[11px] uppercase tracking-widest text-zinc-500 font-black">Responsável</Label>
+                  <Label className="text-[11px] uppercase tracking-widest text-zinc-500 font-black">Vendedor</Label>
                   <Input {...register('seller')} className="bg-white/5 border-white/5 h-16 rounded-2xl text-lg" />
                 </div>
                 <div className="space-y-4">
@@ -387,7 +368,7 @@ export default function OrdersManagerPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-950 border-white/10 text-white">
-                          {['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Concluído'].map(s => (
+                          {PRODUCTION_STAGES.filter(s => s !== 'Todos').map(s => (
                             <SelectItem key={s} value={s}>{s}</SelectItem>
                           ))}
                         </SelectContent>
@@ -400,14 +381,14 @@ export default function OrdersManagerPage() {
               <div className="space-y-8">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-black text-primary uppercase tracking-[0.5em]">Itens da Produção</h3>
-                  <button type="button" onClick={() => append({ desc: 'Novo Item', size: '', quantity: 1, unitValue: 0 })} className="text-primary text-[10px] font-black uppercase tracking-widest bg-primary/10 px-4 py-2 rounded-full border border-primary/20">
+                  <button type="button" onClick={() => append({ desc: 'Novo Item', quantity: 1, unitValue: 0 })} className="text-primary text-[10px] font-black uppercase tracking-widest bg-primary/10 px-4 py-2 rounded-full border border-primary/20">
                     + Adicionar
                   </button>
                 </div>
                 {fields.map((field, index) => (
                   <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-6 p-8 bg-white/[0.02] rounded-3xl border border-white/5 relative group">
                     <div className="md:col-span-10">
-                      <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/5 h-14 text-base" placeholder="Especificação Técnica" />
+                      <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/5 h-14 text-base" placeholder="Descrição Técnica" />
                     </div>
                     <div className="md:col-span-2">
                        <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-14 text-center text-base" />
@@ -420,8 +401,8 @@ export default function OrdersManagerPage() {
               </div>
 
               <div className="flex items-center justify-end pt-12 border-t border-white/5">
-                <Button type="submit" disabled={isSubmitting} className="w-full md:w-72 h-16 bg-primary text-black font-black uppercase tracking-widest rounded-2xl text-sm hover:shadow-[0_0_50px_rgba(255,95,31,0.5)] transition-all">
-                  {isSubmitting ? <Loader2 className="w-6 animate-spin" /> : 'Confirmar Registro'}
+                <Button type="submit" disabled={isSubmitting} className="w-full md:w-72 h-16 bg-primary text-black font-black uppercase tracking-widest rounded-full text-xs hover:shadow-[0_0_25px_rgba(255,95,31,0.5)] transition-all">
+                  {isSubmitting ? <Loader2 className="w-6 animate-spin" /> : 'Confirmar Lançamento'}
                 </Button>
               </div>
             </form>
