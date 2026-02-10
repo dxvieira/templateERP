@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -14,8 +13,7 @@ import {
   Trash2,
   Loader2,
   Calendar,
-  AlertTriangle,
-  Clock
+  AlertTriangle
 } from 'lucide-react';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { useOrders } from '@/hooks/use-orders';
@@ -57,7 +55,7 @@ const orderSchema = z.object({
 
 type OrderFormValues = z.infer<typeof orderSchema>;
 
-// --- COMPONENTE: IMPACT CARD (VERTICAL HIGH VOLTAGE) ---
+// --- COMPONENTE: IMPACT CARD (VERTICAL HIGH VOLTAGE - VIBRANT) ---
 const ImpactRow = ({ order, index, isDelayed = false, onClick }: { order: any, index: number, isDelayed?: boolean, onClick: () => void }) => {
   return (
     <motion.div 
@@ -68,20 +66,20 @@ const ImpactRow = ({ order, index, isDelayed = false, onClick }: { order: any, i
       onClick={onClick}
       className={cn(
         "group relative flex flex-col justify-between p-8 rounded-[2.5rem] border border-zinc-800 bg-[#111111] cursor-pointer overflow-hidden transition-all duration-300",
-        "min-h-[300px] hover:border-primary hover:bg-primary/[0.03] hover:shadow-[0_20px_60px_-15px_rgba(255,95,31,0.2)]",
-        isDelayed && "border-destructive/20 hover:border-destructive hover:bg-destructive/[0.03] hover:shadow-[0_20px_60px_-15px_rgba(255,0,0,0.2)]"
+        "min-h-[300px] hover:border-primary/60 hover:bg-primary/[0.04] hover:shadow-[0_25px_70px_-15px_rgba(255,95,31,0.3)]",
+        isDelayed && "border-destructive/30 hover:border-destructive/60 hover:bg-destructive/[0.04] hover:shadow-[0_25px_70px_-15px_rgba(255,0,0,0.3)]"
       )}
     >
-      {/* Sabre de Luz no Topo */}
+      {/* Sabre de Luz Vibrante no Topo */}
       <div className={cn(
-        "absolute top-0 left-1/2 -translate-x-1/2 w-[70%] h-1.5 blur-[8px] opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-full",
-        isDelayed ? "bg-destructive shadow-[0_0_20px_#FF0000]" : "bg-primary shadow-[0_0_20px_#FF5F1F]"
+        "absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-1.5 blur-[10px] opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-full",
+        isDelayed ? "bg-destructive shadow-[0_0_25px_#FF0000]" : "bg-primary shadow-[0_0_25px_#FF5F1F]"
       )} />
 
       <div className="flex justify-between items-start mb-8">
         <div className={cn(
           "h-10 px-4 rounded-xl bg-black flex items-center justify-center border border-zinc-800 text-[11px] font-mono font-black text-zinc-500 group-hover:text-white transition-colors",
-          isDelayed ? "group-hover:border-destructive" : "group-hover:border-primary"
+          isDelayed ? "group-hover:border-destructive/40" : "group-hover:border-primary/40"
         )}>
           OS #{order.id.slice(-4)}
         </div>
@@ -91,7 +89,7 @@ const ImpactRow = ({ order, index, isDelayed = false, onClick }: { order: any, i
       <div className="flex-1 space-y-6">
         <h4 className={cn(
           "text-2xl font-black leading-tight uppercase tracking-tighter transition-colors truncate pb-1",
-          isDelayed ? "group-hover:text-destructive" : "group-hover:text-primary"
+          isDelayed ? "group-hover:text-destructive drop-shadow-[0_0_10px_rgba(255,0,0,0.5)]" : "group-hover:text-primary drop-shadow-[0_0_10px_rgba(255,95,31,0.5)]"
         )}>
           {order.client}
         </h4>
@@ -103,7 +101,7 @@ const ImpactRow = ({ order, index, isDelayed = false, onClick }: { order: any, i
       <div className="mt-10 pt-8 border-t border-white/5 space-y-6">
         <div className="flex items-center gap-4">
           <div className={cn(
-            "w-3 h-3 rounded-full shadow-[0_0_12px_currentColor] animate-pulse",
+            "w-3 h-3 rounded-full shadow-[0_0_15px_currentColor] animate-pulse",
             isDelayed ? "bg-destructive text-destructive" : "bg-primary text-primary"
           )} />
           <span className="text-[12px] font-black uppercase tracking-[0.3em] text-zinc-300">
@@ -208,6 +206,7 @@ export default function DashboardPage() {
       setIsModalOpen(false);
       setEditingOrder(null);
     } catch (err) {
+      // Erro tratado globalmente
     } finally {
       setIsSubmitting(false);
     }
@@ -216,7 +215,7 @@ export default function DashboardPage() {
   if (isUserLoading || isLoading) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-        <Loader2 className="w-12 h-12 text-primary animate-spin shadow-[0_0_25px_rgba(255,95,31,0.6)]" />
+        <Loader2 className="w-12 h-12 text-primary animate-spin shadow-[0_0_30px_rgba(255,95,31,0.6)]" />
       </div>
     );
   }
@@ -224,25 +223,25 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden relative font-body selection:bg-primary selection:text-black">
       <DashboardSidebar />
-      <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
+      <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.05] blur-[150px] pointer-events-none rounded-full z-0" />
 
       <main className="flex-1 md:ml-64 p-6 md:p-12 space-y-16 mt-16 md:mt-0 z-10 pb-24">
         <header className="flex flex-col md:flex-row justify-between items-end relative z-10 gap-8">
           <div>
             <div className="flex items-center gap-3 text-primary mb-3">
               <Activity size={16} className="animate-pulse" />
-              <span className="text-[11px] font-black uppercase tracking-[0.5em]">Terminal de Comando VisComm</span>
+              <span className="text-[11px] font-black uppercase tracking-[0.5em] drop-shadow-[0_0_8px_rgba(255,95,31,0.6)]">Terminal de Comando VisComm</span>
             </div>
             <h1 className="text-6xl md:text-7xl font-black tracking-tighter text-white uppercase leading-none">
-              Visão <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-400">Total</span>
+              Visão <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-orange-300 to-orange-500">Total</span>
             </h1>
           </div>
           
           <motion.button 
-            whileHover={{ scale: 1.05, boxShadow: "0 0 40px -5px rgba(255, 95, 31, 0.7)" }}
+            whileHover={{ scale: 1.05, boxShadow: "0 0 50px -5px rgba(255, 95, 31, 0.8)" }}
             whileTap={{ scale: 0.95 }}
             onClick={() => { setEditingOrder(null); reset(); setIsModalOpen(true); }}
-            className="bg-primary hover:bg-white hover:text-black text-black font-black py-5 px-12 rounded-[2rem] transition-all duration-300 flex items-center gap-4 uppercase tracking-[0.2em] text-sm"
+            className="bg-primary hover:bg-white hover:text-black text-black font-black py-5 px-12 rounded-[2rem] transition-all duration-300 flex items-center gap-4 uppercase tracking-[0.2em] text-sm shadow-[0_0_30px_rgba(255,95,31,0.4)]"
           >
               <Zap size={22} fill="currentColor" />
               Lançar OS
@@ -261,10 +260,10 @@ export default function DashboardPage() {
               <div className="space-y-8">
                 <div className="flex items-center justify-between px-4">
                   <h3 className="text-lg font-black text-white tracking-tight flex items-center gap-4 uppercase tracking-tighter">
-                    <AlertTriangle className="text-destructive w-6 h-6 animate-bounce" />
+                    <AlertTriangle className="text-destructive w-6 h-6 animate-bounce drop-shadow-[0_0_10px_#FF0000]" />
                     War Room: Protocolos Críticos
                   </h3>
-                  <span className="bg-destructive/10 text-destructive border border-destructive/20 px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest animate-pulse">
+                  <span className="bg-destructive/10 text-destructive border border-destructive/30 px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest animate-pulse shadow-[0_0_15px_rgba(255,0,0,0.2)]">
                     {delayedOrders.length} Alarmes Ativos
                   </span>
                 </div>
@@ -309,7 +308,7 @@ export default function DashboardPage() {
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
           <DialogContent className="max-w-2xl bg-[#0F0F0F] border-white/5 text-white rounded-[2.5rem] overflow-hidden p-0 shadow-2xl">
             <DialogHeader className="p-8 border-b border-white/5 flex flex-row items-center justify-between bg-white/[0.02]">
-              <DialogTitle className="text-2xl font-black text-primary uppercase tracking-tighter">
+              <DialogTitle className="text-2xl font-black text-primary uppercase tracking-tighter drop-shadow-[0_0_10px_rgba(255,95,31,0.6)]">
                 {editingOrder ? 'Ajustar Protocolo' : 'Novo Protocolo'}
               </DialogTitle>
             </DialogHeader>
@@ -318,21 +317,21 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-3">
                   <Label className="text-[11px] uppercase tracking-widest text-muted-foreground">Cliente*</Label>
-                  <Input {...register('client')} list="dashboard-client-suggestions" className="bg-black/50 border-white/5 h-14 rounded-2xl text-base" />
+                  <Input {...register('client')} list="dashboard-client-suggestions" className="bg-black/50 border-white/5 h-14 rounded-2xl text-base focus:border-primary/50" />
                   <datalist id="dashboard-client-suggestions">
                     {clients?.map(c => <option key={c.id} value={c.name} />)}
                   </datalist>
                 </div>
                 <div className="space-y-3">
                   <Label className="text-[11px] uppercase tracking-widest text-muted-foreground">Prazo Entrega</Label>
-                  <Input type="date" {...register('deliveryDate')} className="bg-black/50 border-white/5 h-14 rounded-2xl text-base" />
+                  <Input type="date" {...register('deliveryDate')} className="bg-black/50 border-white/5 h-14 rounded-2xl text-base focus:border-primary/50" />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-3">
                   <Label className="text-[11px] uppercase tracking-widest text-muted-foreground">Vendedor Responsável</Label>
-                  <Input {...register('seller')} className="bg-black/50 border-white/5 h-14 rounded-2xl text-base" />
+                  <Input {...register('seller')} className="bg-black/50 border-white/5 h-14 rounded-2xl text-base focus:border-primary/50" />
                 </div>
                 <div className="space-y-3">
                   <Label className="text-[11px] uppercase tracking-widest text-muted-foreground">Status Atual</Label>
@@ -341,7 +340,7 @@ export default function DashboardPage() {
                     control={control}
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger className="bg-black/50 border-white/5 h-14 rounded-2xl text-base">
+                        <SelectTrigger className="bg-black/50 border-white/5 h-14 rounded-2xl text-base focus:border-primary/50">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-950 border-white/10 text-white">
@@ -357,7 +356,7 @@ export default function DashboardPage() {
 
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-[11px] font-black text-primary uppercase tracking-[0.5em]">Itens da Produção</h3>
+                  <h3 className="text-[11px] font-black text-primary uppercase tracking-[0.5em] drop-shadow-[0_0_8px_rgba(255,95,31,0.5)]">Itens da Produção</h3>
                   <button type="button" onClick={() => append({ desc: 'Novo Item', quantity: 1, unitValue: 0 })} className="text-primary text-[11px] font-black tracking-widest flex items-center gap-3 hover:opacity-80 transition-opacity">
                     <Plus className="w-5 h-5" /> Adicionar
                   </button>
@@ -387,7 +386,7 @@ export default function DashboardPage() {
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}
                   </p>
                 </div>
-                <Button type="submit" disabled={isSubmitting} className="w-full md:w-56 h-16 bg-primary text-black font-black uppercase tracking-widest rounded-[1.5rem] text-sm hover:shadow-[0_0_40px_rgba(255,95,31,0.5)] transition-all">
+                <Button type="submit" disabled={isSubmitting} className="w-full md:w-56 h-16 bg-primary text-black font-black uppercase tracking-widest rounded-[1.5rem] text-sm hover:shadow-[0_0_50px_rgba(255,95,31,0.7)] transition-all">
                   {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Gravar Protocolo'}
                 </Button>
               </div>
