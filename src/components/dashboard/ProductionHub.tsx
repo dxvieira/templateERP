@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, Activity, Fingerprint } from 'lucide-react';
+import { Zap, Activity, Fingerprint, MousePointer2 } from 'lucide-react';
 
 interface ProductionHubProps {
   stats: {
@@ -26,7 +26,7 @@ export function ProductionHub({ stats }: ProductionHubProps) {
     { id: 'print', label: 'Impressão', value: stats.impressao, color: '#06b6d4' },
     { id: 'metal', label: 'Serralheria', value: stats.serralheria, color: '#facc15' },
     { id: 'finish', label: 'Acabamento', value: stats.acabamento, color: '#FF5F1F' },
-    { id: 'install', label: 'Instalação', value: stats.instalacao, color: '#ef4444' },
+    { id: 'install', label: 'Instalação', value: stats.instalacao, color: '#22c55e' },
   ].filter(s => s.value > 0);
 
   const activeOrdersCount = segments.reduce((acc, item) => acc + item.value, 0);
@@ -37,27 +37,33 @@ export function ProductionHub({ stats }: ProductionHubProps) {
   let accumulatedOffset = 0;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className="w-full flex items-center justify-center p-2 md:p-6"
-    >
-      <div className="relative w-full max-w-4xl bg-[#0a0a0a] border border-white/5 rounded-[3rem] p-8 md:p-12 overflow-hidden group shadow-2xl">
+    <div className="w-full flex justify-center p-2 md:p-6">
+      
+      {/* --- O CARD PRINCIPAL (Container HUD) --- */}
+      <div 
+        className="
+          group relative w-full max-w-4xl bg-[#0a0a0a] 
+          border border-zinc-800 rounded-[2.5rem] md:rounded-[3rem] 
+          p-8 md:p-12 overflow-hidden transition-all duration-500
+          hover:border-[#FF5F1F] hover:shadow-[0_0_80px_-20px_rgba(255,95,31,0.25)]
+          hover:-translate-y-1
+        "
+      >
         
-        {/* LUZES DE AMBIENTE (Aurora Glow) */}
+        {/* LUZES DE AMBIENTE (Aurora Background) */}
         <div className="absolute top-[-50%] left-[-20%] w-[500px] h-[500px] bg-blue-500/5 blur-[120px] rounded-full pointer-events-none group-hover:bg-blue-500/10 transition-colors duration-1000" />
-        <div className="absolute bottom-[-50%] right-[-20%] w-[500px] h-[500px] bg-primary/5 blur-[120px] rounded-full pointer-events-none group-hover:bg-primary/10 transition-colors duration-1000" />
+        <div className="absolute bottom-[-50%] right-[-20%] w-[500px] h-[500px] bg-[#FF5F1F]/5 blur-[120px] rounded-full pointer-events-none group-hover:bg-[#FF5F1F]/10 transition-colors duration-1000" />
 
         {/* --- CABEÇALHO DO HUD --- */}
-        <div className="flex justify-between items-start mb-12 relative z-10">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 relative z-10 gap-6">
           <div>
             <div className="flex items-center gap-2 mb-2">
-               <Activity size={16} className="text-primary animate-pulse" />
-               <span className="text-primary text-[10px] font-black uppercase tracking-[0.4em] drop-shadow-[0_0_8px_rgba(255,95,31,0.5)]">
+               <Activity size={16} className="text-[#FF5F1F] animate-pulse" />
+               <span className="text-[#FF5F1F] text-[10px] font-black uppercase tracking-[0.4em] drop-shadow-[0_0_8px_rgba(255,95,31,0.5)]">
                  Monitoramento VisComm Online
                </span>
             </div>
-            <h2 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tighter leading-none">
+            <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter leading-none">
               Reator de <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-600">Produção</span>
             </h2>
           </div>
@@ -65,10 +71,10 @@ export function ProductionHub({ stats }: ProductionHubProps) {
         </div>
 
         {/* --- CORPO PRINCIPAL (HUD) --- */}
-        <div className="flex flex-col lg:flex-row items-center gap-16 relative z-10">
+        <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20 relative z-10">
           
-          {/* O REATOR CENTRAL */}
-          <div className="relative w-[300px] h-[300px] md:w-[350px] md:h-[350px] flex items-center justify-center shrink-0">
+          {/* O REATOR CENTRAL (Gráfico) */}
+          <div className="relative w-[280px] h-[280px] md:w-[350px] md:h-[350px] flex items-center justify-center shrink-0">
             
             {/* Anéis HUD Giratórios */}
             <motion.div 
@@ -84,7 +90,7 @@ export function ProductionHub({ stats }: ProductionHubProps) {
             <div className="absolute inset-10 border border-zinc-900 rounded-full opacity-50 shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]" />
 
             {/* SVG DO DONUT */}
-            <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90 transform overflow-visible z-10">
+            <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90 transform overflow-visible z-10 drop-shadow-2xl">
                {/* Trilho Base */}
                <circle cx="100" cy="100" r={radius} stroke="#111111" strokeWidth="14" fill="transparent" />
 
@@ -119,6 +125,7 @@ export function ProductionHub({ stats }: ProductionHubProps) {
                        transition={{ duration: 1, type: "spring", bounce: 0 }}
                        onMouseEnter={() => setActiveIndex(index)}
                        onMouseLeave={() => setActiveIndex(null)}
+                       onTouchStart={() => setActiveIndex(index)}
                        className="cursor-pointer transition-all"
                      />
                    );
@@ -142,13 +149,13 @@ export function ProductionHub({ stats }: ProductionHubProps) {
                     <span className="text-zinc-500 text-[10px] uppercase font-black tracking-[0.3em] mb-2">
                       {activeIndex !== null ? segments[activeIndex].label : "Protocolos Ativos"}
                     </span>
-                    <span className="text-7xl font-black text-white tracking-tighter drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+                    <span className="text-6xl md:text-7xl font-black text-white tracking-tighter drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
                       {activeIndex !== null ? segments[activeIndex].value : activeOrdersCount}
                     </span>
                     {activeIndex === null && (
-                      <div className="mt-4 flex items-center gap-2 bg-primary/10 px-4 py-1.5 rounded-full border border-primary/20">
-                         <Zap size={12} className="text-primary" fill="currentColor" />
-                         <span className="text-[10px] text-primary font-black uppercase tracking-widest">Sincronizado</span>
+                      <div className="mt-4 flex items-center gap-2 bg-[#FF5F1F]/10 px-4 py-1.5 rounded-full border border-[#FF5F1F]/20">
+                         <Zap size={12} className="text-[#FF5F1F]" fill="currentColor" />
+                         <span className="text-[10px] text-[#FF5F1F] font-black uppercase tracking-widest">Sincronizado</span>
                       </div>
                     )}
                  </motion.div>
@@ -156,7 +163,7 @@ export function ProductionHub({ stats }: ProductionHubProps) {
             </div>
           </div>
 
-          {/* LEGENDA HUD */}
+          {/* LEGENDA HUD (Lista Dinâmica) */}
           <div className="flex-1 w-full flex flex-col gap-4">
              {segments.map((item, index) => {
                const isActive = activeIndex === index;
@@ -166,6 +173,7 @@ export function ProductionHub({ stats }: ProductionHubProps) {
                    key={item.id}
                    onMouseEnter={() => setActiveIndex(index)}
                    onMouseLeave={() => setActiveIndex(null)}
+                   onTouchStart={() => setActiveIndex(index)}
                    animate={{
                      scale: isActive ? 1.05 : 1,
                      x: isActive ? 15 : 0,
@@ -220,14 +228,20 @@ export function ProductionHub({ stats }: ProductionHubProps) {
 
              {segments.length === 0 && (
                <div className="flex flex-col items-center justify-center py-10 opacity-20">
-                 <Fingerprint className="w-12 h-12 mb-4" />
-                 <p className="text-[10px] font-black uppercase tracking-widest">Aguardando Lançamentos</p>
+                 <Fingerprint className="w-12 h-12 mb-4 text-zinc-500" />
+                 <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Aguardando Lançamentos</p>
                </div>
              )}
           </div>
+        </div>
 
+        {/* --- RODAPÉ DECORATIVO --- */}
+        <div className="absolute bottom-4 left-0 right-0 text-center opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+           <p className="text-[10px] text-zinc-600 uppercase tracking-widest flex justify-center items-center gap-2">
+             <MousePointer2 size={12} className="text-[#FF5F1F]" /> Interaja com o Reator para detalhes
+           </p>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
