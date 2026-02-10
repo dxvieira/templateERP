@@ -3,7 +3,7 @@
 
 import React, { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { 
   Target, 
   ChevronLeft, 
@@ -12,7 +12,8 @@ import {
   Zap,
   CheckCircle2,
   ListTodo,
-  Loader2
+  Loader2,
+  Rocket
 } from 'lucide-react';
 import { startOfWeek, endOfWeek, isWithinInterval, parseISO, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -78,8 +79,7 @@ export default function WeeklyGoalsPage() {
       <DashboardSidebar />
       
       {/* Background Glows */}
-      <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-green-600 opacity-[0.08] blur-[150px] pointer-events-none rounded-full z-0" />
-      <div className="fixed bottom-[-10%] right-[-5%] w-[40%] h-[40%] bg-emerald-600 opacity-[0.08] blur-[150px] pointer-events-none rounded-full z-0" />
+      <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-green-600 opacity-[0.05] blur-[150px] pointer-events-none rounded-full z-0" />
 
       <main className="flex-1 md:ml-64 p-6 md:p-12 space-y-12 mt-16 md:mt-0 z-10 pb-32">
         
@@ -103,82 +103,96 @@ export default function WeeklyGoalsPage() {
                 Meta da Semana
               </h1>
             </div>
-
-            {/* Stats Summary Widget */}
-            <div className="bg-white/[0.02] border border-white/5 p-6 rounded-[2rem] flex items-center gap-8 backdrop-blur-sm">
-              <div className="text-center">
-                <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-1">Total</p>
-                <p className="text-2xl font-black text-white">{totalWeekly}</p>
-              </div>
-              <div className="w-px h-8 bg-white/5" />
-              <div className="text-center">
-                <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-1">Concluídos</p>
-                <p className="text-2xl font-black text-green-400">{completedOrders.length}</p>
-              </div>
-            </div>
           </div>
         </header>
 
-        {/* BARRA DE PROGRESSO (HUD Energy Bar) */}
-        <section className="bg-zinc-900/40 p-8 md:p-10 rounded-[2.5rem] border border-white/5 relative overflow-hidden group">
+        {/* --- CARD DA BARRA DE PROGRESSO (Com Hover Neon Verde) --- */}
+        <section 
+          className="
+            group relative 
+            bg-zinc-900/40 border border-zinc-800 rounded-[2.5rem] p-8 md:p-10
+            transition-all duration-500 ease-out
+            hover:border-green-500/50 
+            hover:shadow-[0_0_60px_-10px_rgba(34,197,94,0.25)]
+            hover:-translate-y-1
+            overflow-hidden
+          "
+        >
+          {/* Cabeçalho da Barra */}
           <div className="flex justify-between items-end mb-6 relative z-10">
             <div>
-              <p className="text-green-500 text-[10px] font-black uppercase tracking-[0.3em] mb-2 flex items-center gap-2">
+              <div className="flex items-baseline gap-2">
+                <span className="text-6xl md:text-7xl font-black text-white tracking-tighter transition-colors group-hover:text-green-400">
+                  {completedOrders.length}
+                </span>
+                <span className="text-2xl md:text-3xl text-zinc-600 font-black group-hover:text-zinc-500 transition-colors">
+                  / {totalWeekly} PEDIDOS
+                </span>
+              </div>
+              <p className="text-green-500 text-[10px] font-black uppercase tracking-[0.3em] mt-2 flex items-center gap-2 group-hover:text-green-400 transition-colors">
                  <Zap size={12} fill="currentColor" /> Status da Missão
               </p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-6xl font-black text-white tracking-tighter">{completedOrders.length}</span>
-                <span className="text-zinc-600 font-black text-2xl uppercase tracking-widest">/ {totalWeekly} Pedidos</span>
-              </div>
             </div>
             
+            {/* Ícone de Conquista */}
             <motion.div 
                animate={progress === 100 ? { rotate: [0, -10, 10, 0], scale: 1.1 } : {}}
                transition={{ duration: 0.5, repeat: progress === 100 ? Infinity : 0, repeatDelay: 2 }}
-               className={`p-4 rounded-2xl border transition-all duration-500 ${progress === 100 ? 'bg-yellow-500/10 border-yellow-500 text-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.2)]' : 'bg-white/5 border-white/10 text-zinc-600'}`}
+               className={`
+                  p-5 rounded-2xl border transition-all duration-500
+                  ${progress === 100 
+                    ? 'bg-green-500 text-black border-green-400 shadow-[0_0_30px_#22c55e]' 
+                    : 'bg-black/40 border-zinc-800 text-zinc-600 group-hover:text-green-500 group-hover:border-green-500/30'
+                  }
+               `}
             >
-               {progress === 100 ? <Trophy size={32} /> : <Target size={32} />}
+               {progress === 100 ? <Trophy size={32} fill="currentColor" /> : <Target size={32} />}
             </motion.div>
           </div>
 
-          <div className="relative h-6 w-full bg-black/60 rounded-sm overflow-hidden border border-white/5 p-0.5 z-10 shadow-inner">
-            {/* Grid de Fundo (Ticks) */}
-            <div className="absolute inset-0 flex justify-between px-1 pointer-events-none">
-               {[...Array(30)].map((_, i) => (
-                  <div key={i} className="w-[1px] h-full bg-white/5" />
+          {/* CONTAINER DA BARRA (Trilho HUD) */}
+          <div className="h-8 w-full bg-[#050505] rounded-lg relative overflow-hidden border border-zinc-800 shadow-inner group-hover:border-green-900/50 transition-colors z-10">
+            
+            {/* Grid de Fundo (Ticks Decorativos) */}
+            <div className="absolute inset-0 flex justify-between px-2 z-0 opacity-20">
+               {[...Array(15)].map((_, i) => (
+                  <div key={i} className="w-[1px] h-full bg-zinc-600" />
                ))}
             </div>
 
+            {/* A BARRA LÍQUIDA (Física de Inércia) */}
             <motion.div 
-              initial={{ width: 0 }}
-              animate={{ width: `${progress}%` }}
-              transition={{ duration: 1.8, ease: [0.2, 0, 0, 1] }} // Inércia Física
-              className="h-full rounded-sm relative"
+               initial={{ width: 0 }}
+               animate={{ width: `${progress}%` }}
+               transition={{ duration: 1.5, ease: "circOut" }} 
+               className="h-full relative z-10 rounded-r-md overflow-hidden"
             >
-              {/* Gradiente Líquido */}
-              <div className="absolute inset-0 bg-gradient-to-r from-green-900 via-green-500 to-emerald-400" />
-              
-              {/* Shimmer Effect */}
-              <motion.div 
-                animate={{ x: ['-100%', '100%'] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent w-full" 
-              />
-              
-              {/* Energy Head (Brilho na ponta) */}
-              <div className="absolute right-0 top-0 bottom-0 w-1 bg-white shadow-[0_0_15px_rgba(255,255,255,0.8)] z-10" />
+               {/* Gradiente Verde Vibrante */}
+               <div className="absolute inset-0 bg-gradient-to-r from-green-900 via-green-600 to-emerald-400" />
+               
+               {/* Shimmer Animado */}
+               <motion.div 
+                 animate={{ x: ['-100%', '100%'] }}
+                 transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
+                 className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent w-full" 
+               />
+               
+               {/* Ponta de Energia Branca */}
+               <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white shadow-[0_0_20px_rgba(255,255,255,1)]" />
             </motion.div>
           </div>
           
           {/* Mensagem Motivacional Dinâmica */}
-          <p className="mt-4 text-right text-[9px] text-zinc-500 font-mono uppercase tracking-widest">
-            {progress === 0 && "Inicie a produção para ativar o sistema operacional."}
-            {progress > 0 && progress < 50 && "Frequência estável. Mantenha o ritmo de produção."}
-            {progress >= 50 && progress < 100 && "Metade da missão concluída. Finalize o ciclo."}
-            {progress === 100 && "Meta atingida. Sistema operando em eficiência máxima."}
-          </p>
+          <div className="flex justify-end mt-4">
+             <p className="text-[9px] text-zinc-600 font-mono group-hover:text-green-400/80 transition-colors uppercase tracking-widest">
+                {progress === 0 && "SISTEMA PRONTO. INICIE A PRODUÇÃO PARA ATIVAR."}
+                {progress > 0 && progress < 50 && "FREQUÊNCIA ESTÁVEL. MANTENHA O RITMO."}
+                {progress >= 50 && progress < 100 && "META PRÓXIMA. SISTEMA EM ALTO RENDIMENTO."}
+                {progress === 100 && "META ATINGIDA. SISTEMA OPERANDO EM EFICIÊNCIA MÁXIMA."}
+             </p>
+          </div>
 
-          {/* Animated background element */}
+          {/* Glow de fundo pulsante */}
           <div 
             className="absolute -top-24 -right-24 w-64 h-64 bg-green-500/10 blur-[80px] rounded-full pointer-events-none transition-all duration-1000" 
             style={{ opacity: progress / 100 + 0.1 }}
@@ -188,7 +202,7 @@ export default function WeeklyGoalsPage() {
         {/* SEÇÃO 1: FILA ATIVA (Pendentes da Semana) */}
         <section className="space-y-8">
           <div className="flex items-center gap-4 px-2 border-b border-white/5 pb-4">
-            <div className="p-2 bg-green-500/10 rounded-xl border border-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.1)]">
+            <div className="p-2 bg-green-500/10 rounded-xl border border-green-500/20">
               <ListTodo className="text-green-400 w-6 h-6" />
             </div>
             <div className="flex-1">
@@ -225,12 +239,12 @@ export default function WeeklyGoalsPage() {
                 className="py-24 flex flex-col items-center justify-center text-center space-y-6 bg-white/[0.01] border border-dashed border-white/5 rounded-[3rem]"
               >
                 <div className="p-8 bg-green-500/10 rounded-full border border-green-500/20">
-                  <Trophy className="text-green-400 w-16 h-16" />
+                  <Rocket className="text-green-400 w-16 h-16" />
                 </div>
                 <div className="space-y-2">
-                  <h3 className="text-xl font-black text-white uppercase tracking-tight">Missão Zerada</h3>
+                  <h3 className="text-xl font-black text-white uppercase tracking-tight">Fila Zerada</h3>
                   <p className="text-[10px] text-zinc-500 uppercase tracking-[0.3em] font-bold max-w-xs leading-relaxed mx-auto">
-                    Nenhuma pendência na fila desta semana. Sistema em prontidão para novos pedidos.
+                    Nenhuma pendência para esta semana. Sistema em prontidão para novos pedidos.
                   </p>
                 </div>
               </motion.div>
@@ -256,7 +270,7 @@ export default function WeeklyGoalsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 gap-4 opacity-80 hover:opacity-100 transition-opacity">
               {completedOrders.map((order) => (
                 <div key={order.id}>
                   <OrderCard 
