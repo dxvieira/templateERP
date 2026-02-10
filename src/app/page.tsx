@@ -86,12 +86,14 @@ export default function DashboardPage() {
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
   const watchedItems = watch('items');
 
-  // Cálculos de Prioridade (3 Camadas)
+  // Lógica de Datas e Prioridades
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const todayStr = today.toISOString().split('T')[0];
   const weekStart = startOfWeek(today, { weekStartsOn: 0 });
   const weekEnd = endOfWeek(today, { weekStartsOn: 0 });
 
+  // 1. Contador de Pedidos Pendentes da Semana (Para o WeeklyTargetCard)
   const weeklyPendingCount = useMemo(() => {
     return orders.filter(o => {
       if (!o.deliveryDate || ['Concluído', 'Entregue'].includes(o.status)) return false;
@@ -104,6 +106,7 @@ export default function DashboardPage() {
     }).length;
   }, [orders, weekStart, weekEnd]);
 
+  // 2. Pedidos Críticos (War Room): Atrasados ou Hoje
   const warRoom = useMemo(() => {
     return orders.filter(o => 
       !['Concluído', 'Entregue'].includes(o.status) && 
@@ -112,6 +115,7 @@ export default function DashboardPage() {
     ).sort((a, b) => (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
   }, [orders, todayStr]);
 
+  // 3. Fila de Pedidos (Fluxo Nominal): Futuro
   const productionQueue = useMemo(() => {
     return orders.filter(o => 
       !['Concluído', 'Entregue'].includes(o.status) && 
@@ -119,6 +123,7 @@ export default function DashboardPage() {
     ).sort((a, b) => (a.deliveryDate || '9999').localeCompare(b.deliveryDate || '9999'));
   }, [orders, todayStr]);
 
+  // 4. Pedidos Concluídos (Troféus)
   const completedList = useMemo(() => {
     return orders.filter(o => ['Concluído', 'Entregue'].includes(o.status))
       .sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
@@ -221,7 +226,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* CAMADA 1: WAR ROOM (EMERGÊNCIAS) */}
+        {/* CAMADA 1: PEDIDOS CRÍTICOS (WAR ROOM) */}
         {warRoom.length > 0 && (
           <section className="space-y-8 animate-in slide-in-from-top-4 duration-500">
             <div className="flex items-center gap-4 px-2 border-b border-destructive/20 pb-4">
@@ -230,12 +235,12 @@ export default function DashboardPage() {
               </div>
               <div className="flex-1">
                 <h3 className="text-sm font-black text-white uppercase tracking-[0.4em] flex items-center gap-3">
-                  War Room <span className="bg-destructive/20 text-destructive text-[10px] px-2 py-0.5 rounded-full border border-destructive/30">{warRoom.length} CRÍTICOS</span>
+                  Pedidos Críticos (War Room) <span className="bg-destructive/20 text-destructive text-[10px] px-2 py-0.5 rounded-full border border-destructive/30 font-bold">{warRoom.length} EM ALERTA</span>
                 </h3>
                 <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-1">Atrasados ou Entrega Hoje</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {warRoom.map((order) => (
                 <OrderCard 
                   key={order.id} 
@@ -255,18 +260,18 @@ export default function DashboardPage() {
           </section>
         )}
 
-        {/* CAMADA 2: FILA DE PRODUÇÃO (FLUXO NOMINAL) */}
+        {/* CAMADA 2: FILA DE PEDIDOS (FLUXO NOMINAL) */}
         <section className="space-y-8">
           <div className="flex items-center gap-4 px-2 border-b border-white/5 pb-4">
             <div className="p-2 bg-primary/10 rounded-xl">
               <Layers className="text-primary w-6 h-6" />
             </div>
             <div className="flex-1">
-              <h3 className="text-sm font-black text-white uppercase tracking-[0.4em]">Fila de Produção</h3>
-              <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-1">Próximos Projetos ({productionQueue.length})</p>
+              <h3 className="text-sm font-black text-white uppercase tracking-[0.4em]">Fila de Pedidos</h3>
+              <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-1">Próximas Entregas ({productionQueue.length})</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {productionQueue.map((order) => (
               <OrderCard 
                 key={order.id} 
@@ -283,12 +288,12 @@ export default function DashboardPage() {
               />
             ))}
             {productionQueue.length === 0 && warRoom.length === 0 && (
-              <div className="py-20 text-center opacity-20 uppercase font-black text-sm tracking-[0.5em]">Sem pedidos ativos na fila</div>
+              <div className="col-span-full py-20 text-center opacity-20 uppercase font-black text-sm tracking-[0.5em]">Sem pedidos ativos na fila</div>
             )}
           </div>
         </section>
 
-        {/* CAMADA 3: ENTREGAS REALIZADAS (TROFÉUS) */}
+        {/* CAMADA 3: PEDIDOS CONCLUÍDOS (TROFÉUS) */}
         {completedList.length > 0 && (
           <section className="space-y-8 animate-in fade-in duration-700">
             <div className="flex items-center gap-4 px-2 border-b border-green-500/20 pb-4">
@@ -296,11 +301,11 @@ export default function DashboardPage() {
                 <CheckCircle2 className="text-emerald-500 w-6 h-6" />
               </div>
               <div className="flex-1">
-                <h3 className="text-sm font-black text-white uppercase tracking-[0.4em]">Entregas Realizadas</h3>
+                <h3 className="text-sm font-black text-white uppercase tracking-[0.4em]">Pedidos Concluídos</h3>
                 <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-1">Troféus de Produção ({completedList.length})</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {completedList.map((order) => (
                 <OrderCard 
                   key={order.id} 

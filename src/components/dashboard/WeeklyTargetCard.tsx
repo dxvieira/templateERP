@@ -3,9 +3,8 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Target, Rocket, ChevronRight } from 'lucide-react';
+import { Target, Rocket, ArrowUpRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
 
 interface WeeklyTargetCardProps {
   pendingCount: number;
@@ -18,77 +17,69 @@ export function WeeklyTargetCard({ pendingCount }: WeeklyTargetCardProps) {
     <motion.div
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
-      className="relative h-full group"
+      transition={{ delay: 0.3 }}
+      className="
+        group relative h-full min-h-[300px] flex flex-col justify-between
+        bg-[#09090b] border border-zinc-800 rounded-[2.5rem] p-8 overflow-hidden
+        transition-all duration-500
+        /* HOVER: Amarelo Neon Intenso */
+        hover:border-yellow-500/80 
+        hover:shadow-[0_0_60px_-15px_rgba(234,179,8,0.4)]
+        hover:-translate-y-1
+      "
     >
-      {/* Glow de Fundo Cyberpunk */}
-      <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-cyan-500 rounded-[2.5rem] blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200" />
-      
-      <div className="relative h-full bg-[#09090b] border border-white/5 rounded-[2.5rem] p-8 flex flex-col justify-between overflow-hidden">
+      {/* Luz de Fundo (Amarelo Ouro) */}
+      <div className="absolute top-[-20%] right-[-20%] w-[80%] h-[80%] bg-yellow-500/10 blur-[80px] rounded-full pointer-events-none transition-all duration-700 group-hover:bg-yellow-500/20" />
+
+      {/* Cabeçalho */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="p-2 rounded-full bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 group-hover:scale-110 transition-transform duration-300">
+             <Target size={20} />
+          </div>
+          <span className="text-yellow-500 text-[10px] font-bold uppercase tracking-[0.2em]">Objetivo Ativo</span>
+        </div>
         
-        {/* Efeito de Ondas Animadas */}
-        <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-64 h-64 pointer-events-none">
-          <motion.div
-            animate={{
-              scale: [1, 1.2, 1],
-              opacity: [0.1, 0.2, 0.1],
-            }}
-            transition={{
-              duration: 4,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-            className="w-full h-full bg-purple-500/20 rounded-full blur-[60px]"
-          />
-        </div>
-
-        <div className="space-y-6 relative z-10">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Target className="text-cyan-400 w-5 h-5 animate-pulse" />
-              <span className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em]">
-                Objetivo Ativo
-              </span>
-            </div>
-            <motion.div
-              animate={{ y: [0, -5, 0] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-            >
-              <Rocket className="text-purple-400 w-6 h-6" />
-            </motion.div>
-          </div>
-
-          <div className="space-y-2">
-            <h2 className="text-3xl font-black text-white uppercase tracking-tighter leading-none">
-              Meta da <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">
-                Semana
-              </span>
-            </h2>
-          </div>
-
-          <div className="pt-4">
-            <div className="flex items-baseline gap-2">
-              <span className="text-5xl font-black text-white tracking-tighter">
-                {pendingCount}
-              </span>
-              <span className="text-zinc-500 text-xs font-bold uppercase tracking-widest">
-                Pedidos <br /> Pendentes
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <Button
-          onClick={() => router.push('/goals')}
-          className="relative z-10 w-full h-14 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-black uppercase tracking-widest rounded-2xl group/btn overflow-hidden transition-all active:scale-95"
-        >
-          <div className="absolute inset-0 bg-gradient-to-r from-purple-600/20 to-cyan-500/20 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-1000" />
-          <span className="flex items-center gap-2">
-            Acessar Missão <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+        <h2 className="text-4xl font-black text-white uppercase leading-[0.9] tracking-tight mb-2">
+          Meta da <br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 group-hover:to-yellow-300 transition-all">
+            Semana
           </span>
-        </Button>
-
+        </h2>
       </div>
+
+      {/* Contador Central */}
+      <div className="flex items-center gap-3 my-4">
+         <span className="text-7xl font-black text-white tracking-tighter group-hover:text-yellow-400 transition-colors duration-300">
+           {pendingCount}
+         </span>
+         <div className="flex flex-col justify-center">
+            <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Pedidos</span>
+            <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Pendentes</span>
+         </div>
+      </div>
+
+      {/* Botão de Ação */}
+      <button 
+        onClick={() => router.push('/goals')}
+        className="
+          w-full py-4 rounded-xl flex items-center justify-center gap-2
+          bg-zinc-900 border border-zinc-800 
+          text-white font-bold uppercase tracking-widest text-xs
+          transition-all duration-300
+          group-hover:bg-yellow-500 group-hover:text-black group-hover:border-yellow-400
+          group-hover:shadow-[0_0_20px_rgba(234,179,8,0.5)]
+          relative z-10
+        "
+      >
+        Acessar Missão <ArrowUpRight size={16} />
+      </button>
+
+      {/* Ícone Decorativo Flutuante */}
+      <div className="absolute top-8 right-8 text-zinc-800 group-hover:text-yellow-500/20 transition-colors duration-500 rotate-12">
+        <Rocket size={48} />
+      </div>
+
     </motion.div>
   );
 }
