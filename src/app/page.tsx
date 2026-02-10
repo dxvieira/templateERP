@@ -1,6 +1,8 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,11 +14,13 @@ import {
   AlertTriangle,
   LayoutDashboard
 } from 'lucide-react';
-import { DashboardSidebar } from '@/components/dashboard/Sidebar';
+
 import { useOrders } from '@/hooks/use-orders';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { query, collection, orderBy } from 'firebase/firestore';
-import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
+
+import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { ProductionHub } from '@/components/dashboard/ProductionHub';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { Button } from '@/components/ui/button';
@@ -35,7 +39,6 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { useToast } from '@/hooks/use-toast';
 
 const orderSchema = z.object({
   client: z.string().min(1, 'Nome do cliente é obrigatório'),
@@ -62,6 +65,7 @@ export default function DashboardPage() {
   const [editingOrder, setEditingOrder] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Queries e Hooks de Dados
   const clientsQuery = useMemoFirebase(() => 
     firestore ? query(collection(firestore, 'clients'), orderBy('name', 'asc')) : null
   , [firestore]);
@@ -79,6 +83,7 @@ export default function DashboardPage() {
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
   const watchedItems = watch('items');
 
+  // Cálculos Memoizados
   const totalValue = useMemo(() => {
     return watchedItems?.reduce((acc, item) => {
       const q = Number(item.quantity) || 0;
@@ -96,6 +101,7 @@ export default function DashboardPage() {
     );
   }, [orders]);
 
+  // Efeitos colaterais
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.replace('/login');
@@ -115,6 +121,7 @@ export default function DashboardPage() {
     }
   }, [editingOrder, reset]);
 
+  // Handlers
   const onSubmit = async (data: OrderFormValues) => {
     setIsSubmitting(true);
     try {
@@ -128,15 +135,23 @@ export default function DashboardPage() {
       setIsModalOpen(false);
       setEditingOrder(null);
     } catch (err) {
+      console.error(err);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleQuickConclude = async (orderId: string) => {
+    try {
+      await updateOrder(orderId, { status: 'Concluído' });
+      toast({ title: "Finalizado", description: "Protocolo movido para concluídos." });
+    } catch (err) {}
+  };
+
   if (isUserLoading || isLoading) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-        <Loader2 className="w-12 h-12 text-primary animate-spin" />
+        <Loader2 className="w-12 h-12 text-primary animate-spin shadow-[0_0_20px_rgba(255,95,31,0.3)]" />
       </div>
     );
   }
@@ -160,17 +175,19 @@ export default function DashboardPage() {
           
           <Button 
             onClick={() => { setEditingOrder(null); reset(); setIsModalOpen(true); }}
-            className="bg-primary text-black font-black py-8 px-12 rounded-2xl transition-all duration-300 flex items-center gap-4 uppercase tracking-[0.2em] text-sm shadow-[0_10px_30px_-5px_rgba(255,95,31,0.3)]"
+            className="bg-primary text-black font-black py-8 px-12 rounded-2xl transition-all duration-300 flex items-center gap-4 uppercase tracking-[0.2em] text-sm shadow-[0_10px_30px_-5px_rgba(255,95,31,0.3)] hover:shadow-[0_15px_40px_-5px_rgba(255,95,31,0.5)] active:scale-95"
           >
               <Plus size={22} strokeWidth={3} />
               Nova OS
           </Button>
         </header>
 
+        {/* REATOR ULTRA-FLUIDO */}
         <section className="relative z-10">
-          <ProductionHub stats={stats} orders={orders} />
+          <ProductionHub stats={stats} />
         </section>
 
+        {/* LISTAGEM DE ORDENS (COMPACT NEON ROWS) */}
         <div className="space-y-20 max-w-6xl">
           {delayedOrders.length > 0 && (
             <div className="space-y-8">
@@ -178,7 +195,7 @@ export default function DashboardPage() {
                 <AlertTriangle className="text-destructive w-6 h-6 animate-pulse" />
                 <h3 className="text-sm font-black text-white uppercase tracking-[0.4em]">Protocolos Críticos ({delayedOrders.length})</h3>
               </div>
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-3">
                 {delayedOrders.map((order) => (
                   <OrderCard 
                     key={order.id} 
@@ -190,6 +207,7 @@ export default function DashboardPage() {
                       deliveryDate: order.deliveryDate
                     }} 
                     onClick={() => setEditingOrder(order)} 
+                    onQuickConclude={handleQuickConclude}
                     onDelete={deleteOrder}
                   />
                 ))}
@@ -199,10 +217,10 @@ export default function DashboardPage() {
 
           <div className="space-y-8">
              <div className="flex items-center justify-between px-2">
-                <h3 className="text-sm font-black text-zinc-500 uppercase tracking-[0.4em]">Fluxo Recente</h3>
+                <h3 className="text-sm font-black text-zinc-500 uppercase tracking-[0.4em]">Fluxo de Produção Recente</h3>
              </div>
-             <div className="space-y-3">
-                {orders.slice(0, 8).map((order) => (
+             <div className="grid grid-cols-1 gap-3">
+                {orders.slice(0, 15).map((order) => (
                   <OrderCard 
                     key={order.id} 
                     order={{
@@ -213,18 +231,20 @@ export default function DashboardPage() {
                       deliveryDate: order.deliveryDate
                     }} 
                     onClick={() => setEditingOrder(order)} 
+                    onQuickConclude={handleQuickConclude}
                     onDelete={deleteOrder}
                   />
                 ))}
                 {orders.length === 0 && (
-                  <div className="py-20 text-center opacity-20 uppercase font-black text-sm tracking-[0.5em]">Aguardando Dados</div>
+                  <div className="py-20 text-center opacity-20 uppercase font-black text-sm tracking-[0.5em]">Aguardando Sincronização de Dados</div>
                 )}
              </div>
           </div>
         </div>
 
+        {/* MODAL DE CADASTRO/EDIÇÃO */}
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
-          <DialogContent className="max-w-3xl bg-[#0A0A0A] border-white/5 text-white rounded-[2.5rem] overflow-hidden p-0">
+          <DialogContent className="max-w-3xl bg-[#0A0A0A] border-white/5 text-white rounded-[2.5rem] overflow-hidden p-0 shadow-2xl">
             <DialogHeader className="p-10 border-b border-white/5 flex flex-row items-center justify-between bg-white/[0.01]">
               <DialogTitle className="text-3xl font-black text-primary uppercase tracking-tighter">
                 {editingOrder ? 'Ajustar OS' : 'Lançar OS'}
@@ -272,7 +292,7 @@ export default function DashboardPage() {
               <div className="space-y-8">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-black text-primary uppercase tracking-[0.5em]">Itens da Produção</h3>
-                  <button type="button" onClick={() => append({ desc: 'Novo Item', quantity: 1, unitValue: 0 })} className="text-primary text-[10px] font-black uppercase tracking-widest bg-primary/10 px-4 py-2 rounded-full border border-primary/20">
+                  <button type="button" onClick={() => append({ desc: 'Novo Item', quantity: 1, unitValue: 0 })} className="text-primary text-[10px] font-black uppercase tracking-widest bg-primary/10 px-4 py-2 rounded-full border border-primary/20 hover:bg-primary hover:text-black transition-all">
                     + Adicionar
                   </button>
                 </div>
@@ -284,11 +304,14 @@ export default function DashboardPage() {
                     <div className="md:col-span-2">
                        <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-14 text-center text-base" />
                     </div>
+                    <button type="button" onClick={() => remove(index)} className="absolute -right-2 -top-2 bg-destructive text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-all">
+                      <Plus className="w-4 h-4 rotate-45" />
+                    </button>
                   </div>
                 ))}
               </div>
               <div className="flex items-center justify-end pt-12 border-t border-white/5">
-                <Button type="submit" disabled={isSubmitting} className="w-full md:w-64 h-16 bg-primary text-black font-black uppercase tracking-widest rounded-2xl text-sm">
+                <Button type="submit" disabled={isSubmitting} className="w-full md:w-64 h-16 bg-primary text-black font-black uppercase tracking-widest rounded-2xl text-sm hover:shadow-[0_0_50px_rgba(255,95,31,0.5)] transition-all">
                   {isSubmitting ? <Loader2 className="w-6 animate-spin" /> : 'Confirmar OS'}
                 </Button>
               </div>
