@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -31,7 +30,7 @@ export function ProductionHub({ stats }: ProductionHubProps) {
 
   const totalValue = stageData.reduce((acc, item) => acc + item.value, 0);
 
-  const radius = 90;
+  const radius = 80;
   const circumference = 2 * Math.PI * radius;
   let accumulatedOffset = 0;
 
@@ -44,68 +43,62 @@ export function ProductionHub({ stats }: ProductionHubProps) {
 
   const segmentVariants = {
     idle: {
-      strokeWidth: 12,
+      strokeWidth: 10,
       scale: 1,
       opacity: 0.4,
-      filter: "drop-shadow(0 0 0px rgba(0,0,0,0))",
       transition: { duration: 0.4, ease: "easeInOut" }
     },
     default: {
-        strokeWidth: 14,
+        strokeWidth: 12,
         scale: 1,
         opacity: 1,
-        filter: "drop-shadow(0 0 0px rgba(0,0,0,0))",
         transition: fluidSpring
     },
     active: (color: string) => ({
-      strokeWidth: [18, 22, 18],
+      strokeWidth: [14, 18, 14],
       scale: 1.05,
       opacity: 1,
-      filter: `drop-shadow(0 0 25px ${color}) brightness(1.3)`,
+      filter: `drop-shadow(0 0 20px ${color})`,
       transition: {
         strokeWidth: { duration: 3, repeat: Infinity, ease: "easeInOut" },
         scale: fluidSpring,
-        filter: { duration: 0.3 },
-        opacity: { duration: 0.3 }
+        filter: { duration: 0.3 }
       }
     })
   };
 
   return (
     <div className="w-full flex justify-center">
-      <div className="relative w-full max-w-4xl bg-[#09090b] border border-zinc-800/50 rounded-[3rem] p-8 md:p-12 overflow-hidden transition-all duration-500 hover:border-[#FF5F1F]/30 hover:shadow-[0_0_50px_-10px_rgba(255,95,31,0.15)]">
+      <div className="relative w-full max-w-4xl bg-[#09090b] border border-zinc-800/50 rounded-2xl p-6 md:p-10 overflow-hidden transition-all duration-500 hover:border-[#FF5F1F]/30">
         
         <motion.div 
             animate={{ 
                 backgroundColor: activeIndex !== null ? stageData[activeIndex].color : '#FF5F1F',
-                opacity: activeIndex !== null ? 0.1 : 0.05
+                opacity: activeIndex !== null ? 0.08 : 0.04
             }}
             transition={{ duration: 1 }}
-            className="absolute inset-0 blur-[120px] pointer-events-none" 
+            className="absolute inset-0 blur-[100px] pointer-events-none" 
         />
 
-        <div className="flex justify-between items-start mb-10 relative z-10 gap-4">
+        <div className="flex justify-between items-start mb-8 relative z-10 gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-2">
-               <Activity size={14} className="text-[#FF5F1F] animate-pulse" />
-               <span className="text-[#FF5F1F] text-[10px] font-bold uppercase tracking-[0.3em]">
+            <div className="flex items-center gap-2 mb-1.5">
+               <Activity size={12} className="text-[#FF5F1F] animate-pulse" />
+               <span className="text-[#FF5F1F] text-[9px] font-bold uppercase tracking-[0.3em]">
                  Monitoramento Ativo
                </span>
             </div>
-            <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter leading-none">
+            <h2 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter leading-none">
               Reator de <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500">Produção</span>
             </h2>
           </div>
-          <Fingerprint className="text-zinc-700 opacity-50 hidden md:block" size={48} strokeWidth={1} />
+          <Fingerprint className="text-zinc-700 opacity-30 hidden md:block" size={40} strokeWidth={1} />
         </div>
 
-        <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20 relative z-10">
-          <div className="relative w-[280px] h-[280px] md:w-[320px] md:h-[320px] shrink-0 flex items-center justify-center group/chart">
-            <div className="absolute inset-0 border border-zinc-800/20 rounded-full border-dashed animate-[spin_60s_linear_infinite]" />
-            <div className="absolute inset-4 border border-zinc-800/10 rounded-full border-dotted animate-[spin_40s_linear_infinite_reverse]" />
-
+        <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-16 relative z-10">
+          <div className="relative w-[240px] h-[240px] md:w-[280px] md:h-[280px] shrink-0 flex items-center justify-center group/chart">
             <svg viewBox="0 0 240 240" className="w-full h-full -rotate-90 transform overflow-visible">
-               <circle cx="120" cy="120" r={radius} stroke="#1a1a1a" strokeWidth="14" fill="transparent" />
+               <circle cx="120" cy="120" r={radius} stroke="#1a1a1a" strokeWidth="12" fill="transparent" />
 
                {stageData.map((item, index) => {
                  const percentage = (item.value / totalValue) * 100;
@@ -118,61 +111,35 @@ export function ProductionHub({ stats }: ProductionHubProps) {
 
                  return (
                    <motion.circle
-                     key={item.id}
-                     cx="120" cy="120" r={radius}
-                     fill="transparent"
-                     stroke={item.color}
-                     strokeDasharray={dashArray}
-                     strokeDashoffset={dashOffset}
-                     strokeLinecap="round"
-                     variants={segmentVariants}
-                     initial="default"
-                     animate={currentVariant}
-                     custom={item.color}
-                     onMouseEnter={() => setActiveIndex(index)}
-                     onMouseLeave={() => setActiveIndex(null)}
-                     onTouchStart={() => setActiveIndex(index)}
-                     style={{ transformOrigin: 'center' }}
-                     className="cursor-pointer transition-all"
+                     key={item.id} cx="120" cy="120" r={radius} fill="transparent"
+                     stroke={item.color} strokeDasharray={dashArray} strokeDashoffset={dashOffset}
+                     strokeLinecap="round" variants={segmentVariants}
+                     initial="default" animate={currentVariant} custom={item.color}
+                     onMouseEnter={() => setActiveIndex(index)} onMouseLeave={() => setActiveIndex(null)}
+                     className="cursor-pointer transition-all" style={{ transformOrigin: 'center' }}
                    />
                  );
                })}
             </svg>
 
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none overflow-hidden">
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                <AnimatePresence mode='wait'>
                  <motion.div
                    key={activeIndex !== null ? activeIndex : 'total'}
-                   initial={{ opacity: 0, y: 20, scale: 0.9 }}
-                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                   exit={{ opacity: 0, y: -20, scale: 0.9 }}
-                   transition={{ 
-                     opacity: { duration: 0.2 },
-                     y: fluidSpring,
-                     scale: fluidSpring
-                   }}
+                   initial={{ opacity: 0, y: 15, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -15, scale: 0.95 }}
+                   transition={{ opacity: { duration: 0.2 }, y: fluidSpring }}
                    className="flex flex-col items-center"
                  >
-                    <span 
-                        className="text-[10px] uppercase font-bold tracking-[0.3em] mb-1 transition-colors duration-300"
-                        style={{ color: activeIndex !== null ? stageData[activeIndex].color : '#71717a' }}
-                    >
+                    <span className="text-[9px] uppercase font-bold tracking-[0.3em] mb-0.5 transition-colors" style={{ color: activeIndex !== null ? stageData[activeIndex].color : '#71717a' }}>
                       {activeIndex !== null ? stageData[activeIndex].label : "Total Ativo"}
                     </span>
-                    <span 
-                      className="text-6xl md:text-8xl font-black text-white tracking-tighter leading-none transition-all duration-300"
-                      style={{ 
-                        textShadow: activeIndex !== null 
-                          ? `0 0 30px ${stageData[activeIndex].color}` 
-                          : 'none'
-                      }}
-                    >
+                    <span className="text-5xl md:text-7xl font-black text-white tracking-tighter leading-none" style={{ textShadow: activeIndex !== null ? `0 0 25px ${stageData[activeIndex].color}` : 'none' }}>
                       {activeIndex !== null ? stageData[activeIndex].value : totalValue}
                     </span>
                     {activeIndex === null && (
-                      <div className="mt-4 flex items-center gap-1.5 bg-[#FF5F1F]/10 px-2.5 py-1 rounded-full border border-[#FF5F1F]/20">
-                        <Zap size={10} className="text-[#FF5F1F]" fill="#FF5F1F" />
-                        <span className="text-[10px] text-[#FF5F1F] font-bold font-mono uppercase tracking-widest">Online</span>
+                      <div className="mt-3 flex items-center gap-1.5 bg-[#FF5F1F]/10 px-2 py-0.5 rounded-full border border-[#FF5F1F]/20">
+                        <Zap size={8} className="text-[#FF5F1F]" fill="#FF5F1F" />
+                        <span className="text-[8px] text-[#FF5F1F] font-bold font-mono uppercase tracking-widest">Online</span>
                       </div>
                     )}
                  </motion.div>
@@ -180,72 +147,26 @@ export function ProductionHub({ stats }: ProductionHubProps) {
             </div>
           </div>
 
-          <div className="flex-1 w-full space-y-2">
+          <div className="flex-1 w-full space-y-1.5">
              {stageData.map((item, index) => {
                const isActive = activeIndex === index;
-               
                return (
                  <motion.div
-                   key={item.id}
-                   onMouseEnter={() => setActiveIndex(index)}
-                   onMouseLeave={() => setActiveIndex(null)}
-                   onTouchStart={() => setActiveIndex(index)}
-                   animate={{
-                     scale: isActive ? 1.02 : 1,
-                     x: isActive ? 10 : 0,
-                     backgroundColor: isActive ? "rgba(255,255,255,0.05)" : "transparent",
-                     borderColor: isActive ? "rgba(255,255,255,0.1)" : "transparent"
-                   }}
+                   key={item.id} onMouseEnter={() => setActiveIndex(index)} onMouseLeave={() => setActiveIndex(null)}
+                   animate={{ scale: isActive ? 1.01 : 1, x: isActive ? 5 : 0, backgroundColor: isActive ? "rgba(255,255,255,0.03)" : "transparent" }}
                    transition={fluidSpring}
-                   className={cn(
-                     "cursor-pointer relative flex items-center justify-between p-4 rounded-2xl border transition-all duration-300",
-                     isActive ? "border-white/10" : "border-transparent hover:bg-zinc-900/50"
-                   )}
+                   className={cn("cursor-pointer flex items-center justify-between p-3 rounded-xl border border-transparent transition-all", isActive && "border-white/10")}
                  >
-                    <div className="flex items-center gap-4 pl-2">
-                       <div className="relative flex items-center justify-center">
-                          <motion.div 
-                            animate={{
-                                scale: isActive ? [1, 1.5, 1] : 1,
-                                opacity: isActive ? 0.5 : 0
-                            }}
-                            transition={{ duration: 2, repeat: Infinity }}
-                            className="absolute w-full h-full rounded-full"
-                            style={{ backgroundColor: item.color }}
-                          />
-                          <div 
-                            className="w-2.5 h-2.5 rounded-full relative z-10 transition-all duration-300"
-                            style={{ backgroundColor: item.color, boxShadow: isActive ? `0 0 15px ${item.color}` : `0 0 5px ${item.color}` }} 
-                          />
-                       </div>
-                       
+                    <div className="flex items-center gap-3 pl-1">
+                       <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color, boxShadow: `0 0 10px ${item.color}` }} />
                        <div className="flex flex-col">
-                         <span className={cn(
-                           "text-xs font-bold uppercase tracking-wider transition-colors duration-300",
-                           isActive ? "text-white" : "text-zinc-500"
-                         )}>
-                           {item.label}
-                         </span>
-                         <div className="h-1 w-24 bg-zinc-900 rounded-full mt-1.5 overflow-hidden">
-                            <motion.div 
-                              initial={{ width: 0 }}
-                              animate={{ width: `${(item.value / totalValue) * 100}%` }}
-                              transition={{ duration: 1.5 }}
-                              className="h-full rounded-full"
-                              style={{ backgroundColor: item.color }}
-                            />
+                         <span className={cn("text-[10px] font-bold uppercase tracking-wider", isActive ? "text-white" : "text-zinc-500")}>{item.label}</span>
+                         <div className="h-0.5 w-16 bg-zinc-900 rounded-full mt-1 overflow-hidden">
+                            <motion.div initial={{ width: 0 }} animate={{ width: `${(item.value / totalValue) * 100}%` }} className="h-full rounded-full" style={{ backgroundColor: item.color }} />
                          </div>
                        </div>
                     </div>
-
-                    <div className="text-right">
-                       <span className={cn(
-                         "text-xl md:text-2xl font-mono font-black transition-colors duration-300",
-                         isActive ? "text-white" : "text-zinc-600"
-                       )}>
-                         {item.value}
-                       </span>
-                    </div>
+                    <span className={cn("text-lg font-mono font-black", isActive ? "text-white" : "text-zinc-600")}>{item.value}</span>
                  </motion.div>
                );
              })}

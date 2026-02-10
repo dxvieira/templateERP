@@ -63,8 +63,8 @@ export const OrderCard = memo(({ order, onClick, onQuickConclude, onDelete }: Or
         style={{ backgroundColor: statusColor, boxShadow: `0 0 10px ${statusColor}` }}
       />
 
-      {/* CONTEÚDO PRINCIPAL - Padding Reduzido (p-3) */}
-      <div className="relative z-10 flex-1 w-full p-3 pl-5 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-4">
+      {/* CONTEÚDO PRINCIPAL - Padding Reduzido (p-2.5) */}
+      <div className="relative z-10 flex-1 w-full p-2.5 pl-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-4">
         
         <div className="flex flex-col gap-0.5 min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -72,36 +72,36 @@ export const OrderCard = memo(({ order, onClick, onQuickConclude, onDelete }: Or
               #{order.id.slice(-6)}
             </span>
             <div className="flex items-center gap-1">
-               <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: statusColor }} />
-               <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>
+               <div className="w-1 h-1 rounded-full" style={{ backgroundColor: statusColor }} />
+               <span className="text-[8px] font-black uppercase tracking-wider" style={{ color: statusColor }}>
                  {order.status || 'Aguardando'}
                </span>
             </div>
           </div>
           <h3 className={cn(
-            "text-base sm:text-lg font-black truncate transition-colors leading-tight uppercase tracking-tight",
+            "text-sm sm:text-base font-black truncate transition-colors leading-tight uppercase tracking-tight",
             isDone ? "text-zinc-300 group-hover:text-white" : "text-white"
           )}>
             {order.client}
           </h3>
           <div className="flex items-center gap-1 text-zinc-500">
             <Package size={8} />
-            <p className="text-[9px] uppercase truncate font-medium tracking-widest">{order.description}</p>
+            <p className="text-[8px] uppercase truncate font-medium tracking-widest">{order.description}</p>
           </div>
         </div>
 
         <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-3">
           <div className={cn(
-            "flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all",
+            "flex items-center gap-2 px-2 py-1 rounded-md border transition-all",
             isLate ? "bg-red-500/10 border-red-500/30" : "bg-zinc-900/50 border-zinc-800",
             "group-hover:border-[var(--hover-color)]/30"
           )}>
             <div className="text-right">
-              <p className="text-[8px] text-zinc-500 uppercase font-bold tracking-widest">
+              <p className="text-[7px] text-zinc-500 uppercase font-bold tracking-widest">
                 {isDone ? 'Concluído' : 'Prazo'}
               </p>
-              <div className={cn("flex items-center gap-1.5 font-mono font-bold text-base", isLate ? "text-red-500" : "text-white")}>
-                {isDone ? <CheckCircle2 size={12} className="text-green-500" /> : <Calendar size={12} className="text-zinc-500" />}
+              <div className={cn("flex items-center gap-1 font-mono font-bold text-xs", isLate ? "text-red-500" : "text-white")}>
+                {isDone ? <CheckCircle2 size={10} className="text-green-500" /> : <Calendar size={10} className="text-zinc-500" />}
                 {formattedDate}
               </div>
             </div>
@@ -113,7 +113,7 @@ export const OrderCard = memo(({ order, onClick, onQuickConclude, onDelete }: Or
                 onClick={(e) => { e.stopPropagation(); onQuickConclude(order.id); }}
                 className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-primary hover:border-primary/50 transition-all"
               >
-                <CheckCircle2 size={16} />
+                <CheckCircle2 size={14} />
               </button>
             )}
             {onDelete && (
@@ -121,10 +121,10 @@ export const OrderCard = memo(({ order, onClick, onQuickConclude, onDelete }: Or
                 onClick={(e) => { e.stopPropagation(); onDelete(order.id); }}
                 className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-destructive hover:border-destructive/50 transition-all"
               >
-                <Trash2 size={16} />
+                <Trash2 size={14} />
               </button>
             )}
-            <ChevronRight className="text-zinc-800 group-hover:text-[var(--hover-color)] group-hover:translate-x-1 transition-all hidden sm:block" size={16} />
+            <ChevronRight className="text-zinc-800 group-hover:text-[var(--hover-color)] group-hover:translate-x-1 transition-all hidden sm:block" size={14} />
           </div>
         </div>
       </div>
