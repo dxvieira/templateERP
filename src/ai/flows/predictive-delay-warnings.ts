@@ -1,14 +1,8 @@
-// src/ai/flows/predictive-delay-warnings.ts
+
 'use server';
 
 /**
  * @fileOverview This file defines a Genkit flow for predicting potential delays in order fulfillment.
- *
- * The flow takes in current production metrics and order details to predict potential delays for orders currently on track.
- * It exports:
- *   - `predictDelayWarnings`: The main function to trigger the delay prediction flow.
- *   - `PredictDelayWarningsInput`: The TypeScript type definition for the input to the `predictDelayWarnings` function.
- *   - `PredictDelayWarningsOutput`: The TypeScript type definition for the output of the `predictDelayWarnings` function.
  */
 
 import {ai} from '@/ai/genkit';
@@ -16,6 +10,7 @@ import {z} from 'genkit';
 
 // Define the input schema for the flow
 const PredictDelayWarningsInputSchema = z.object({
+  currentDate: z.string().describe('The current date in YYYY-MM-DD format.'),
   productionVelocity: z.number().describe('The current production velocity, measured in orders completed per day.'),
   orders: z.array(
     z.object({
@@ -40,31 +35,16 @@ const PredictDelayWarningsOutputSchema = z.object({
 });
 export type PredictDelayWarningsOutput = z.infer<typeof PredictDelayWarningsOutputSchema>;
 
-// Define the tool to check the current date.
-const checkCurrentDate = ai.defineTool({
-  name: 'checkCurrentDate',
-  description: 'Returns the current date in YYYY-MM-DD format.',
-  inputSchema: z.void(),
-  outputSchema: z.string(),
-}, async () => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
-  const day = String(today.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-});
-
 // Define the prompt for predicting delay warnings
 const predictDelayWarningsPrompt = ai.definePrompt({
   name: 'predictDelayWarningsPrompt',
   input: {schema: PredictDelayWarningsInputSchema},
   output: {schema: PredictDelayWarningsOutputSchema},
-  tools: [checkCurrentDate],
   prompt: `You are a production manager assistant that analyzes current production velocity and order details to predict potential delays for orders currently on track. Orders that are already delayed should not be included in the output.
 
 The current production velocity is {{productionVelocity}} orders per day.
 
-Here is the current date, according to the checkCurrentDate tool: {{ await checkCurrentDate }}
+Here is the current date: {{currentDate}}
 
 Analyze the following orders:
 
@@ -99,9 +79,8 @@ const predictDelayWarningsFlow = ai.defineFlow(
 
 /**
  * Predicts potential delays for orders currently on track.
- * @param input - The input data for the prediction.
- * @returns A promise that resolves to the prediction result.
  */
-export async function predictDelayWarnings(input: PredictDelayWarningsInput): Promise<PredictDelayWarningsOutput> {
-  return predictDelayWarningsFlow(input);
+export async function predictDelayWarnings(input: Omit<PredictDelayWarningsInput, 'currentDate'>): Promise<PredictDelayWarningsOutput> {
+  const today = new Date().toISOString().split('T')[0];
+  return predictDelayWarningsFlow({ ...input, currentDate: today });
 }

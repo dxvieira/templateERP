@@ -15,7 +15,8 @@ import {
   ChevronRight,
   Plus,
   Trash2,
-  Loader2
+  Loader2,
+  Calendar
 } from 'lucide-react';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { useOrders } from '@/hooks/use-orders';
@@ -42,7 +43,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 
-// --- SCHEMA DE VALIDAÇÃO (Compatível com Gestão de OS) ---
+// --- SCHEMA DE VALIDAÇÃO ---
 const orderSchema = z.object({
   client: z.string().min(1, 'Nome do cliente é obrigatório'),
   deliveryDate: z.string().default(''),
@@ -76,7 +77,7 @@ const AnimatedNumber = ({ value }: { value: number }) => {
   return <span>{displayValue}</span>;
 };
 
-// --- COMPONENTE: CARD DE ALTO IMPACTO ---
+// --- COMPONENTE: CARD DE ALTO IMPACTO (HIGH VOLTAGE) ---
 const ImpactCard = ({ 
   children, 
   className = "", 
@@ -94,20 +95,20 @@ const ImpactCard = ({
     transition={{ duration: 0.5, delay }}
     whileHover={{ 
       y: -8, 
-      scale: 1.01,
-      transition: { type: "spring", stiffness: 400, damping: 15 }
+      scale: 1.02,
+      transition: { type: "spring", stiffness: 400, damping: 10 }
     }}
     className={cn(
       "relative overflow-hidden rounded-3xl border cursor-default transition-all duration-300",
       isCritical 
-        ? "border-destructive/30 bg-destructive/5 hover:border-destructive hover:bg-destructive/10 hover:shadow-[0_0_40px_-10px_rgba(255,0,0,0.4)]" 
+        ? "border-destructive/30 bg-destructive/5 hover:border-destructive hover:bg-destructive/10 hover:shadow-[0_0_50px_-10px_rgba(255,0,0,0.4)]" 
         : "border-zinc-800 bg-[#0F0F0F] hover:border-primary hover:bg-primary/10 hover:shadow-[0_0_50px_-10px_rgba(255,95,31,0.4)]",
       "group",
       className
     )}
   >
     <div className={cn(
-      "absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-1 blur-[8px] opacity-0 group-hover:opacity-100 transition-opacity duration-500",
+      "absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-1 blur-[10px] opacity-0 group-hover:opacity-100 transition-opacity duration-500",
       isCritical ? "bg-destructive" : "bg-primary"
     )} />
     
@@ -117,7 +118,7 @@ const ImpactCard = ({
   </motion.div>
 );
 
-// --- COMPONENTE: ROW DE PEDIDO ---
+// --- COMPONENTE: ROW DE PEDIDO (HIGH VOLTAGE) ---
 const ImpactRow = ({ order, index, isDelayed = false, onClick }: { order: any, index: number, isDelayed?: boolean, onClick: () => void }) => {
   const themeColor = isDelayed ? "text-destructive" : "text-primary";
   const bgColor = isDelayed ? "from-destructive/20" : "from-primary/20";
@@ -127,7 +128,7 @@ const ImpactRow = ({ order, index, isDelayed = false, onClick }: { order: any, i
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.05 }}
-      whileHover={{ scale: 1.005, x: 5 }}
+      whileHover={{ scale: 1.01, x: 5 }}
       onClick={onClick}
       className="group relative flex items-center justify-between p-4 rounded-2xl border border-transparent bg-white/5 mb-2 cursor-pointer overflow-hidden"
     >
@@ -220,6 +221,11 @@ export default function DashboardPage() {
     }, 0) || 0;
   }, [watchedItems]);
 
+  const clientsQuery = useMemoFirebase(() => 
+    firestore ? query(collection(firestore, 'clients'), orderBy('name', 'asc')) : null
+  , [firestore]);
+  const { data: clients } = useCollection(clientsQuery);
+
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.replace('/login');
@@ -252,7 +258,7 @@ export default function DashboardPage() {
       setIsModalOpen(false);
       setEditingOrder(null);
     } catch (err) {
-      // Erro tratado pelo errorEmitter no useOrders
+      // Erro tratado pelo errorEmitter
     } finally {
       setIsSubmitting(false);
     }
@@ -273,11 +279,6 @@ export default function DashboardPage() {
     o.status !== 'Concluído' && 
     o.status !== 'Entregue'
   );
-
-  const clientsQuery = useMemoFirebase(() => 
-    firestore ? query(collection(firestore, 'clients'), orderBy('name', 'asc')) : null
-  , [firestore]);
-  const { data: clients } = useCollection(clientsQuery);
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden selection:bg-primary selection:text-black relative font-body">
