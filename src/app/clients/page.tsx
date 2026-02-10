@@ -10,14 +10,15 @@ import {
   Search, 
   Plus, 
   Phone, 
-  MapPin, 
   Building2, 
   Mail,
   X,
   Save,
   Loader2,
   Trash2,
-  ChevronRight
+  ChevronRight,
+  FileBadge,
+  MapPin
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -33,14 +34,15 @@ export default function ClientsPage() {
   const [editingClient, setEditingClient] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Estados do Formulário (Expansão para Dossiê Completo)
+  // Estados do Formulário (Dossiê Completo)
   const [formData, setFormData] = useState({
     name: '',
     company: '',
     phone: '',
     email: '',
     address: '',
-    zip: ''
+    zip: '',
+    cpfCnpj: ''
   });
 
   // --- CARREGAR CLIENTES VIA HOOKS ---
@@ -56,7 +58,8 @@ export default function ClientsPage() {
     if (!clients) return [];
     return clients.filter(client => 
       client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.company?.toLowerCase().includes(searchTerm.toLowerCase())
+      client.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (client.cpfCnpj && client.cpfCnpj.includes(searchTerm))
     );
   }, [clients, searchTerm]);
 
@@ -67,6 +70,7 @@ export default function ClientsPage() {
     
     setIsSubmitting(true);
     const clientRef = editingClient ? doc(firestore, 'clients', editingClient.id) : doc(collection(firestore, 'clients'));
+    
     const payload = {
       ...formData,
       id: clientRef.id,
@@ -109,17 +113,23 @@ export default function ClientsPage() {
   const openModal = (client: any = null) => {
     if (client) {
       setEditingClient(client);
+      // Garantir que campos de objeto (como endereço estruturado) sejam convertidos em string ou ignorados para evitar erro de renderização
+      const safeAddress = typeof client.address === 'object' 
+        ? `${client.address.street || ''}, ${client.address.number || ''} ${client.address.neighborhood || ''}`.trim()
+        : client.address || '';
+
       setFormData({ 
-        name: client.name, 
+        name: client.name || '', 
         company: client.company || '', 
         phone: client.phone || '', 
         email: client.email || '',
-        address: client.address || '',
-        zip: client.zip || ''
+        address: safeAddress,
+        zip: client.zip || '',
+        cpfCnpj: client.cpfCnpj || ''
       });
     } else {
       setEditingClient(null);
-      setFormData({ name: '', company: '', phone: '', email: '', address: '', zip: '' });
+      setFormData({ name: '', company: '', phone: '', email: '', address: '', zip: '', cpfCnpj: '' });
     }
     setIsModalOpen(true);
   };
@@ -161,7 +171,7 @@ export default function ClientsPage() {
               shadow-[0_10px_30px_-5px_rgba(255,95,31,0.4)] active:scale-95
             "
           >
-            <Plus size={20} strokeWidth={3} /> Novo Cliente
+            <Plus size={20} strokeWidth={3} /> Novo Parceiro
           </button>
         </div>
 
@@ -172,7 +182,7 @@ export default function ClientsPage() {
           </div>
           <input 
             type="text"
-            placeholder="Filtrar parceiros por nome ou empresa..."
+            placeholder="Buscar por nome, empresa ou CPF/CNPJ..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="
@@ -187,7 +197,7 @@ export default function ClientsPage() {
           </div>
         </div>
 
-        {/* --- GRID DE CARDS (Clique Único) --- */}
+        {/* --- GRID DE CARDS (Clique Único para Dossiê) --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           <AnimatePresence mode="popLayout">
             {filteredClients.map((client, idx) => (
@@ -212,7 +222,7 @@ export default function ClientsPage() {
                 {/* Header do Card */}
                 <div className="flex justify-between items-start mb-8 relative z-10">
                   <div className="flex items-center gap-5 min-w-0">
-                    {/* Avatar Gerado */}
+                    {/* Avatar Iniciais */}
                     <div className="shrink-0 w-16 h-16 rounded-3xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[#FF5F1F] font-black text-2xl shadow-inner group-hover:scale-110 transition-transform duration-500">
                       {client.name.substring(0,2).toUpperCase()}
                     </div>
@@ -220,25 +230,32 @@ export default function ClientsPage() {
                       <h3 className="text-xl font-black text-white leading-tight uppercase tracking-tight group-hover:text-[#FF5F1F] transition-colors truncate">
                         {client.name}
                       </h3>
-                      {client.company && (
-                        <p className="text-[10px] font-bold text-zinc-500 flex items-center gap-2 mt-1 uppercase tracking-widest truncate">
-                          <Building2 size={12} className="text-[#FF5F1F]" /> {client.company}
-                        </p>
-                      )}
+                      <div className="flex flex-col mt-1">
+                        {client.company && (
+                          <p className="text-[10px] font-bold text-zinc-500 flex items-center gap-2 uppercase tracking-widest truncate">
+                            <Building2 size={12} className="text-[#FF5F1F]" /> {client.company}
+                          </p>
+                        )}
+                        {client.cpfCnpj && (
+                          <p className="text-[9px] font-mono text-zinc-600 flex items-center gap-2 mt-0.5 truncate uppercase">
+                            <FileBadge size={11} className="text-zinc-700" /> {client.cpfCnpj}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <ChevronRight className="text-zinc-800 group-hover:text-[#FF5F1F] group-hover:translate-x-1 transition-all" size={24} />
                 </div>
 
-                {/* Resumo de Contato (Evita quebra) */}
+                {/* Resumo de Contato */}
                 <div className="space-y-3 relative z-10">
                   <div className="flex items-center gap-4 text-xs font-bold text-zinc-400">
                     <Phone size={16} className="text-zinc-700 group-hover:text-[#FF5F1F] transition-colors" />
-                    <span className="truncate">{client.phone || 'N/A'}</span>
+                    <span className="truncate">{client.phone || 'Sem telefone'}</span>
                   </div>
                   <div className="flex items-center gap-4 text-xs font-bold text-zinc-400">
                     <Mail size={16} className="text-zinc-700 group-hover:text-[#FF5F1F] transition-colors" />
-                    <span className="truncate">{client.email || 'N/A'}</span>
+                    <span className="truncate">{client.email || 'Sem e-mail'}</span>
                   </div>
                 </div>
               </motion.div>
@@ -248,7 +265,7 @@ export default function ClientsPage() {
           {isLoading && (
             <div className="col-span-full py-24 flex flex-col items-center gap-4">
               <Loader2 className="w-12 h-12 text-[#FF5F1F] animate-spin" />
-              <p className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.5em]">Sincronizando Dossiês Cloud...</p>
+              <p className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.5em]">Sincronizando Dossiês...</p>
             </div>
           )}
 
@@ -274,36 +291,45 @@ export default function ClientsPage() {
                 className="w-full max-w-2xl bg-[#0A0A0A] border border-white/5 rounded-[3.5rem] shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]"
               >
                 {/* Header do Modal */}
-                <div className="flex items-center justify-between p-10 pb-6">
+                <div className="flex items-center justify-between p-10 pb-6 border-b border-white/5 bg-white/[0.01]">
                   <div>
                     <h2 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
-                      {editingClient ? 'Detalhes do Dossiê' : 'Novo Parceiro'}
+                      {editingClient ? 'Detalhes do Parceiro' : 'Novo Parceiro'}
                       <div className="w-2 h-2 rounded-full bg-[#FF5F1F] animate-pulse shadow-[0_0_10px_rgba(255,95,31,1)]" />
                     </h2>
-                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-1">Sincronização de Rede Ativa</p>
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-1">Dados Sincronizados em Tempo Real</p>
                   </div>
                   <button onClick={closeModal} className="p-3 bg-white/5 rounded-full text-zinc-500 hover:text-white transition-colors">
                     <X size={24}/>
                   </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-10 pt-4 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-10 pt-8 custom-scrollbar">
                   <form id="clientForm" onSubmit={handleSave} className="space-y-10">
                     
-                    {/* Identificação */}
+                    {/* Identificação Principal */}
                     <div className="space-y-6">
                       <div className="space-y-2">
-                        <label className="text-[10px] text-[#FF5F1F] uppercase font-black tracking-[0.3em] ml-1">Nome Completo do Contato</label>
+                        <label className="text-[10px] text-[#FF5F1F] uppercase font-black tracking-[0.3em] ml-1">Nome Completo do Contato *</label>
                         <input 
                           required 
                           className="w-full bg-white/[0.02] border border-white/5 rounded-2xl p-5 text-white focus:border-[#FF5F1F] focus:bg-white/[0.05] outline-none transition-all" 
                           value={formData.name} 
                           onChange={e => setFormData({...formData, name: e.target.value})} 
-                          placeholder="Ex: Roberto Visual"
+                          placeholder="Ex: João Silva"
                         />
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">CPF ou CNPJ</label>
+                          <input 
+                            className="w-full bg-white/[0.02] border border-white/5 rounded-2xl p-5 text-white focus:border-[#FF5F1F] outline-none transition-all font-mono" 
+                            value={formData.cpfCnpj} 
+                            onChange={e => setFormData({...formData, cpfCnpj: e.target.value})} 
+                            placeholder="000.000.000-00"
+                          />
+                        </div>
                         <div className="space-y-2">
                           <label className="text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">Empresa / Organização</label>
                           <input 
@@ -313,8 +339,14 @@ export default function ClientsPage() {
                             placeholder="Opcional"
                           />
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Contato e Localização */}
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                          <label className="text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">WhatsApp / Fone</label>
+                          <label className="text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">WhatsApp / Telefone</label>
                           <input 
                             className="w-full bg-white/[0.02] border border-white/5 rounded-2xl p-5 text-white focus:border-[#FF5F1F] outline-none transition-all" 
                             value={formData.phone} 
@@ -322,25 +354,21 @@ export default function ClientsPage() {
                             placeholder="(00) 00000-0000"
                           />
                         </div>
-                      </div>
-                    </div>
-
-                    {/* Contato e Localização */}
-                    <div className="space-y-6">
-                      <div className="space-y-2">
-                        <label className="text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">Correio Eletrônico (E-mail)</label>
-                        <input 
-                          type="email"
-                          className="w-full bg-white/[0.02] border border-white/5 rounded-2xl p-5 text-white focus:border-[#FF5F1F] outline-none transition-all" 
-                          value={formData.email} 
-                          onChange={e => setFormData({...formData, email: e.target.value})} 
-                          placeholder="parceiro@viscomm.com"
-                        />
+                        <div className="space-y-2">
+                          <label className="text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">E-mail Corporativo</label>
+                          <input 
+                            type="email"
+                            className="w-full bg-white/[0.02] border border-white/5 rounded-2xl p-5 text-white focus:border-[#FF5F1F] outline-none transition-all" 
+                            value={formData.email} 
+                            onChange={e => setFormData({...formData, email: e.target.value})} 
+                            placeholder="parceiro@viscomm.com"
+                          />
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="md:col-span-2 space-y-2">
-                          <label className="text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">Endereço Principal</label>
+                          <label className="text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1">Endereço de Entrega</label>
                           <input 
                             className="w-full bg-white/[0.02] border border-white/5 rounded-2xl p-5 text-white focus:border-[#FF5F1F] outline-none transition-all" 
                             value={formData.address} 
@@ -370,7 +398,7 @@ export default function ClientsPage() {
                       onClick={() => handleDelete(editingClient.id)} 
                       className="flex-1 py-5 rounded-2xl bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive hover:text-white transition-all font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-3"
                     >
-                      <Trash2 size={18} /> Remover
+                      <Trash2 size={18} /> Remover Parceiro
                     </button>
                   )}
                   <div className="flex-[2] flex gap-4">
