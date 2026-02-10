@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -25,7 +26,7 @@ export function ProductionHub({ stats }: ProductionHubProps) {
     { id: 'imp', label: 'Impressão', value: stats.impressao, color: '#3B82F6' },
     { id: 'serr', label: 'Serralheria', value: stats.serralheria, color: '#EAB308' },
     { id: 'acab', label: 'Acabamento', value: stats.acabamento, color: '#FF5F1F' },
-    { id: 'inst', label: 'Instalação', value: stats.instalacao, color: '#22c55e' },
+    { id: 'inst', label: 'Instalação', value: stats.instalacao, color: '#8B5CF6' },
   ].filter(s => s.value > 0), [stats]);
 
   const totalValue = stageData.reduce((acc, item) => acc + item.value, 0);

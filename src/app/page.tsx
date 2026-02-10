@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -106,7 +107,6 @@ export default function DashboardPage() {
       .sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
   }, [orders]);
 
-  // Cálculos Memoizados Secundários
   const totalValue = useMemo(() => {
     return watchedItems?.reduce((acc, item) => {
       const q = Number(item.quantity) || 0;
@@ -115,7 +115,6 @@ export default function DashboardPage() {
     }, 0) || 0;
   }, [watchedItems]);
 
-  // Efeitos colaterais
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.replace('/login');
@@ -135,7 +134,6 @@ export default function DashboardPage() {
     }
   }, [editingOrder, reset]);
 
-  // Handlers
   const onSubmit = async (data: OrderFormValues) => {
     setIsSubmitting(true);
     try {
@@ -196,7 +194,6 @@ export default function DashboardPage() {
           </Button>
         </header>
 
-        {/* REATOR ULTRA-FLUIDO */}
         <section className="relative z-10">
           <ProductionHub stats={stats} />
         </section>
@@ -268,19 +265,19 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* CAMADA 3: PEDIDOS CONCLUÍDOS (HISTÓRICO) */}
+        {/* CAMADA 3: ENTREGAS REALIZADAS (TROFÉUS) */}
         {completedList.length > 0 && (
-          <section className="space-y-8 opacity-60 hover:opacity-100 transition-opacity duration-500">
-            <div className="flex items-center gap-4 px-2 border-b border-zinc-800 pb-4">
-              <div className="p-2 bg-emerald-500/10 rounded-xl">
+          <section className="space-y-8 animate-in fade-in duration-700">
+            <div className="flex items-center gap-4 px-2 border-b border-green-500/20 pb-4">
+              <div className="p-2 bg-emerald-500/10 rounded-xl border border-green-500/20">
                 <CheckCircle2 className="text-emerald-500 w-6 h-6" />
               </div>
               <div className="flex-1">
-                <h3 className="text-sm font-black text-zinc-400 uppercase tracking-[0.4em]">Pedidos Concluídos</h3>
-                <p className="text-zinc-600 text-[10px] uppercase font-bold tracking-widest mt-1">Histórico Recente ({completedList.length})</p>
+                <h3 className="text-sm font-black text-white uppercase tracking-[0.4em]">Entregas Realizadas</h3>
+                <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-1">Troféus de Produção ({completedList.length})</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-3 grayscale-[0.5] hover:grayscale-0 transition-all duration-300">
+            <div className="grid grid-cols-1 gap-3">
               {completedList.map((order) => (
                 <OrderCard 
                   key={order.id} 
