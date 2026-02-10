@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -12,7 +13,11 @@ import {
   Loader2,
   AlertTriangle,
   Layers,
-  CheckCircle2
+  CheckCircle2,
+  Hash,
+  Box,
+  FileText,
+  Trash2
 } from 'lucide-react';
 import { startOfWeek, endOfWeek, isWithinInterval, parseISO } from 'date-fns';
 
@@ -28,6 +33,7 @@ import { WeeklyTargetCard } from '@/components/dashboard/WeeklyTargetCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { 
   Dialog, 
   DialogContent, 
@@ -48,9 +54,10 @@ const orderSchema = z.object({
   seller: z.string().default('Vendedor Geral'),
   status: z.enum(['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Concluído']).default('Arte'),
   items: z.array(z.object({
-    desc: z.string().default('Novo Item'),
+    desc: z.string().default(''),
     quantity: z.coerce.number().min(0).default(1),
     unitValue: z.coerce.number().min(0).default(0),
+    observation: z.string().optional(),
   })).min(1),
 });
 
@@ -78,7 +85,7 @@ export default function DashboardPage() {
     defaultValues: {
       client: '',
       status: 'Arte',
-      items: [{ desc: 'Novo Item', quantity: 1, unitValue: 0 }]
+      items: [{ desc: '', quantity: 1, unitValue: 0, observation: '' }]
     }
   });
 
@@ -92,7 +99,7 @@ export default function DashboardPage() {
   const weekStart = startOfWeek(today, { weekStartsOn: 0 });
   const weekEnd = endOfWeek(today, { weekStartsOn: 0 });
 
-  // 1. Contador de Pedidos Pendentes da Semana (Para o WeeklyTargetCard)
+  // 1. Contador de Pedidos Pendentes da Semana
   const weeklyPendingCount = useMemo(() => {
     return orders.filter(o => {
       if (!o.deliveryDate || ['Concluído', 'Entregue'].includes(o.status)) return false;
@@ -122,7 +129,7 @@ export default function DashboardPage() {
     ).sort((a, b) => (a.deliveryDate || '9999').localeCompare(b.deliveryDate || '9999'));
   }, [orders, todayStr]);
 
-  // 4. Pedidos Concluídos (Troféus)
+  // 4. Pedidos Concluídos
   const completedList = useMemo(() => {
     return orders.filter(o => ['Concluído', 'Entregue'].includes(o.status))
       .sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
@@ -149,7 +156,7 @@ export default function DashboardPage() {
         deliveryDate: editingOrder.deliveryDate || '',
         seller: editingOrder.seller || 'Vendedor Geral',
         status: editingOrder.status,
-        items: editingOrder.items || [{ desc: 'Novo Item', quantity: 1, unitValue: 0 }]
+        items: editingOrder.items || [{ desc: '', quantity: 1, unitValue: 0, observation: '' }]
       });
       setIsModalOpen(true);
     }
@@ -194,28 +201,27 @@ export default function DashboardPage() {
       <DashboardSidebar />
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
 
-      <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-10 mt-16 md:mt-0 z-10 pb-24">
+      <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-8 mt-16 md:mt-0 z-10 pb-24">
         <header className="flex flex-col md:flex-row justify-between items-end gap-6">
-          <div className="space-y-2">
+          <div className="space-y-1">
             <div className="flex items-center gap-2 text-primary">
               <Activity size={14} className="animate-pulse" />
               <span className="text-[9px] font-black uppercase tracking-[0.4em]">Terminal Operacional VisComm</span>
             </div>
-            <h1 className="text-3xl md:text-4xl font-black tracking-tighter text-white uppercase leading-none">
+            <h1 className="text-3xl md:text-3xl font-black tracking-tighter text-white uppercase leading-none">
               Gestão de <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-400">Fluxo</span>
             </h1>
           </div>
           
           <Button 
             onClick={() => { setEditingOrder(null); reset(); setIsModalOpen(true); }}
-            className="bg-primary text-black font-black py-6 px-10 rounded-xl transition-all duration-300 flex items-center gap-3 uppercase tracking-widest text-xs shadow-[0_5px_20px_-5px_rgba(255,95,31,0.3)] hover:bg-white active:scale-95"
+            className="bg-primary text-black font-black h-12 px-8 rounded-xl transition-all duration-300 flex items-center gap-3 uppercase tracking-widest text-[10px] shadow-[0_5px_20px_-5px_rgba(255,95,31,0.3)] hover:bg-white active:scale-95"
           >
               <Plus size={18} strokeWidth={3} />
               Lançar Pedido
           </Button>
         </header>
 
-        {/* HUB SUPERIOR: REATOR + META DA SEMANA */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10">
           <div className="lg:col-span-2">
             <ProductionHub stats={stats} />
@@ -225,18 +231,16 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* CAMADA 1: PEDIDOS CRÍTICOS (WAR ROOM) */}
         {warRoom.length > 0 && (
-          <section className="space-y-6 animate-in slide-in-from-top-4 duration-500">
+          <section className="space-y-4 animate-in slide-in-from-top-4 duration-500">
             <div className="flex items-center gap-3 px-2 border-b border-destructive/20 pb-3">
               <div className="p-1.5 bg-destructive/10 rounded-lg animate-pulse">
-                <AlertTriangle className="text-destructive w-5 h-5" />
+                <AlertTriangle className="text-destructive w-4 h-4" />
               </div>
               <div className="flex-1">
-                <h3 className="text-xs font-black text-white uppercase tracking-[0.3em] flex items-center gap-2">
-                  Pedidos Críticos <span className="bg-destructive/20 text-destructive text-[9px] px-2 py-0.5 rounded-full border border-destructive/30 font-bold">{warRoom.length} EM ALERTA</span>
+                <h3 className="text-[10px] font-black text-white uppercase tracking-[0.3em] flex items-center gap-2">
+                  Pedidos Críticos <span className="bg-destructive/20 text-destructive text-[8px] px-2 py-0.5 rounded-full border border-destructive/30 font-bold">{warRoom.length} EM ALERTA</span>
                 </h3>
-                <p className="text-zinc-500 text-[9px] uppercase font-bold tracking-widest mt-0.5">Atrasados ou Entrega Hoje</p>
               </div>
             </div>
             
@@ -261,15 +265,13 @@ export default function DashboardPage() {
           </section>
         )}
 
-        {/* CAMADA 2: FILA DE PEDIDOS */}
-        <section className="space-y-6">
+        <section className="space-y-4">
           <div className="flex items-center gap-3 px-2 border-b border-white/5 pb-3">
             <div className="p-1.5 bg-primary/10 rounded-lg">
-              <Layers className="text-primary w-5 h-5" />
+              <Layers className="text-primary w-4 h-4" />
             </div>
             <div className="flex-1">
-              <h3 className="text-xs font-black text-white uppercase tracking-[0.3em]">Fila de Pedidos</h3>
-              <p className="text-zinc-500 text-[9px] uppercase font-bold tracking-widest mt-0.5">Próximas Entregas ({productionQueue.length})</p>
+              <h3 className="text-[10px] font-black text-white uppercase tracking-[0.3em]">Fila de Pedidos ({productionQueue.length})</h3>
             </div>
           </div>
 
@@ -291,22 +293,17 @@ export default function DashboardPage() {
                 />
               </div>
             ))}
-            {productionQueue.length === 0 && warRoom.length === 0 && (
-              <div className="col-span-full py-16 text-center opacity-20 uppercase font-black text-xs tracking-[0.4em] w-full">Sem pedidos ativos na fila</div>
-            )}
           </div>
         </section>
 
-        {/* CAMADA 3: PEDIDOS CONCLUÍDOS */}
         {completedList.length > 0 && (
-          <section className="space-y-6 animate-in fade-in duration-700">
+          <section className="space-y-4 animate-in fade-in duration-700">
             <div className="flex items-center gap-3 px-2 border-b border-green-500/20 pb-3">
               <div className="p-1.5 bg-emerald-500/10 rounded-lg border border-green-500/20">
-                <CheckCircle2 className="text-emerald-500 w-5 h-5" />
+                <CheckCircle2 className="text-emerald-500 w-4 h-4" />
               </div>
               <div className="flex-1">
-                <h3 className="text-xs font-black text-white uppercase tracking-[0.3em]">Pedidos Concluídos</h3>
-                <p className="text-zinc-500 text-[9px] uppercase font-bold tracking-widest mt-0.5">Troféus de Produção ({completedList.length})</p>
+                <h3 className="text-[10px] font-black text-white uppercase tracking-[0.3em]">Pedidos Concluídos ({completedList.length})</h3>
               </div>
             </div>
 
@@ -331,41 +328,40 @@ export default function DashboardPage() {
           </section>
         )}
 
-        {/* MODAL DE CADASTRO/EDIÇÃO */}
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
-          <DialogContent className="max-w-3xl bg-[#0A0A0A] border-white/5 text-white rounded-2xl overflow-hidden p-0 shadow-2xl">
-            <DialogHeader className="p-8 border-b border-white/5 flex flex-row items-center justify-between bg-white/[0.01]">
-              <DialogTitle className="text-2xl font-black text-primary uppercase tracking-tighter">
-                {editingOrder ? 'Ajustar Pedido' : 'Lançar Pedido'}
+          <DialogContent className="max-w-3xl bg-[#0A0A0A] border-white/5 text-white rounded-[2rem] overflow-hidden p-0 shadow-2xl">
+            <DialogHeader className="p-6 md:p-8 border-b border-white/5 flex flex-row items-center justify-between bg-zinc-900/30">
+              <DialogTitle className="text-xl font-black text-primary uppercase tracking-tighter">
+                {editingOrder ? 'Ajustar Pedido' : 'Novo Lançamento'}
               </DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit(onSubmit)} className="p-8 space-y-8 max-h-[75vh] overflow-y-auto no-scrollbar">
+            <form onSubmit={handleSubmit(onSubmit)} className="p-6 md:p-8 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="text-[10px] uppercase tracking-widest text-zinc-500 font-black">Cliente*</Label>
-                  <Input {...register('client')} list="client-list" className="bg-white/5 border-white/5 h-12 rounded-xl text-base focus:border-primary/50" />
+                <div className="space-y-1.5">
+                  <Label className="text-[9px] uppercase tracking-widest text-zinc-500 font-black">Cliente*</Label>
+                  <Input {...register('client')} list="client-list" className="bg-white/5 border-white/5 h-10 rounded-lg text-sm focus:border-primary/50" />
                   <datalist id="client-list">
                     {clients?.map(c => <option key={c.id} value={c.name} />)}
                   </datalist>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] uppercase tracking-widest text-zinc-500 font-black">Entrega</Label>
-                  <Input type="date" {...register('deliveryDate')} className="bg-white/5 border-white/5 h-12 rounded-xl text-base focus:border-primary/50" />
+                <div className="space-y-1.5">
+                  <Label className="text-[9px] uppercase tracking-widest text-zinc-500 font-black">Entrega</Label>
+                  <Input type="date" {...register('deliveryDate')} className="bg-white/5 border-white/5 h-10 rounded-lg text-sm focus:border-primary/50" />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="text-[10px] uppercase tracking-widest text-zinc-500 font-black">Vendedor</Label>
-                  <Input {...register('seller')} className="bg-white/5 border-white/5 h-12 rounded-xl text-base" />
+                <div className="space-y-1.5">
+                  <Label className="text-[9px] uppercase tracking-widest text-zinc-500 font-black">Vendedor</Label>
+                  <Input {...register('seller')} className="bg-white/5 border-white/5 h-10 rounded-lg text-sm" />
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-[10px] uppercase tracking-widest text-zinc-500 font-black">Etapa</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-[9px] uppercase tracking-widest text-zinc-500 font-black">Etapa</Label>
                   <Controller
                     name="status"
                     control={control}
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger className="bg-white/5 border-white/5 h-12 rounded-xl text-base">
+                        <SelectTrigger className="bg-white/5 border-white/5 h-10 rounded-lg text-sm">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-950 border-white/10 text-white">
@@ -378,30 +374,57 @@ export default function DashboardPage() {
                   />
                 </div>
               </div>
-              <div className="space-y-6">
+              
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.4em]">Itens da Produção</h3>
-                  <button type="button" onClick={() => append({ desc: 'Novo Item', quantity: 1, unitValue: 0 })} className="text-primary text-[9px] font-black uppercase tracking-widest bg-primary/10 px-3 py-1.5 rounded-full border border-primary/20 hover:bg-primary hover:text-black transition-all">
-                    + Adicionar
+                  <button type="button" onClick={() => append({ desc: '', quantity: 1, unitValue: 0, observation: '' })} className="text-primary text-[8px] font-black uppercase tracking-widest bg-primary/10 px-3 py-1 rounded-full border border-primary/20 hover:bg-primary hover:text-black transition-all">
+                    + Item
                   </button>
                 </div>
-                {fields.map((field, index) => (
-                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 p-5 bg-white/[0.02] rounded-xl border border-white/5 relative group">
-                    <div className="md:col-span-10">
-                      <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/5 h-10 text-sm" placeholder="Descrição Técnica" />
-                    </div>
-                    <div className="md:col-span-2">
-                       <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-10 text-center text-sm" />
-                    </div>
-                    <button type="button" onClick={() => remove(index)} className="absolute -right-2 -top-2 bg-destructive text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all">
-                      <Plus className="w-3 h-3 rotate-45" />
-                    </button>
-                  </div>
-                ))}
+                
+                <div className="space-y-3">
+                  {fields.map((field, index) => (
+                    <motion.div 
+                      layout
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      key={field.id} 
+                      className="bg-white/[0.02] border border-white/5 rounded-xl p-4 relative group"
+                    >
+                      <div className="flex flex-col gap-3">
+                        <div className="flex gap-3 items-end">
+                          <div className="flex-1 space-y-1">
+                            <Label className="text-[8px] text-zinc-500 uppercase font-black tracking-widest flex items-center gap-1">
+                              <Box size={8} /> Material
+                            </Label>
+                            <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/5 h-9 text-xs" placeholder="Lona, ACM..." />
+                          </div>
+                          <div className="w-16 space-y-1">
+                            <Label className="text-[8px] text-zinc-500 uppercase font-black tracking-widest flex items-center gap-1">
+                              <Hash size={8} /> Qtd.
+                            </Label>
+                            <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-9 text-center text-xs" />
+                          </div>
+                          <button type="button" onClick={() => remove(index)} className="p-2 text-zinc-600 hover:text-destructive">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[8px] text-zinc-500 uppercase font-black tracking-widest flex items-center gap-1">
+                            <FileText size={8} /> Obs. Técnica
+                          </Label>
+                          <Textarea {...register(`items.${index}.observation`)} className="bg-transparent border-white/5 min-h-[50px] text-xs resize-none" placeholder="Detalhes de acabamento..." />
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
               </div>
-              <div className="flex items-center justify-end pt-8 border-t border-white/5">
-                <Button type="submit" disabled={isSubmitting} className="w-full md:w-56 h-12 bg-primary text-black font-black uppercase tracking-widest rounded-xl text-xs hover:shadow-[0_0_30px_rgba(255,95,31,0.5)] transition-all">
-                  {isSubmitting ? <Loader2 className="w-5 animate-spin" /> : 'Confirmar Pedido'}
+
+              <div className="flex items-center justify-end pt-6 border-t border-white/5">
+                <Button type="submit" disabled={isSubmitting} className="w-full md:w-48 h-10 bg-primary text-black font-black uppercase tracking-widest rounded-xl text-[10px] hover:shadow-[0_0_30px_rgba(255,95,31,0.5)] transition-all">
+                  {isSubmitting ? <Loader2 className="w-4 animate-spin" /> : 'Gravar Pedido'}
                 </Button>
               </div>
             </form>

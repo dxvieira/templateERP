@@ -55,7 +55,8 @@
             "type": "object",
             "properties": {
               "desc": {
-                "type": "string"
+                "type": "string",
+                "description": "Material or service description"
               },
               "size": {
                 "type": "string"
@@ -65,6 +66,10 @@
               },
               "unitValue": {
                 "type": "number"
+              },
+              "observation": {
+                "type": "string",
+                "description": "Technical details for production"
               }
             }
           }

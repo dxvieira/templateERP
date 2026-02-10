@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useCallback } from 'react';
@@ -12,6 +13,7 @@ import { DeleteConfirmationModal } from '@/components/dashboard/DeleteConfirmati
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Select, 
@@ -34,7 +36,11 @@ import {
   X, 
   PackageOpen, 
   SlidersHorizontal,
-  ChevronDown
+  ChevronDown,
+  Trash2,
+  Hash,
+  Box,
+  FileText
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useOrders } from '@/hooks/use-orders';
@@ -60,6 +66,7 @@ const orderSchema = z.object({
     desc: z.string().default('Novo Item'),
     quantity: z.coerce.number().min(0).default(1),
     unitValue: z.coerce.number().min(0).default(0),
+    observation: z.string().optional(),
   })).min(1),
 });
 
@@ -89,7 +96,7 @@ export default function OrdersManagerPage() {
     defaultValues: {
       client: '',
       status: 'Arte',
-      items: [{ desc: 'Novo Item', quantity: 1, unitValue: 0 }]
+      items: [{ desc: 'Novo Item', quantity: 1, unitValue: 0, observation: '' }]
     }
   });
 
@@ -160,7 +167,7 @@ export default function OrdersManagerPage() {
       deliveryDate: order.deliveryDate || '',
       seller: order.seller || 'Vendedor Geral',
       status: order.status,
-      items: order.items || [{ desc: 'Novo Item', quantity: 1, unitValue: 0 }]
+      items: order.items || [{ desc: 'Novo Item', quantity: 1, unitValue: 0, observation: '' }]
     });
     setIsModalOpen(true);
   };
@@ -171,7 +178,6 @@ export default function OrdersManagerPage() {
       
       <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-6 mt-16 md:mt-0 z-10 pb-20">
         
-        {/* HEADER COMPACTO */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-white/5 pb-6">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-primary">
@@ -192,11 +198,8 @@ export default function OrdersManagerPage() {
           </Button>
         </div>
 
-        {/* COMMAND CENTER COMPACTO */}
         <div className="sticky top-2 z-40 bg-[#09090b]/95 backdrop-blur-xl border border-zinc-800/80 rounded-2xl p-3 shadow-xl">
           <div className="flex flex-col lg:flex-row gap-3 items-center">
-            
-            {/* BUSCA */}
             <div className="relative w-full lg:w-1/3 group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-primary transition-colors" size={16} />
               <input 
@@ -215,7 +218,6 @@ export default function OrdersManagerPage() {
 
             <div className="hidden lg:block w-px h-6 bg-zinc-800" />
 
-            {/* SELETOR DE ETAPAS COMPACTO */}
             <div className="w-full lg:flex-1">
               <div className="md:hidden relative w-full">
                 <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" size={14} />
@@ -258,7 +260,6 @@ export default function OrdersManagerPage() {
           </div>
         </div>
 
-        {/* LISTAGEM DE RESULTADOS COMPACTA */}
         <div className="space-y-3">
           <div className="flex justify-between items-center px-1">
             <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">
@@ -313,7 +314,6 @@ export default function OrdersManagerPage() {
           </div>
         </div>
 
-        {/* MODAIS (MANTIDOS) */}
         <DeleteConfirmationModal
           isOpen={isDeleteModalOpen}
           orderId={orderIdToDelete}
@@ -328,41 +328,40 @@ export default function OrdersManagerPage() {
 
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
           <DialogContent className="max-w-3xl bg-[#0A0A0A] border-white/5 text-white rounded-[2.5rem] overflow-hidden p-0 shadow-2xl">
-            <DialogHeader className="p-10 border-b border-white/5 flex flex-row items-center justify-between bg-zinc-900/30">
-              <DialogTitle className="text-3xl font-black text-primary uppercase tracking-tighter">
+            <DialogHeader className="p-6 md:p-10 border-b border-white/5 flex flex-row items-center justify-between bg-zinc-900/30">
+              <DialogTitle className="text-2xl font-black text-primary uppercase tracking-tighter">
                 {editingOrder ? 'Ajustar Pedido' : 'Novo Registro'}
               </DialogTitle>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="p-10 md:p-14 space-y-12 max-h-[75vh] overflow-y-auto custom-scrollbar">
-              {/* Form content remains the same but within Dialog UI */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                <div className="space-y-4">
-                  <Label className="text-[11px] uppercase tracking-widest text-zinc-500 font-black">Cliente*</Label>
-                  <Input {...register('client')} list="client-suggestions" className="bg-white/5 border-white/5 h-16 rounded-2xl text-lg focus:border-primary/50" />
+            <form onSubmit={handleSubmit(onSubmit)} className="p-6 md:p-10 space-y-8 max-h-[75vh] overflow-y-auto custom-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label className="text-[10px] uppercase tracking-widest text-zinc-500 font-black">Cliente*</Label>
+                  <Input {...register('client')} list="client-suggestions" className="bg-white/5 border-white/5 h-12 rounded-xl text-base focus:border-primary/50" />
                   <datalist id="client-suggestions">
                     {clients?.map(c => <option key={c.id} value={c.name} />)}
                   </datalist>
                 </div>
-                <div className="space-y-4">
-                  <Label className="text-[11px] uppercase tracking-widest text-zinc-500 font-black">Entrega</Label>
-                  <Input type="date" {...register('deliveryDate')} className="bg-white/5 border-white/5 h-16 rounded-2xl text-lg focus:border-primary/50" />
+                <div className="space-y-2">
+                  <Label className="text-[10px] uppercase tracking-widest text-zinc-500 font-black">Entrega</Label>
+                  <Input type="date" {...register('deliveryDate')} className="bg-white/5 border-white/5 h-12 rounded-xl text-base focus:border-primary/50" />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                <div className="space-y-4">
-                  <Label className="text-[11px] uppercase tracking-widest text-zinc-500 font-black">Vendedor</Label>
-                  <Input {...register('seller')} className="bg-white/5 border-white/5 h-16 rounded-2xl text-lg" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label className="text-[10px] uppercase tracking-widest text-zinc-500 font-black">Vendedor</Label>
+                  <Input {...register('seller')} className="bg-white/5 border-white/5 h-12 rounded-xl text-base" />
                 </div>
-                <div className="space-y-4">
-                  <Label className="text-[11px] uppercase tracking-widest text-zinc-500 font-black">Status de Fluxo</Label>
+                <div className="space-y-2">
+                  <Label className="text-[10px] uppercase tracking-widest text-zinc-500 font-black">Status de Fluxo</Label>
                   <Controller
                     name="status"
                     control={control}
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger className="bg-white/5 border-white/5 h-16 rounded-2xl text-lg">
+                        <SelectTrigger className="bg-white/5 border-white/5 h-12 rounded-xl text-base">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-950 border-white/10 text-white">
@@ -376,30 +375,68 @@ export default function OrdersManagerPage() {
                 </div>
               </div>
 
-              <div className="space-y-8">
+              <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-black text-primary uppercase tracking-[0.5em]">Itens da Produção</h3>
-                  <button type="button" onClick={() => append({ desc: 'Novo Item', quantity: 1, unitValue: 0 })} className="text-primary text-[10px] font-black uppercase tracking-widest bg-primary/10 px-4 py-2 rounded-full border border-primary/20">
-                    + Adicionar
+                  <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.5em]">Itens da Produção</h3>
+                  <button type="button" onClick={() => append({ desc: '', quantity: 1, unitValue: 0, observation: '' })} className="text-primary text-[9px] font-black uppercase tracking-widest bg-primary/10 px-4 py-2 rounded-full border border-primary/20 hover:bg-primary hover:text-black transition-all">
+                    + Adicionar Item
                   </button>
                 </div>
-                {fields.map((field, index) => (
-                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-6 p-8 bg-white/[0.02] rounded-3xl border border-white/5 relative group">
-                    <div className="md:col-span-10">
-                      <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/5 h-14 text-base" placeholder="Descrição Técnica" />
-                    </div>
-                    <div className="md:col-span-2">
-                       <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-14 text-center text-base" />
-                    </div>
-                    <button type="button" onClick={() => remove(index)} className="absolute -right-3 -top-3 bg-destructive text-white p-2.5 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-xl">
-                      <Plus className="w-4 h-4 rotate-45" />
-                    </button>
+                
+                <div className="space-y-4">
+                  {fields.map((field, index) => (
+                    <motion.div 
+                      layout
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      key={field.id} 
+                      className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 md:p-6 relative group hover:border-white/10 transition-colors"
+                    >
+                      <div className="flex flex-col gap-4">
+                        {/* Linha 1: Material + Qtd */}
+                        <div className="flex gap-4 items-end">
+                          <div className="flex-1 space-y-1.5">
+                            <Label className="text-[9px] text-zinc-500 uppercase font-black tracking-widest flex items-center gap-1">
+                              <Box size={10} className="text-primary" /> Material / Serviço
+                            </Label>
+                            <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/5 h-10 text-sm focus:border-primary/50" placeholder="Ex: Lona 440g, ACM 3mm..." />
+                          </div>
+                          <div className="w-20 md:w-24 space-y-1.5">
+                            <Label className="text-[9px] text-zinc-500 uppercase font-black tracking-widest flex items-center gap-1">
+                              <Hash size={10} className="text-primary" /> Qtd.
+                            </Label>
+                            <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-10 text-center text-sm focus:border-primary/50" />
+                          </div>
+                          <button type="button" onClick={() => remove(index)} className="p-2.5 text-zinc-600 hover:text-destructive transition-colors">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+
+                        {/* Linha 2: Observações */}
+                        <div className="space-y-1.5">
+                          <Label className="text-[9px] text-zinc-500 uppercase font-black tracking-widest flex items-center gap-1">
+                            <FileText size={10} className="text-primary" /> Observações Técnicas
+                          </Label>
+                          <Textarea 
+                            {...register(`items.${index}.observation`)} 
+                            className="bg-transparent border-white/5 min-h-[60px] text-sm focus:border-primary/50 resize-none" 
+                            placeholder="Detalhes de acabamento, ilhós, refile, tamanho exato..." 
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+
+                {fields.length === 0 && (
+                  <div className="py-10 text-center border border-dashed border-white/5 rounded-2xl bg-white/[0.01]">
+                    <p className="text-[10px] text-zinc-600 uppercase font-black tracking-widest">Nenhum item registrado para esta OS</p>
                   </div>
-                ))}
+                )}
               </div>
 
-              <div className="flex items-center justify-end pt-12 border-t border-white/5">
-                <Button type="submit" disabled={isSubmitting} className="w-full md:w-72 h-16 bg-primary text-black font-black uppercase tracking-widest rounded-full text-xs hover:shadow-[0_0_25px_rgba(255,95,31,0.5)] transition-all">
+              <div className="flex items-center justify-end pt-8 border-t border-white/5">
+                <Button type="submit" disabled={isSubmitting} className="w-full md:w-64 h-12 bg-primary text-black font-black uppercase tracking-widest rounded-full text-xs hover:shadow-[0_0_25px_rgba(255,95,31,0.5)] transition-all">
                   {isSubmitting ? <Loader2 className="w-6 animate-spin" /> : 'Confirmar Lançamento'}
                 </Button>
               </div>
