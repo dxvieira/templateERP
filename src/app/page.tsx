@@ -68,8 +68,8 @@ const ImpactRow = ({ order, index, isDelayed = false, onClick }: { order: any, i
       onClick={onClick}
       className={cn(
         "group relative flex flex-col justify-between p-8 rounded-[2.5rem] border border-zinc-800 bg-[#111111] cursor-pointer overflow-hidden transition-all duration-300",
-        "min-h-[300px] hover:border-primary hover:bg-primary/[0.03] hover:shadow-[0_0_50px_-15px_rgba(255,95,31,0.4)]",
-        isDelayed && "border-destructive/20 hover:border-destructive hover:bg-destructive/[0.03] hover:shadow-[0_0_50px_-15px_rgba(255,0,0,0.4)]"
+        "min-h-[300px] hover:border-primary hover:bg-primary/[0.03] hover:shadow-[0_20px_60px_-15px_rgba(255,95,31,0.2)]",
+        isDelayed && "border-destructive/20 hover:border-destructive hover:bg-destructive/[0.03] hover:shadow-[0_20px_60px_-15px_rgba(255,0,0,0.2)]"
       )}
     >
       {/* Sabre de Luz no Topo */}
