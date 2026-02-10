@@ -40,28 +40,18 @@ const predictDelayWarningsPrompt = ai.definePrompt({
   name: 'predictDelayWarningsPrompt',
   input: {schema: PredictDelayWarningsInputSchema},
   output: {schema: PredictDelayWarningsOutputSchema},
-  prompt: `You are a production manager assistant that analyzes current production velocity and order details to predict potential delays for orders currently on track. Orders that are already delayed should not be included in the output.
+  prompt: `You are a production manager assistant that analyzes current production velocity and order details to predict potential delays.
 
-The current production velocity is {{productionVelocity}} orders per day.
+Current production velocity: {{{productionVelocity}}} orders/day.
+Today's date: {{{currentDate}}}.
 
-Here is the current date: {{currentDate}}
-
-Analyze the following orders:
-
+Orders to analyze:
 {{#each orders}}
-  - Order ID: {{id}}
-    - Client: {{client}}
-    - Status: {{status}}
-    - Delivery Date: {{deliveryDate}}
-    - Value: {{value}}
+- OS #{{{id}}} | Client: {{{client}}} | Status: {{{status}}} | Deadline: {{{deliveryDate}}}
 {{/each}}
 
-Based on the production velocity and the order details, identify any orders that are likely to be delayed. Include only orders that are currently on track in the prediction. Provide a reason for each predicted delay.
-
-Output a JSON array of delayed orders with their IDs and reasons for the delay. If no orders are predicted to be delayed, return an empty array.
-
-Format your output as a JSON object conforming to the following schema:
-${JSON.stringify(PredictDelayWarningsOutputSchema.shape, null, 2)}`,
+Identify orders likely to miss their deadline based on the status and velocity.
+Output a JSON array of predicted delayed orders with reasons.`,
 });
 
 // Define the Genkit flow
