@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -240,21 +239,23 @@ export default function DashboardPage() {
                 <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-1">Atrasados ou Entrega Hoje</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            
+            <div className="flex overflow-x-auto pb-6 gap-4 snap-x snap-mandatory neon-scrollbar lg:grid lg:grid-cols-2 lg:overflow-visible lg:pb-0">
               {warRoom.map((order) => (
-                <OrderCard 
-                  key={order.id} 
-                  order={{
-                    id: order.id,
-                    client: order.client,
-                    description: order.items?.[0]?.desc || 'Sem descrição',
-                    status: order.status,
-                    deliveryDate: order.deliveryDate
-                  }} 
-                  onClick={() => setEditingOrder(order)} 
-                  onQuickConclude={handleQuickConclude}
-                  onDelete={deleteOrder}
-                />
+                <div key={order.id} className="min-w-[85vw] sm:min-w-[350px] lg:min-w-0 snap-center">
+                  <OrderCard 
+                    order={{
+                      id: order.id,
+                      client: order.client,
+                      description: order.items?.[0]?.desc || 'Sem descrição',
+                      status: order.status,
+                      deliveryDate: order.deliveryDate
+                    }} 
+                    onClick={() => setEditingOrder(order)} 
+                    onQuickConclude={handleQuickConclude}
+                    onDelete={deleteOrder}
+                  />
+                </div>
               ))}
             </div>
           </section>
@@ -271,24 +272,27 @@ export default function DashboardPage() {
               <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-1">Próximas Entregas ({productionQueue.length})</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          <div className="flex overflow-x-auto pb-6 gap-4 snap-x snap-mandatory neon-scrollbar lg:grid lg:grid-cols-2 lg:overflow-visible lg:pb-0">
             {productionQueue.map((order) => (
-              <OrderCard 
-                key={order.id} 
-                order={{
-                  id: order.id,
-                  client: order.client,
-                  description: order.items?.[0]?.desc || 'Sem descrição',
-                  status: order.status,
-                  deliveryDate: order.deliveryDate
-                }} 
-                onClick={() => setEditingOrder(order)} 
-                onQuickConclude={handleQuickConclude}
-                onDelete={deleteOrder}
-              />
+              <div key={order.id} className="min-w-[85vw] sm:min-w-[350px] lg:min-w-0 snap-center">
+                <OrderCard 
+                  key={order.id} 
+                  order={{
+                    id: order.id,
+                    client: order.client,
+                    description: order.items?.[0]?.desc || 'Sem descrição',
+                    status: order.status,
+                    deliveryDate: order.deliveryDate
+                  }} 
+                  onClick={() => setEditingOrder(order)} 
+                  onQuickConclude={handleQuickConclude}
+                  onDelete={deleteOrder}
+                />
+              </div>
             ))}
             {productionQueue.length === 0 && warRoom.length === 0 && (
-              <div className="col-span-full py-20 text-center opacity-20 uppercase font-black text-sm tracking-[0.5em]">Sem pedidos ativos na fila</div>
+              <div className="col-span-full py-20 text-center opacity-20 uppercase font-black text-sm tracking-[0.5em] w-full">Sem pedidos ativos na fila</div>
             )}
           </div>
         </section>
@@ -305,20 +309,23 @@ export default function DashboardPage() {
                 <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-1">Troféus de Produção ({completedList.length})</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+            <div className="flex overflow-x-auto pb-6 gap-4 snap-x snap-mandatory neon-scrollbar lg:grid lg:grid-cols-2 lg:overflow-visible lg:pb-0">
               {completedList.map((order) => (
-                <OrderCard 
-                  key={order.id} 
-                  order={{
-                    id: order.id,
-                    client: order.client,
-                    description: order.items?.[0]?.desc || 'Sem descrição',
-                    status: order.status,
-                    deliveryDate: order.deliveryDate
-                  }} 
-                  onClick={() => setEditingOrder(order)} 
-                  onDelete={deleteOrder}
-                />
+                <div key={order.id} className="min-w-[85vw] sm:min-w-[350px] lg:min-w-0 snap-center">
+                  <OrderCard 
+                    key={order.id} 
+                    order={{
+                      id: order.id,
+                      client: order.client,
+                      description: order.items?.[0]?.desc || 'Sem descrição',
+                      status: order.status,
+                      deliveryDate: order.deliveryDate
+                    }} 
+                    onClick={() => setEditingOrder(order)} 
+                    onDelete={deleteOrder}
+                  />
+                </div>
               ))}
             </div>
           </section>
