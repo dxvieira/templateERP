@@ -15,6 +15,7 @@ import {
   Layers,
   CheckCircle2
 } from 'lucide-react';
+import { startOfWeek, endOfWeek, isWithinInterval, parseISO } from 'date-fns';
 
 import { useOrders } from '@/hooks/use-orders';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
@@ -24,6 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { ProductionHub } from '@/components/dashboard/ProductionHub';
 import { OrderCard } from '@/components/dashboard/OrderCard';
+import { WeeklyTargetCard } from '@/components/dashboard/WeeklyTargetCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -85,7 +87,22 @@ export default function DashboardPage() {
   const watchedItems = watch('items');
 
   // Cálculos de Prioridade (3 Camadas)
-  const todayStr = new Date().toISOString().split('T')[0];
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const weekStart = startOfWeek(today, { weekStartsOn: 0 });
+  const weekEnd = endOfWeek(today, { weekStartsOn: 0 });
+
+  const weeklyPendingCount = useMemo(() => {
+    return orders.filter(o => {
+      if (!o.deliveryDate || ['Concluído', 'Entregue'].includes(o.status)) return false;
+      try {
+        const d = parseISO(o.deliveryDate);
+        return isWithinInterval(d, { start: weekStart, end: weekEnd });
+      } catch (e) {
+        return false;
+      }
+    }).length;
+  }, [orders, weekStart, weekEnd]);
 
   const warRoom = useMemo(() => {
     return orders.filter(o => 
@@ -194,8 +211,14 @@ export default function DashboardPage() {
           </Button>
         </header>
 
-        <section className="relative z-10">
-          <ProductionHub stats={stats} />
+        {/* HUB SUPERIOR: REATOR + META DA SEMANA */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-8 relative z-10">
+          <div className="lg:col-span-2">
+            <ProductionHub stats={stats} />
+          </div>
+          <div className="lg:col-span-1">
+            <WeeklyTargetCard pendingCount={weeklyPendingCount} />
+          </div>
         </section>
 
         {/* CAMADA 1: WAR ROOM (EMERGÊNCIAS) */}
