@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -12,7 +11,8 @@ import {
   Plus,
   Loader2,
   AlertTriangle,
-  LayoutDashboard
+  Layers,
+  CheckCircle2
 } from 'lucide-react';
 
 import { useOrders } from '@/hooks/use-orders';
@@ -83,7 +83,30 @@ export default function DashboardPage() {
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
   const watchedItems = watch('items');
 
-  // Cálculos Memoizados
+  // Cálculos de Prioridade (3 Camadas)
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const warRoom = useMemo(() => {
+    return orders.filter(o => 
+      !['Concluído', 'Entregue'].includes(o.status) && 
+      o.deliveryDate && 
+      o.deliveryDate <= todayStr
+    ).sort((a, b) => (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
+  }, [orders, todayStr]);
+
+  const productionQueue = useMemo(() => {
+    return orders.filter(o => 
+      !['Concluído', 'Entregue'].includes(o.status) && 
+      (!o.deliveryDate || o.deliveryDate > todayStr)
+    ).sort((a, b) => (a.deliveryDate || '9999').localeCompare(b.deliveryDate || '9999'));
+  }, [orders, todayStr]);
+
+  const completedList = useMemo(() => {
+    return orders.filter(o => ['Concluído', 'Entregue'].includes(o.status))
+      .sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
+  }, [orders]);
+
+  // Cálculos Memoizados Secundários
   const totalValue = useMemo(() => {
     return watchedItems?.reduce((acc, item) => {
       const q = Number(item.quantity) || 0;
@@ -91,15 +114,6 @@ export default function DashboardPage() {
       return acc + (q * v);
     }, 0) || 0;
   }, [watchedItems]);
-
-  const delayedOrders = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    return orders.filter(o => 
-      o.deliveryDate && 
-      o.deliveryDate < today && 
-      !['Concluído', 'Entregue'].includes(o.status)
-    );
-  }, [orders]);
 
   // Efeitos colaterais
   useEffect(() => {
@@ -127,10 +141,10 @@ export default function DashboardPage() {
     try {
       if (editingOrder) {
         await updateOrder(editingOrder.id, { ...data, totalValue });
-        toast({ title: "Protocolo Atualizado", description: `OS #${editingOrder.id} salva.` });
+        toast({ title: "Pedido Atualizado", description: `Pedido #${editingOrder.id} salvo.` });
       } else {
         await createOrder({ ...data, totalValue });
-        toast({ title: "OS Criada", description: "Novo protocolo registrado no terminal." });
+        toast({ title: "Pedido Criado", description: "Novo pedido registrado no terminal." });
       }
       setIsModalOpen(false);
       setEditingOrder(null);
@@ -144,7 +158,7 @@ export default function DashboardPage() {
   const handleQuickConclude = async (orderId: string) => {
     try {
       await updateOrder(orderId, { status: 'Concluído' });
-      toast({ title: "Finalizado", description: "Protocolo movido para concluídos." });
+      toast({ title: "Finalizado", description: "Pedido movido para concluídos." });
     } catch (err) {}
   };
 
@@ -178,7 +192,7 @@ export default function DashboardPage() {
             className="bg-primary text-black font-black py-8 px-12 rounded-2xl transition-all duration-300 flex items-center gap-4 uppercase tracking-[0.2em] text-sm shadow-[0_10px_30px_-5px_rgba(255,95,31,0.3)] hover:shadow-[0_15px_40px_-5px_rgba(255,95,31,0.5)] active:scale-95"
           >
               <Plus size={22} strokeWidth={3} />
-              Nova OS
+              Lançar Pedido
           </Button>
         </header>
 
@@ -187,67 +201,110 @@ export default function DashboardPage() {
           <ProductionHub stats={stats} />
         </section>
 
-        {/* LISTAGEM DE ORDENS (COMPACT NEON ROWS) */}
-        <div className="space-y-20 max-w-6xl">
-          {delayedOrders.length > 0 && (
-            <div className="space-y-8">
-              <div className="flex items-center gap-4 px-2">
-                <AlertTriangle className="text-destructive w-6 h-6 animate-pulse" />
-                <h3 className="text-sm font-black text-white uppercase tracking-[0.4em]">Protocolos Críticos ({delayedOrders.length})</h3>
+        {/* CAMADA 1: WAR ROOM (EMERGÊNCIAS) */}
+        {warRoom.length > 0 && (
+          <section className="space-y-8 animate-in slide-in-from-top-4 duration-500">
+            <div className="flex items-center gap-4 px-2 border-b border-destructive/20 pb-4">
+              <div className="p-2 bg-destructive/10 rounded-xl animate-pulse">
+                <AlertTriangle className="text-destructive w-6 h-6" />
               </div>
-              <div className="grid grid-cols-1 gap-3">
-                {delayedOrders.map((order) => (
-                  <OrderCard 
-                    key={order.id} 
-                    order={{
-                      id: order.id,
-                      client: order.client,
-                      description: order.items?.[0]?.desc || 'Sem descrição',
-                      status: order.status,
-                      deliveryDate: order.deliveryDate
-                    }} 
-                    onClick={() => setEditingOrder(order)} 
-                    onQuickConclude={handleQuickConclude}
-                    onDelete={deleteOrder}
-                  />
-                ))}
+              <div className="flex-1">
+                <h3 className="text-sm font-black text-white uppercase tracking-[0.4em] flex items-center gap-3">
+                  War Room <span className="bg-destructive/20 text-destructive text-[10px] px-2 py-0.5 rounded-full border border-destructive/30">{warRoom.length} CRÍTICOS</span>
+                </h3>
+                <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-1">Atrasados ou Entrega Hoje</p>
               </div>
             </div>
-          )}
+            <div className="grid grid-cols-1 gap-3">
+              {warRoom.map((order) => (
+                <OrderCard 
+                  key={order.id} 
+                  order={{
+                    id: order.id,
+                    client: order.client,
+                    description: order.items?.[0]?.desc || 'Sem descrição',
+                    status: order.status,
+                    deliveryDate: order.deliveryDate
+                  }} 
+                  onClick={() => setEditingOrder(order)} 
+                  onQuickConclude={handleQuickConclude}
+                  onDelete={deleteOrder}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
-          <div className="space-y-8">
-             <div className="flex items-center justify-between px-2">
-                <h3 className="text-sm font-black text-zinc-500 uppercase tracking-[0.4em]">Fluxo de Produção Recente</h3>
-             </div>
-             <div className="grid grid-cols-1 gap-3">
-                {orders.slice(0, 15).map((order) => (
-                  <OrderCard 
-                    key={order.id} 
-                    order={{
-                      id: order.id,
-                      client: order.client,
-                      description: order.items?.[0]?.desc || 'Sem descrição',
-                      status: order.status,
-                      deliveryDate: order.deliveryDate
-                    }} 
-                    onClick={() => setEditingOrder(order)} 
-                    onQuickConclude={handleQuickConclude}
-                    onDelete={deleteOrder}
-                  />
-                ))}
-                {orders.length === 0 && (
-                  <div className="py-20 text-center opacity-20 uppercase font-black text-sm tracking-[0.5em]">Aguardando Sincronização de Dados</div>
-                )}
-             </div>
+        {/* CAMADA 2: FILA DE PRODUÇÃO (FLUXO NOMINAL) */}
+        <section className="space-y-8">
+          <div className="flex items-center gap-4 px-2 border-b border-white/5 pb-4">
+            <div className="p-2 bg-primary/10 rounded-xl">
+              <Layers className="text-primary w-6 h-6" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-black text-white uppercase tracking-[0.4em]">Fila de Produção</h3>
+              <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mt-1">Próximos Projetos ({productionQueue.length})</p>
+            </div>
           </div>
-        </div>
+          <div className="grid grid-cols-1 gap-3">
+            {productionQueue.map((order) => (
+              <OrderCard 
+                key={order.id} 
+                order={{
+                  id: order.id,
+                  client: order.client,
+                  description: order.items?.[0]?.desc || 'Sem descrição',
+                  status: order.status,
+                  deliveryDate: order.deliveryDate
+                }} 
+                onClick={() => setEditingOrder(order)} 
+                onQuickConclude={handleQuickConclude}
+                onDelete={deleteOrder}
+              />
+            ))}
+            {productionQueue.length === 0 && warRoom.length === 0 && (
+              <div className="py-20 text-center opacity-20 uppercase font-black text-sm tracking-[0.5em]">Sem pedidos ativos na fila</div>
+            )}
+          </div>
+        </section>
+
+        {/* CAMADA 3: PEDIDOS CONCLUÍDOS (HISTÓRICO) */}
+        {completedList.length > 0 && (
+          <section className="space-y-8 opacity-60 hover:opacity-100 transition-opacity duration-500">
+            <div className="flex items-center gap-4 px-2 border-b border-zinc-800 pb-4">
+              <div className="p-2 bg-emerald-500/10 rounded-xl">
+                <CheckCircle2 className="text-emerald-500 w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-black text-zinc-400 uppercase tracking-[0.4em]">Pedidos Concluídos</h3>
+                <p className="text-zinc-600 text-[10px] uppercase font-bold tracking-widest mt-1">Histórico Recente ({completedList.length})</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 grayscale-[0.5] hover:grayscale-0 transition-all duration-300">
+              {completedList.map((order) => (
+                <OrderCard 
+                  key={order.id} 
+                  order={{
+                    id: order.id,
+                    client: order.client,
+                    description: order.items?.[0]?.desc || 'Sem descrição',
+                    status: order.status,
+                    deliveryDate: order.deliveryDate
+                  }} 
+                  onClick={() => setEditingOrder(order)} 
+                  onDelete={deleteOrder}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* MODAL DE CADASTRO/EDIÇÃO */}
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
           <DialogContent className="max-w-3xl bg-[#0A0A0A] border-white/5 text-white rounded-[2.5rem] overflow-hidden p-0 shadow-2xl">
             <DialogHeader className="p-10 border-b border-white/5 flex flex-row items-center justify-between bg-white/[0.01]">
               <DialogTitle className="text-3xl font-black text-primary uppercase tracking-tighter">
-                {editingOrder ? 'Ajustar OS' : 'Lançar OS'}
+                {editingOrder ? 'Ajustar Pedido' : 'Lançar Pedido'}
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit(onSubmit)} className="p-10 md:p-14 space-y-12 max-h-[75vh] overflow-y-auto no-scrollbar">
@@ -312,7 +369,7 @@ export default function DashboardPage() {
               </div>
               <div className="flex items-center justify-end pt-12 border-t border-white/5">
                 <Button type="submit" disabled={isSubmitting} className="w-full md:w-64 h-16 bg-primary text-black font-black uppercase tracking-widest rounded-2xl text-sm hover:shadow-[0_0_50px_rgba(255,95,31,0.5)] transition-all">
-                  {isSubmitting ? <Loader2 className="w-6 animate-spin" /> : 'Confirmar OS'}
+                  {isSubmitting ? <Loader2 className="w-6 animate-spin" /> : 'Confirmar Pedido'}
                 </Button>
               </div>
             </form>

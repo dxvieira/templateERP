@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -21,7 +20,6 @@ interface ProductionHubProps {
 export function ProductionHub({ stats }: ProductionHubProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
-  // Mapeia os dados reais para o formato do Ultra-Fluid Reactor
   const stageData = useMemo(() => [
     { id: 'art', label: 'Arte Final', value: stats.arte, color: '#d946ef' },
     { id: 'imp', label: 'Impressão', value: stats.impressao, color: '#3B82F6' },
@@ -32,12 +30,10 @@ export function ProductionHub({ stats }: ProductionHubProps) {
 
   const totalValue = stageData.reduce((acc, item) => acc + item.value, 0);
 
-  // Configurações do SVG
   const radius = 90;
   const circumference = 2 * Math.PI * radius;
   let accumulatedOffset = 0;
 
-  // --- FÍSICA DE MOLA PERSONALIZADA ---
   const fluidSpring = {
     type: "spring",
     stiffness: 250,
@@ -61,7 +57,7 @@ export function ProductionHub({ stats }: ProductionHubProps) {
         transition: fluidSpring
     },
     active: (color: string) => ({
-      strokeWidth: [18, 22, 18], // Respiração
+      strokeWidth: [18, 22, 18],
       scale: 1.05,
       opacity: 1,
       filter: `drop-shadow(0 0 25px ${color}) brightness(1.3)`,
@@ -78,7 +74,6 @@ export function ProductionHub({ stats }: ProductionHubProps) {
     <div className="w-full flex justify-center">
       <div className="relative w-full max-w-4xl bg-[#09090b] border border-zinc-800/50 rounded-[3rem] p-8 md:p-12 overflow-hidden transition-all duration-500 hover:border-[#FF5F1F]/30 hover:shadow-[0_0_50px_-10px_rgba(255,95,31,0.15)]">
         
-        {/* Luz de fundo reativa */}
         <motion.div 
             animate={{ 
                 backgroundColor: activeIndex !== null ? stageData[activeIndex].color : '#FF5F1F',
@@ -88,7 +83,6 @@ export function ProductionHub({ stats }: ProductionHubProps) {
             className="absolute inset-0 blur-[120px] pointer-events-none" 
         />
 
-        {/* HEADER */}
         <div className="flex justify-between items-start mb-10 relative z-10 gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -104,13 +98,8 @@ export function ProductionHub({ stats }: ProductionHubProps) {
           <Fingerprint className="text-zinc-700 opacity-50 hidden md:block" size={48} strokeWidth={1} />
         </div>
 
-        {/* CONTEÚDO PRINCIPAL */}
         <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20 relative z-10">
-          
-          {/* 1. O GRÁFICO (REATOR) */}
           <div className="relative w-[280px] h-[280px] md:w-[320px] md:h-[320px] shrink-0 flex items-center justify-center group/chart">
-            
-            {/* Anéis decorativos de fundo */}
             <div className="absolute inset-0 border border-zinc-800/20 rounded-full border-dashed animate-[spin_60s_linear_infinite]" />
             <div className="absolute inset-4 border border-zinc-800/10 rounded-full border-dotted animate-[spin_40s_linear_infinite_reverse]" />
 
@@ -149,7 +138,6 @@ export function ProductionHub({ stats }: ProductionHubProps) {
                })}
             </svg>
 
-            {/* TEXTO CENTRAL */}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none overflow-hidden">
                <AnimatePresence mode='wait'>
                  <motion.div
@@ -191,7 +179,6 @@ export function ProductionHub({ stats }: ProductionHubProps) {
             </div>
           </div>
 
-          {/* 2. A LEGENDA (Lado Direito) */}
           <div className="flex-1 w-full space-y-2">
              {stageData.map((item, index) => {
                const isActive = activeIndex === index;
@@ -238,7 +225,6 @@ export function ProductionHub({ stats }: ProductionHubProps) {
                          )}>
                            {item.label}
                          </span>
-                         {/* Mini barra de progresso */}
                          <div className="h-1 w-24 bg-zinc-900 rounded-full mt-1.5 overflow-hidden">
                             <motion.div 
                               initial={{ width: 0 }}
@@ -263,7 +249,6 @@ export function ProductionHub({ stats }: ProductionHubProps) {
                );
              })}
           </div>
-
         </div>
       </div>
     </div>

@@ -21,7 +21,7 @@ import { useAuth, initiateSignOut } from '@/firebase';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-  { icon: ClipboardList, label: 'Gestão de Protocolos', path: '/orders' },
+  { icon: ClipboardList, label: 'Gestão de Pedidos', path: '/orders' },
   { icon: Users, label: 'Meus Clientes', path: '/clients' },
   { icon: TrendingUp, label: 'Analytics', path: '#' },
   { icon: Package, label: 'Estoque', path: '#' },
