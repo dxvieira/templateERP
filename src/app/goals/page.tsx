@@ -1,9 +1,9 @@
 
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Target, 
   ChevronLeft, 
@@ -13,19 +13,67 @@ import {
   CheckCircle2,
   ListTodo,
   Loader2,
-  Rocket
+  Rocket,
+  X,
+  Save,
+  Trash2
 } from 'lucide-react';
 import { startOfWeek, endOfWeek, isWithinInterval, parseISO, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 
 import { useOrders } from '@/hooks/use-orders';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { Button } from '@/components/ui/button';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle 
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+
+const orderSchema = z.object({
+  client: z.string().min(1, 'Nome do cliente é obrigatório'),
+  deliveryDate: z.string().default(''),
+  seller: z.string().default('Vendedor Geral'),
+  status: z.enum(['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Concluído']).default('Arte'),
+  items: z.array(z.object({
+    desc: z.string().default('Novo Item'),
+    quantity: z.coerce.number().min(0).default(1),
+    unitValue: z.coerce.number().min(0).default(0),
+  })).min(1),
+});
+
+type OrderFormValues = z.infer<typeof orderSchema>;
 
 export default function WeeklyGoalsPage() {
   const router = useRouter();
-  const { orders, isLoading, updateOrder } = useOrders();
+  const { toast } = useToast();
+  const { orders, isLoading, updateOrder, deleteOrder } = useOrders();
+
+  // Estados para Edição
+  const [editingOrder, setEditingOrder] = useState<any>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { register, control, handleSubmit, reset } = useForm<OrderFormValues>({
+    resolver: zodResolver(orderSchema)
+  });
+
+  const { fields, append, remove } = useFieldArray({ control, name: "items" });
 
   // 1. Calcular intervalo da semana (Domingo a Sábado)
   const today = new Date();
@@ -60,9 +108,38 @@ export default function WeeklyGoalsPage() {
     };
   }, [orders, weekStart, weekEnd]);
 
+  useEffect(() => {
+    if (editingOrder) {
+      reset({
+        client: editingOrder.client,
+        deliveryDate: editingOrder.deliveryDate || '',
+        seller: editingOrder.seller || 'Vendedor Geral',
+        status: editingOrder.status,
+        items: editingOrder.items || [{ desc: 'Novo Item', quantity: 1, unitValue: 0 }]
+      });
+      setIsModalOpen(true);
+    }
+  }, [editingOrder, reset]);
+
+  const onUpdateSubmit = async (data: OrderFormValues) => {
+    if (!editingOrder) return;
+    setIsSubmitting(true);
+    try {
+      await updateOrder(editingOrder.id, data);
+      toast({ title: "Pedido Atualizado", description: "As alterações foram salvas com sucesso." });
+      setIsModalOpen(false);
+      setEditingOrder(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleQuickConclude = async (orderId: string) => {
     try {
       await updateOrder(orderId, { status: 'Concluído' });
+      toast({ title: "Objetivo Conquistado", description: "O pedido foi movido para o histórico da semana." });
     } catch (err) {}
   };
 
@@ -106,7 +183,7 @@ export default function WeeklyGoalsPage() {
           </div>
         </header>
 
-        {/* --- CARD DA BARRA DE PROGRESSO (Com Hover Neon Verde) --- */}
+        {/* --- CARD DA BARRA DE PROGRESSO (HUD PROGRESS INTERACTIVE) --- */}
         <section 
           className="
             group relative 
@@ -134,7 +211,6 @@ export default function WeeklyGoalsPage() {
               </p>
             </div>
             
-            {/* Ícone de Conquista */}
             <motion.div 
                animate={progress === 100 ? { rotate: [0, -10, 10, 0], scale: 1.1 } : {}}
                transition={{ duration: 0.5, repeat: progress === 100 ? Infinity : 0, repeatDelay: 2 }}
@@ -150,24 +226,23 @@ export default function WeeklyGoalsPage() {
             </motion.div>
           </div>
 
-          {/* CONTAINER DA BARRA (Trilho HUD) */}
+          {/* CONTAINER DA BARRA (TRILHO HUD) */}
           <div className="h-8 w-full bg-[#050505] rounded-lg relative overflow-hidden border border-zinc-800 shadow-inner group-hover:border-green-900/50 transition-colors z-10">
             
-            {/* Grid de Fundo (Ticks Decorativos) */}
+            {/* Grid de Fundo (Ticks) */}
             <div className="absolute inset-0 flex justify-between px-2 z-0 opacity-20">
                {[...Array(15)].map((_, i) => (
                   <div key={i} className="w-[1px] h-full bg-zinc-600" />
                ))}
             </div>
 
-            {/* A BARRA LÍQUIDA (Física de Inércia) */}
+            {/* BARRA LÍQUIDA (FÍSICA DE INÉRCIA) */}
             <motion.div 
                initial={{ width: 0 }}
                animate={{ width: `${progress}%` }}
                transition={{ duration: 1.5, ease: "circOut" }} 
                className="h-full relative z-10 rounded-r-md overflow-hidden"
             >
-               {/* Gradiente Verde Vibrante */}
                <div className="absolute inset-0 bg-gradient-to-r from-green-900 via-green-600 to-emerald-400" />
                
                {/* Shimmer Animado */}
@@ -177,12 +252,11 @@ export default function WeeklyGoalsPage() {
                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent w-full" 
                />
                
-               {/* Ponta de Energia Branca */}
+               {/* Ponta de Energia */}
                <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white shadow-[0_0_20px_rgba(255,255,255,1)]" />
             </motion.div>
           </div>
           
-          {/* Mensagem Motivacional Dinâmica */}
           <div className="flex justify-end mt-4">
              <p className="text-[9px] text-zinc-600 font-mono group-hover:text-green-400/80 transition-colors uppercase tracking-widest">
                 {progress === 0 && "SISTEMA PRONTO. INICIE A PRODUÇÃO PARA ATIVAR."}
@@ -191,15 +265,9 @@ export default function WeeklyGoalsPage() {
                 {progress === 100 && "META ATINGIDA. SISTEMA OPERANDO EM EFICIÊNCIA MÁXIMA."}
              </p>
           </div>
-
-          {/* Glow de fundo pulsante */}
-          <div 
-            className="absolute -top-24 -right-24 w-64 h-64 bg-green-500/10 blur-[80px] rounded-full pointer-events-none transition-all duration-1000" 
-            style={{ opacity: progress / 100 + 0.1 }}
-          />
         </section>
 
-        {/* SEÇÃO 1: FILA ATIVA (Pendentes da Semana) */}
+        {/* SEÇÃO 1: FILA DA SEMANA (PENDENTES) */}
         <section className="space-y-8">
           <div className="flex items-center gap-4 px-2 border-b border-white/5 pb-4">
             <div className="p-2 bg-green-500/10 rounded-xl border border-green-500/20">
@@ -207,7 +275,7 @@ export default function WeeklyGoalsPage() {
             </div>
             <div className="flex-1">
               <h3 className="text-sm font-black text-white uppercase tracking-[0.4em] flex items-center gap-3">
-                Fila Ativa
+                Fila da Semana
                 <span className="bg-white/5 text-zinc-500 text-[10px] px-2 py-0.5 rounded-full border border-white/10 font-bold uppercase">
                   {pendingOrders.length} RESTANTES
                 </span>
@@ -228,8 +296,9 @@ export default function WeeklyGoalsPage() {
                     status: order.status,
                     deliveryDate: order.deliveryDate
                   }} 
-                  onClick={() => router.push(`/orders`)}
+                  onClick={() => setEditingOrder(order)}
                   onQuickConclude={handleQuickConclude}
+                  onDelete={deleteOrder}
                 />
               ))
             ) : (
@@ -252,7 +321,7 @@ export default function WeeklyGoalsPage() {
           </div>
         </section>
 
-        {/* SEÇÃO 2: OBJETIVOS CONQUISTADOS (Concluídos) */}
+        {/* SEÇÃO 2: OBJETIVOS CONQUISTADOS (CONCLUÍDOS) */}
         {completedOrders.length > 0 && (
           <section className="space-y-8 animate-in slide-in-from-bottom-8 duration-1000">
             <div className="flex items-center gap-4 px-2 border-b border-green-500/20 pb-4">
@@ -272,22 +341,109 @@ export default function WeeklyGoalsPage() {
 
             <div className="grid grid-cols-1 gap-4 opacity-80 hover:opacity-100 transition-opacity">
               {completedOrders.map((order) => (
-                <div key={order.id}>
-                  <OrderCard 
-                    order={{
-                      id: order.id,
-                      client: order.client,
-                      description: order.items?.[0]?.desc || 'Sem descrição técnica',
-                      status: order.status,
-                      deliveryDate: order.deliveryDate
-                    }} 
-                    onClick={() => router.push(`/orders`)}
-                  />
-                </div>
+                <OrderCard 
+                  key={order.id} 
+                  order={{
+                    id: order.id,
+                    client: order.client,
+                    description: order.items?.[0]?.desc || 'Sem descrição técnica',
+                    status: order.status,
+                    deliveryDate: order.deliveryDate
+                  }} 
+                  onClick={() => setEditingOrder(order)}
+                  onDelete={deleteOrder}
+                />
               ))}
             </div>
           </section>
         )}
+
+        {/* MODAL DE EDIÇÃO INTEGRADO */}
+        <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
+          <DialogContent className="max-w-3xl bg-[#0A0A0A] border-white/5 text-white rounded-[2.5rem] overflow-hidden p-0 shadow-2xl">
+            <DialogHeader className="p-10 border-b border-white/5 flex flex-row items-center justify-between bg-white/[0.01]">
+              <DialogTitle className="text-3xl font-black text-green-500 uppercase tracking-tighter">
+                Ajustar Pedido
+              </DialogTitle>
+              <Button 
+                variant="ghost" 
+                onClick={() => {
+                  if (editingOrder) {
+                    deleteOrder(editingOrder.id);
+                    setIsModalOpen(false);
+                  }
+                }}
+                className="text-destructive hover:bg-destructive/10 font-black uppercase text-[10px] tracking-widest gap-2 h-10 px-6 rounded-xl border border-destructive/10"
+              >
+                <Trash2 className="w-4 h-4" /> Remover
+              </Button>
+            </DialogHeader>
+
+            <form onSubmit={handleSubmit(onUpdateSubmit)} className="p-10 md:p-14 space-y-12 max-h-[75vh] overflow-y-auto no-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div className="space-y-4">
+                  <Label className="text-[11px] uppercase tracking-widest text-zinc-500 font-black">Cliente*</Label>
+                  <Input {...register('client')} className="bg-white/5 border-white/5 h-16 rounded-2xl text-lg focus:border-green-500/50 transition-all" />
+                </div>
+                <div className="space-y-4">
+                  <Label className="text-[11px] uppercase tracking-widest text-zinc-500 font-black">Entrega</Label>
+                  <Input type="date" {...register('deliveryDate')} className="bg-white/5 border-white/5 h-16 rounded-2xl text-lg focus:border-green-500/50 transition-all" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div className="space-y-4">
+                  <Label className="text-[11px] uppercase tracking-widest text-zinc-500 font-black">Vendedor</Label>
+                  <Input {...register('seller')} className="bg-white/5 border-white/5 h-16 rounded-2xl text-lg" />
+                </div>
+                <div className="space-y-4">
+                  <Label className="text-[11px] uppercase tracking-widest text-zinc-500 font-black">Etapa</Label>
+                  <Controller
+                    name="status"
+                    control={control}
+                    render={({ field }) => (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger className="bg-white/5 border-white/5 h-16 rounded-2xl text-lg">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-zinc-950 border-white/10 text-white">
+                          {['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Concluído'].map(s => (
+                            <SelectItem key={s} value={s}>{s}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-8">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-black text-green-500 uppercase tracking-[0.5em]">Itens da Produção</h3>
+                  <button type="button" onClick={() => append({ desc: 'Novo Item', quantity: 1, unitValue: 0 })} className="text-green-500 text-[10px] font-black uppercase tracking-widest bg-green-500/10 px-4 py-2 rounded-full border border-green-500/20">
+                    + Adicionar
+                  </button>
+                </div>
+                {fields.map((field, index) => (
+                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-6 p-8 bg-white/[0.02] rounded-3xl border border-white/5 relative group">
+                    <div className="md:col-span-10">
+                      <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/5 h-14 text-base" placeholder="Descrição Técnica" />
+                    </div>
+                    <div className="md:col-span-2">
+                       <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-14 text-center text-base" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-end pt-12 border-t border-white/5">
+                <Button type="submit" disabled={isSubmitting} className="w-full md:w-64 h-16 bg-green-600 text-black font-black uppercase tracking-widest rounded-2xl text-sm hover:shadow-[0_0_50px_rgba(34,197,94,0.5)] transition-all">
+                  {isSubmitting ? <Loader2 className="w-6 animate-spin" /> : 'Confirmar Alterações'}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
