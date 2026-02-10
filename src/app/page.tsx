@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { motion, useSpring, useTransform, useMotionValue, AnimatePresence } from 'framer-motion';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -17,7 +17,6 @@ import {
   Trash2,
   Loader2,
   Calendar,
-  Search,
   AlertTriangle
 } from 'lucide-react';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
@@ -126,62 +125,64 @@ const ImpactRow = ({ order, index, isDelayed = false, onClick }: { order: any, i
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.05 }}
-      whileHover={{ scale: 1.01, x: 5 }}
+      whileHover={{ scale: 1.02, y: -4 }}
       onClick={onClick}
-      className="group relative flex items-center justify-between p-3 rounded-2xl border border-transparent bg-white/5 mb-2 cursor-pointer overflow-hidden"
+      className={cn(
+        "group relative flex flex-col p-4 rounded-3xl border border-zinc-800 bg-[#111111] mb-2 cursor-pointer overflow-hidden transition-all duration-300",
+        "min-h-[200px] hover:border-primary hover:bg-primary/5 hover:shadow-[0_0_40px_-10px_rgba(255,95,31,0.3)]",
+        isDelayed && "hover:border-destructive hover:bg-destructive/5 hover:shadow-[0_0_40px_-10px_rgba(255,0,0,0.3)]"
+      )}
     >
       <div className={cn(
-        "absolute inset-0 bg-gradient-to-r to-transparent translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300 ease-out",
-        isDelayed ? "from-destructive/20" : "from-primary/20"
+        "absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-0.5 blur-[4px] opacity-0 group-hover:opacity-100 transition-opacity duration-500",
+        isDelayed ? "bg-destructive shadow-[0_0_10px_#FF0000]" : "bg-primary shadow-[0_0_10px_#FF5F1F]"
       )} />
 
-      <div className="relative z-10 flex items-center gap-3 min-w-0">
+      <div className="flex justify-between items-start mb-4">
         <div className={cn(
-          "h-10 w-10 rounded-xl bg-black flex items-center justify-center border border-zinc-800 transition-all duration-300 group-hover:scale-110",
-          isDelayed ? "group-hover:border-destructive group-hover:shadow-[0_0_15px_rgba(255,0,0,0.5)]" : "group-hover:border-primary group-hover:shadow-[0_0_15px_rgba(255,95,31,0.5)]"
+          "h-7 px-2 rounded-lg bg-black flex items-center justify-center border border-zinc-800 text-[9px] font-mono font-bold text-zinc-500 group-hover:text-white transition-colors",
+          isDelayed ? "group-hover:border-destructive" : "group-hover:border-primary"
         )}>
-          <span className={cn(
-            "font-mono font-bold text-zinc-500 text-[10px]",
-            isDelayed ? "group-hover:text-destructive" : "group-hover:text-primary"
-          )}>
-            #{order.id.slice(-3)}
-          </span>
+          #{order.id.slice(-4)}
         </div>
-        <div className="truncate">
-          <h4 className={cn(
-            "text-white font-bold text-sm transition-colors",
-            isDelayed ? "group-hover:text-destructive" : "group-hover:text-primary"
-          )}>
-            {order.client}
-          </h4>
-          <p className="text-zinc-500 text-[9px] font-medium truncate uppercase tracking-tighter">
-            {order.items?.[0]?.desc || 'Sem descrição'}
-          </p>
-        </div>
+        <ChevronRight size={14} className="text-zinc-700 group-hover:text-white transition-transform group-hover:translate-x-1" />
       </div>
-      
-      <div className="relative z-10 flex items-center gap-4 shrink-0">
-        <div className="hidden sm:flex items-center gap-2 px-2 py-1 rounded-lg border border-white/5 bg-black/40 group-hover:border-white/10">
+
+      <div className="flex-1 space-y-1.5">
+        <h4 className={cn(
+          "text-xl font-black leading-none uppercase tracking-tighter transition-colors truncate",
+          isDelayed ? "group-hover:text-destructive" : "group-hover:text-primary"
+        )}>
+          {order.client}
+        </h4>
+        <p className="text-[10px] text-zinc-600 font-medium uppercase truncate tracking-tight">
+          {order.items?.[0]?.desc || 'Sem descrição'}
+        </p>
+      </div>
+
+      <div className="mt-auto pt-4 border-t border-white/5 space-y-4">
+        <div className="flex items-center gap-2">
           <div className={cn(
-            "w-1.5 h-1.5 rounded-full shadow-[0_0_8px_currentColor] animate-pulse",
+            "w-2 h-2 rounded-full shadow-[0_0_8px_currentColor] animate-pulse",
             isDelayed ? "bg-destructive text-destructive" : "bg-primary text-primary"
           )} />
-          <span className="text-[9px] uppercase font-black tracking-widest text-zinc-300">{order.status}</span>
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-300">
+            {order.status}
+          </span>
         </div>
 
-        <div className="text-right min-w-[80px]">
-          <p className="text-white font-mono font-bold text-sm">
+        <div className="flex justify-between items-end">
+          <div className="space-y-0.5">
+            <p className="text-[8px] text-zinc-600 uppercase font-black tracking-widest">Entrega</p>
+            <div className="flex items-center gap-1 text-[10px] font-bold text-white uppercase tracking-tighter">
+              <Calendar size={10} className="text-zinc-500" />
+              {order.deliveryDate || 'Sem data'}
+            </div>
+          </div>
+          <p className="text-base font-black font-mono text-white">
             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.totalValue || 0)}
           </p>
-          <div className="flex items-center justify-end gap-1 text-zinc-600 text-[8px] group-hover:text-zinc-400 uppercase tracking-tighter">
-             <Clock size={8} /> {order.deliveryDate || 'Sem data'}
-          </div>
         </div>
-        
-        <ChevronRight className={cn(
-          "text-zinc-700 transition-all group-hover:translate-x-1",
-          isDelayed ? "group-hover:text-destructive" : "group-hover:text-primary"
-        )} size={16} />
       </div>
     </motion.div>
   );
@@ -192,11 +193,27 @@ export default function DashboardPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const { user, isUserLoading } = useUser();
+  
+  // hooks de dados no topo
   const { orders, stats, isLoading, updateOrder, createOrder } = useOrders();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const clientsQuery = useMemoFirebase(() => 
+    firestore ? query(collection(firestore, 'clients'), orderBy('name', 'asc')) : null
+  , [firestore]);
+  const { data: clients } = useCollection(clientsQuery);
+
+  const delayedOrders = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return orders.filter(o => 
+      o.deliveryDate && 
+      o.deliveryDate < today && 
+      !['Concluído', 'Entregue'].includes(o.status)
+    );
+  }, [orders]);
 
   // --- FORMULÁRIO ---
   const { register, control, handleSubmit, reset, watch } = useForm<OrderFormValues>({
@@ -218,20 +235,6 @@ export default function DashboardPage() {
       return acc + (q * v);
     }, 0) || 0;
   }, [watchedItems]);
-
-  const clientsQuery = useMemoFirebase(() => 
-    firestore ? query(collection(firestore, 'clients'), orderBy('name', 'asc')) : null
-  , [firestore]);
-  const { data: clients } = useCollection(clientsQuery);
-
-  const delayedOrders = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    return orders.filter(o => 
-      o.deliveryDate && 
-      o.deliveryDate < today && 
-      !['Concluído', 'Entregue'].includes(o.status)
-    );
-  }, [orders]);
 
   useEffect(() => {
     if (!isUserLoading && !user) {
@@ -284,7 +287,7 @@ export default function DashboardPage() {
       <DashboardSidebar />
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
 
-      <main className="flex-1 md:ml-64 p-5 md:p-6 space-y-6 mt-16 md:mt-0 z-10">
+      <main className="flex-1 md:ml-64 p-5 md:p-6 space-y-8 mt-16 md:mt-0 z-10">
         <header className="flex flex-col md:flex-row justify-between items-end relative z-10 gap-4">
           <div>
             <div className="flex items-center gap-2 text-primary mb-1">
@@ -307,7 +310,7 @@ export default function DashboardPage() {
           </motion.button>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 relative z-10">
           {/* KPI PRINCIPAL */}
           <ImpactCard className="col-span-1 lg:col-span-2 row-span-1 min-h-[220px]">
             <div className="flex justify-between items-start">
@@ -347,16 +350,16 @@ export default function DashboardPage() {
           <AnimatePresence>
             {delayedOrders.length > 0 && (
               <div className="col-span-1 lg:col-span-4">
-                <div className="flex items-center justify-between mb-3 px-1">
-                  <h3 className="text-sm font-black text-white tracking-tight flex items-center gap-2">
+                <div className="flex items-center justify-between mb-4 px-1">
+                  <h3 className="text-sm font-black text-white tracking-tight flex items-center gap-2 uppercase tracking-tighter">
                     <AlertTriangle className="text-destructive w-4 h-4 animate-bounce" />
-                    WAR ROOM: PROTOCOLOS CRÍTICOS
+                    War Room: Protocolos Críticos
                   </h3>
                   <span className="bg-destructive/10 text-destructive border border-destructive/20 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest">
-                    {delayedOrders.length} EM ATRASO
+                    {delayedOrders.length} em atraso
                   </span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                   {delayedOrders.map((order, idx) => (
                     <ImpactRow key={order.id} order={order} index={idx} isDelayed onClick={() => setEditingOrder(order)} />
                   ))}
@@ -367,10 +370,10 @@ export default function DashboardPage() {
 
           {/* PRODUÇÃO RECENTE */}
           <div className="col-span-1 lg:col-span-4">
-             <div className="flex items-center justify-between mb-3 px-1">
-                <h3 className="text-sm font-black text-white tracking-tight flex items-center gap-2">
+             <div className="flex items-center justify-between mb-4 px-1">
+                <h3 className="text-sm font-black text-white tracking-tight flex items-center gap-2 uppercase tracking-tighter">
                    <div className="w-1.5 h-4 bg-primary rounded-full shadow-[0_0_10px_#FF5F1F]" />
-                   FLUXO RECENTE
+                   Fluxo de Produção Recente
                 </h3>
                 <button 
                   onClick={() => router.push('/orders')}
@@ -380,8 +383,8 @@ export default function DashboardPage() {
                 </button>
              </div>
              
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {orders.slice(0, 6).map((order, idx) => (
+             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {orders.slice(0, 12).map((order, idx) => (
                   <ImpactRow key={order.id} order={order} index={idx} onClick={() => setEditingOrder(order)} />
                 ))}
                 {orders.length === 0 && (
