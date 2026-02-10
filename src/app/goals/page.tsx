@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo, useState, useEffect } from 'react';
@@ -16,7 +15,8 @@ import {
   Rocket,
   X,
   Save,
-  Trash2
+  Trash2,
+  Plus
 } from 'lucide-react';
 import { startOfWeek, endOfWeek, isWithinInterval, parseISO, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -125,7 +125,8 @@ export default function WeeklyGoalsPage() {
     if (!editingOrder) return;
     setIsSubmitting(true);
     try {
-      await updateOrder(editingOrder.id, data);
+      const totalValue = data.items.reduce((acc, item) => acc + (item.quantity * item.unitValue), 0);
+      await updateOrder(editingOrder.id, { ...data, totalValue });
       toast({ title: "Pedido Atualizado", description: "As alterações foram salvas com sucesso." });
       setIsModalOpen(false);
       setEditingOrder(null);

@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -59,6 +58,17 @@ export default function ClientsPage() {
       client.company?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [clients, searchTerm]);
+
+  // --- AUXILIAR DE FORMATAÇÃO DE ENDEREÇO (FIX PARA OBJETOS) ---
+  const formatAddress = (address: any) => {
+    if (!address) return 'Localidade não informada';
+    if (typeof address === 'string') return address;
+    
+    // Se for um objeto estruturado do Firestore
+    const { street, number, complement, neighborhood, city, state } = address;
+    const parts = [street, number, complement, neighborhood, city, state].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : 'Dados de endereço incompletos';
+  };
 
   // --- AÇÕES DO CRUD ---
   const handleSave = async (e: React.FormEvent) => {
@@ -123,6 +133,7 @@ export default function ClientsPage() {
   };
 
   const getWhatsappLink = (phone: string) => {
+    if (!phone) return '#';
     const cleanNum = phone.replace(/\D/g, '');
     return `https://wa.me/55${cleanNum}`;
   };
@@ -143,7 +154,7 @@ export default function ClientsPage() {
                <div className="p-2 bg-cyan-500/10 rounded-xl border border-cyan-500/20">
                  <Users size={18} className="text-cyan-400" />
                </div>
-               <span className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.4em]">Relacionamento CRM</span>
+               <span className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.4em]">Hub de Parceiros</span>
              </div>
              <h1 className="text-4xl md:text-6xl font-black text-white uppercase tracking-tighter leading-none">
                Base de <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600">Parceiros</span>
@@ -243,7 +254,7 @@ export default function ClientsPage() {
                   {client.address && (
                      <div className="flex items-center gap-4 text-xs font-bold text-zinc-400 bg-white/[0.02] p-4 rounded-2xl border border-white/5 group-hover:border-cyan-500/20 transition-colors">
                        <MapPin size={16} className="text-cyan-600" />
-                       <span className="truncate">{client.address}</span>
+                       <span className="truncate">{formatAddress(client.address)}</span>
                      </div>
                   )}
                 </div>
@@ -252,7 +263,8 @@ export default function ClientsPage() {
                 <div className="flex gap-3 relative z-10 pt-6 border-t border-white/5">
                   <button 
                     onClick={() => window.open(getWhatsappLink(client.phone), '_blank')}
-                    className="flex-1 py-4 rounded-2xl bg-green-500/10 text-green-500 border border-green-500/20 hover:bg-green-500 hover:text-black font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-3"
+                    disabled={!client.phone}
+                    className="flex-1 py-4 rounded-2xl bg-green-500/10 text-green-500 border border-green-500/20 hover:bg-green-500 hover:text-black font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-3 disabled:opacity-20"
                   >
                     <MessageCircle size={16} /> WhatsApp
                   </button>
