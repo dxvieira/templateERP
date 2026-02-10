@@ -40,18 +40,17 @@ const predictDelayWarningsPrompt = ai.definePrompt({
   name: 'predictDelayWarningsPrompt',
   input: {schema: PredictDelayWarningsInputSchema},
   output: {schema: PredictDelayWarningsOutputSchema},
-  prompt: `You are a production manager assistant that analyzes current production velocity and order details to predict potential delays.
+  prompt: `You are a production manager assistant. Analyze production velocity and order deadlines.
 
-Current production velocity: {{{productionVelocity}}} orders/day.
-Today's date: {{{currentDate}}}.
+Velocity: {{{productionVelocity}}} orders/day.
+Today: {{{currentDate}}}.
 
-Orders to analyze:
+Analyze these orders for potential delays:
 {{#each orders}}
 - OS #{{{id}}} | Client: {{{client}}} | Status: {{{status}}} | Deadline: {{{deliveryDate}}}
 {{/each}}
 
-Identify orders likely to miss their deadline based on the status and velocity.
-Output a JSON array of predicted delayed orders with reasons.`,
+Output a JSON array of predicted delayed orders with specific reasons.`,
 });
 
 // Define the Genkit flow
