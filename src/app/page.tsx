@@ -1,16 +1,13 @@
-
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
-import { motion, useSpring, useTransform, useMotionValue, AnimatePresence } from 'framer-motion';
+import React, { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { 
   Zap, 
-  Layers, 
   Activity, 
-  TrendingUp,
   ChevronRight,
   Plus,
   Trash2,
@@ -59,8 +56,7 @@ const orderSchema = z.object({
 
 type OrderFormValues = z.infer<typeof orderSchema>;
 
-// --- COMPONENTES ---
-
+// --- COMPONENTE: IMPACT CARD (VERTICAL) ---
 const ImpactRow = ({ order, index, isDelayed = false, onClick }: { order: any, index: number, isDelayed?: boolean, onClick: () => void }) => {
   return (
     <motion.div 
@@ -71,7 +67,7 @@ const ImpactRow = ({ order, index, isDelayed = false, onClick }: { order: any, i
       onClick={onClick}
       className={cn(
         "group relative flex flex-col justify-between p-6 rounded-[2.5rem] border border-zinc-800 bg-[#111111] cursor-pointer overflow-hidden transition-all duration-300",
-        "min-h-[260px] hover:border-primary hover:bg-primary/[0.03] hover:shadow-[0_0_50px_-15px_rgba(255,95,31,0.3)]",
+        "min-h-[280px] hover:border-primary hover:bg-primary/[0.03] hover:shadow-[0_0_50px_-15px_rgba(255,95,31,0.3)]",
         isDelayed && "border-destructive/20 hover:border-destructive hover:bg-destructive/[0.03] hover:shadow-[0_0_50px_-15px_rgba(255,0,0,0.3)]"
       )}
     >
@@ -248,7 +244,7 @@ export default function DashboardPage() {
           </motion.button>
         </header>
 
-        {/* PRODUCTION HUB UNIFICADO */}
+        {/* REATOR DE PRODUÇÃO CENTRAL */}
         <section className="relative z-10">
           <ProductionHub stats={stats} orders={orders} />
         </section>
