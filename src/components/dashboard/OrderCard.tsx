@@ -1,22 +1,8 @@
-
-"use client"
+'use client';
 
 import React, { memo } from 'react';
-import { 
-  Calendar, 
-  Trash2,
-  CheckCircle,
-  ChevronDown,
-  User,
-  Package
-} from 'lucide-react';
+import { Calendar, ChevronRight, Package, CheckCircle, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 export interface Order {
   id: string;
@@ -24,7 +10,6 @@ export interface Order {
   description: string;
   status: string;
   deliveryDate: string;
-  value?: number; // Opcional agora, pois não será exibido
 }
 
 interface OrderCardProps {
@@ -35,130 +20,98 @@ interface OrderCardProps {
   onDelete?: (orderId: string) => void;
 }
 
-const statusOptions = ['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Concluído'];
-
-export const OrderCard = memo(({ order, onClick, onStatusChange, onQuickConclude, onDelete }: OrderCardProps) => {
+export const OrderCard = memo(({ order, onClick, onQuickConclude, onDelete }: OrderCardProps) => {
   const isCompleted = order.status === 'Concluído' || order.status === 'Entregue';
+  
+  const dateObj = order.deliveryDate ? new Date(order.deliveryDate.includes('T') ? order.deliveryDate : order.deliveryDate + 'T12:00:00') : null;
+  const formattedDate = dateObj ? dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '--/--';
+  const isLate = dateObj && new Date() > dateObj && !isCompleted;
 
-  const handleDeleteClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation(); 
-    if (onDelete) {
-      onDelete(order.id);
+  const getStatusColor = (status: string) => {
+    switch(status) {
+      case 'Arte': return '#d946ef';
+      case 'Impressão': return '#06b6d4';
+      case 'Serralheria': return '#facc15';
+      case 'Acabamento': return '#FF5F1F';
+      case 'Instalação': return '#22c55e';
+      default: return '#71717a';
     }
   };
 
-  const handleStatusChange = (e: React.MouseEvent, status: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (onStatusChange) {
-      onStatusChange(order.id, status);
-    }
-  };
-
-  const handleConclude = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (onQuickConclude) {
-      onQuickConclude(order.id);
-    }
-  };
-
-  const formattedDate = order.deliveryDate 
-    ? new Date(order.deliveryDate.includes('T') ? order.deliveryDate : order.deliveryDate + 'T12:00:00')
-        .toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
-    : '--/--/--';
+  const statusColor = getStatusColor(order.status);
 
   return (
     <div 
       onClick={() => onClick?.(order)}
       className={cn(
-        "group relative flex flex-col md:flex-row md:items-center justify-between cursor-pointer overflow-hidden transition-all duration-500",
-        "bg-[#0D0D0D] rounded-[1.5rem] border border-white/5",
-        "p-6 md:p-8 min-h-[120px] gap-6 hover:border-primary/40 hover:bg-[#111111]",
-        "hover:shadow-[0_10px_40px_-10px_rgba(255,95,31,0.15)]",
-        isCompleted && "opacity-50 grayscale-[0.3]"
+        "group relative w-full cursor-pointer bg-[#09090b] border border-zinc-800 rounded-xl overflow-hidden transition-all duration-300",
+        "hover:border-[#FF5F1F]/50 hover:shadow-[0_4px_20px_-5px_rgba(255,95,31,0.15)] hover:-translate-y-0.5",
+        "flex flex-col sm:flex-row items-start sm:items-center",
+        isCompleted && "opacity-50 grayscale-[0.5]"
       )}
     >
-      {/* Coluna 1: Cliente e Descrição */}
-      <div className="flex-1 min-w-0 space-y-2">
-        <div className="flex items-center gap-2 mb-1">
-          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-          <span className="text-[10px] font-mono text-zinc-600 tracking-widest uppercase">Protocolo #{order.id}</span>
-        </div>
-        <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-tighter truncate leading-tight">
-          {order.client}
-        </h2>
-        <div className="flex items-center gap-2 text-zinc-500">
-          <Package className="w-3 h-3 shrink-0" />
-          <p className="text-xs uppercase tracking-widest truncate font-medium">
-            {order.description || "Sem descrição técnica"}
-          </p>
-        </div>
-      </div>
+      <div 
+        className="absolute left-0 top-0 bottom-0 w-1.5 transition-all group-hover:w-2"
+        style={{ backgroundColor: statusColor, boxShadow: `0 0 10px ${statusColor}` }}
+      />
 
-      {/* Coluna 2: Status e Prazo (Wide no Desktop) */}
-      <div className="flex flex-col md:flex-row items-start md:items-center gap-6 md:gap-12 shrink-0">
-        
-        {/* Prazo de Entrega */}
-        <div className="space-y-1">
-          <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-600 font-bold">Prazo Final</p>
-          <div className="flex items-center gap-2 text-sm font-black text-white tracking-tight bg-white/5 px-4 py-2 rounded-xl border border-white/5">
-            <Calendar className="w-3.5 h-3.5 text-primary" />
-            {formattedDate}
+      <div className="flex-1 w-full p-4 pl-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div className="flex flex-col gap-1 min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] font-mono text-zinc-500 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800 uppercase">
+              #{order.id.slice(-6)}
+            </span>
+            <div className="flex items-center gap-1.5">
+               <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: statusColor }} />
+               <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>
+                 {order.status}
+               </span>
+            </div>
+          </div>
+          <h3 className="text-lg font-black text-white truncate group-hover:text-[#FF5F1F] transition-colors leading-tight uppercase tracking-tight">
+            {order.client}
+          </h3>
+          <div className="flex items-center gap-1.5 text-zinc-500">
+            <Package size={10} />
+            <p className="text-[10px] uppercase truncate font-medium tracking-widest">{order.description}</p>
           </div>
         </div>
 
-        {/* Status Dropdown */}
-        <div className="min-w-[140px] space-y-1">
-           <p className="text-[9px] uppercase tracking-[0.2em] text-zinc-600 font-bold">Etapa Atual</p>
-           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button 
-                onClick={(e) => e.stopPropagation()}
-                className="w-full flex items-center justify-between px-4 h-11 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all group/btn"
-              >
-                <span className="text-xs font-black text-primary uppercase tracking-[0.1em] truncate">{order.status}</span>
-                <ChevronDown className="w-4 h-4 text-zinc-500 group-hover/btn:text-white transition-colors" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="bg-zinc-950 border-white/10 text-white min-w-[160px] rounded-xl p-2">
-              {statusOptions.map((status) => (
-                <DropdownMenuItem 
-                  key={status} 
-                  onClick={(e) => handleStatusChange(e as any, status)}
-                  className="text-[10px] uppercase font-bold tracking-widest hover:bg-primary hover:text-black cursor-pointer rounded-lg px-3 py-2"
-                >
-                  {status}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4">
+          <div className={cn(
+            "flex items-center gap-3 px-4 py-2 rounded-lg border transition-colors",
+            isLate ? "bg-red-500/10 border-red-500/30" : "bg-zinc-900/50 border-zinc-800 group-hover:border-[#FF5F1F]/30"
+          )}>
+            <div className="text-right">
+              <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">Entrega</p>
+              <div className={cn("flex items-center gap-2 font-mono font-bold text-lg", isLate ? "text-red-500" : "text-white")}>
+                <Calendar size={14} className={isLate ? "text-red-500" : "text-zinc-500"} />
+                {formattedDate}
+              </div>
+            </div>
+          </div>
 
-        {/* Ações Rápidas */}
-        <div className="flex items-center gap-2">
-          {!isCompleted && (
-            <button 
-              onClick={handleConclude}
-              className="w-11 h-11 flex items-center justify-center rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-black transition-all active:scale-90 border border-primary/20"
-              title="Concluir OS"
-            >
-              <CheckCircle className="w-5 h-5" />
-            </button>
-          )}
-          <button 
-            onClick={handleDeleteClick}
-            className="w-11 h-11 flex items-center justify-center rounded-xl bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-all active:scale-90 border border-destructive/20"
-            title="Excluir OS"
-          >
-            <Trash2 className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {!isCompleted && onQuickConclude && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); onQuickConclude(order.id); }}
+                className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-primary hover:border-primary/50 transition-all"
+              >
+                <CheckCircle size={18} />
+              </button>
+            )}
+            {onDelete && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); onDelete(order.id); }}
+                className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-destructive hover:border-destructive/50 transition-all"
+              >
+                <Trash2 size={18} />
+              </button>
+            )}
+            <ChevronRight className="text-zinc-800 group-hover:text-primary group-hover:translate-x-1 transition-all hidden sm:block" />
+          </div>
         </div>
       </div>
-
-      {/* Glow Decorativo Lateral */}
-      <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity" />
     </div>
   );
 });
