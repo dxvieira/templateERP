@@ -1,3 +1,4 @@
+
 'use client';
 
 import { query, collection, orderBy, onSnapshot, doc, serverTimestamp, runTransaction, updateDoc, deleteDoc, Firestore } from 'firebase/firestore';
@@ -128,7 +129,9 @@ export function useOrders() {
     total: orders.length,
     arte: orders.filter(o => o.status === 'Arte').length,
     impressao: orders.filter(o => o.status === 'Impressão').length,
+    serralheria: orders.filter(o => o.status === 'Serralheria').length,
     acabamento: orders.filter(o => o.status === 'Acabamento').length,
+    instalacao: orders.filter(o => o.status === 'Instalação').length,
     concluido: orders.filter(o => o.status === 'Entregue' || o.status === 'Concluído').length,
   };
 

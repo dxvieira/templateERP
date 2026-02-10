@@ -16,7 +16,8 @@ import {
   Trash2,
   Loader2,
   Calendar,
-  AlertTriangle
+  AlertTriangle,
+  Clock
 } from 'lucide-react';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { useOrders } from '@/hooks/use-orders';
@@ -24,7 +25,7 @@ import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebas
 import { query, collection, orderBy } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { ProductionChart } from '@/components/dashboard/ProductionChart';
+import { ProductionHub } from '@/components/dashboard/ProductionHub';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -60,74 +61,16 @@ type OrderFormValues = z.infer<typeof orderSchema>;
 
 // --- COMPONENTES ---
 
-const AnimatedNumber = ({ value }: { value: number }) => {
-  const motionValue = useMotionValue(0);
-  const springValue = useSpring(motionValue, { duration: 2000, bounce: 0 });
-  const rounded = useTransform(springValue, (latest) => Math.round(latest));
-  const [displayValue, setDisplayValue] = useState(0);
-
-  useEffect(() => {
-    motionValue.set(value);
-  }, [value, motionValue]);
-
-  useEffect(() => {
-    const unsubscribe = rounded.on('change', (v) => setDisplayValue(v));
-    return () => unsubscribe();
-  }, [rounded]);
-
-  return <span>{displayValue}</span>;
-};
-
-const ImpactCard = ({ 
-  children, 
-  className = "", 
-  isCritical = false,
-  delay = 0 
-}: { 
-  children: React.ReactNode, 
-  className?: string, 
-  isCritical?: boolean,
-  delay?: number
-}) => (
-  <motion.div 
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.5, delay }}
-    whileHover={{ 
-      y: -8, 
-      scale: 1.01,
-      transition: { type: "spring", stiffness: 400, damping: 10 }
-    }}
-    className={cn(
-      "relative overflow-hidden rounded-3xl border cursor-default transition-all duration-300",
-      isCritical 
-        ? "border-destructive/30 bg-destructive/5 hover:border-destructive hover:bg-destructive/10 hover:shadow-[0_0_50px_-10px_rgba(255,0,0,0.4)]" 
-        : "border-zinc-800 bg-[#0F0F0F] hover:border-primary hover:bg-primary/5 hover:shadow-[0_0_50px_-10px_rgba(255,95,31,0.3)]",
-      "group",
-      className
-    )}
-  >
-    <div className={cn(
-      "absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-1 blur-[10px] opacity-0 group-hover:opacity-100 transition-opacity duration-500",
-      isCritical ? "bg-destructive shadow-[0_0_15px_#FF0000]" : "bg-primary shadow-[0_0_15px_#FF5F1F]"
-    )} />
-    
-    <div className="relative z-10 h-full p-5 flex flex-col justify-between">
-      {children}
-    </div>
-  </motion.div>
-);
-
 const ImpactRow = ({ order, index, isDelayed = false, onClick }: { order: any, index: number, isDelayed?: boolean, onClick: () => void }) => {
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
-      whileHover={{ scale: 1.02, y: -4 }}
+      whileHover={{ y: -8, scale: 1.02 }}
       onClick={onClick}
       className={cn(
-        "group relative flex flex-col p-6 rounded-[2.5rem] border border-zinc-800 bg-[#111111] cursor-pointer overflow-hidden transition-all duration-300",
+        "group relative flex flex-col justify-between p-6 rounded-[2.5rem] border border-zinc-800 bg-[#111111] cursor-pointer overflow-hidden transition-all duration-300",
         "min-h-[260px] hover:border-primary hover:bg-primary/[0.03] hover:shadow-[0_0_50px_-15px_rgba(255,95,31,0.3)]",
         isDelayed && "border-destructive/20 hover:border-destructive hover:bg-destructive/[0.03] hover:shadow-[0_0_50px_-15px_rgba(255,0,0,0.3)]"
       )}
@@ -147,7 +90,7 @@ const ImpactRow = ({ order, index, isDelayed = false, onClick }: { order: any, i
         <ChevronRight size={16} className="text-zinc-700 group-hover:text-white transition-transform group-hover:translate-x-1" />
       </div>
 
-      <div className="flex-1 space-y-2">
+      <div className="flex-1 space-y-4">
         <h4 className={cn(
           "text-2xl font-black leading-[1.1] uppercase tracking-tighter transition-colors truncate pb-1",
           isDelayed ? "group-hover:text-destructive" : "group-hover:text-primary"
@@ -188,7 +131,6 @@ const ImpactRow = ({ order, index, isDelayed = false, onClick }: { order: any, i
 };
 
 export default function DashboardPage() {
-  // 1. TODOS OS HOOKS NO TOPO (Ordem fixa)
   const router = useRouter();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -216,7 +158,6 @@ export default function DashboardPage() {
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
   const watchedItems = watch('items');
 
-  // 2. LOGICA DE DADOS
   const totalValue = useMemo(() => {
     return watchedItems?.reduce((acc, item) => {
       const q = Number(item.quantity) || 0;
@@ -234,7 +175,6 @@ export default function DashboardPage() {
     );
   }, [orders]);
 
-  // 3. EFFECTS
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.replace('/login');
@@ -254,7 +194,6 @@ export default function DashboardPage() {
     }
   }, [editingOrder, reset]);
 
-  // 4. HANDLERS
   const onSubmit = async (data: OrderFormValues) => {
     setIsSubmitting(true);
     try {
@@ -268,13 +207,11 @@ export default function DashboardPage() {
       setIsModalOpen(false);
       setEditingOrder(null);
     } catch (err) {
-      // Erro emitido pelo hook useOrders
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // 5. RENDERS CONDICIONAIS APÓS HOOKS
   if (isUserLoading || isLoading) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
@@ -288,12 +225,12 @@ export default function DashboardPage() {
       <DashboardSidebar />
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
 
-      <main className="flex-1 md:ml-64 p-6 md:p-8 space-y-10 mt-16 md:mt-0 z-10 pb-20">
+      <main className="flex-1 md:ml-64 p-6 md:p-8 space-y-12 mt-16 md:mt-0 z-10 pb-20">
         <header className="flex flex-col md:flex-row justify-between items-end relative z-10 gap-6">
           <div>
             <div className="flex items-center gap-2 text-primary mb-2">
               <Activity size={14} className="animate-pulse" />
-              <span className="text-[10px] font-black uppercase tracking-[0.4em]">Protocolo Terminal VisComm</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.4em]">Terminal VisComm Online</span>
             </div>
             <h1 className="text-5xl md:text-6xl font-black tracking-tighter text-white uppercase leading-none">
               Visão <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-400">Geral</span>
@@ -304,57 +241,27 @@ export default function DashboardPage() {
             whileHover={{ scale: 1.05, boxShadow: "0 0 30px -5px rgba(255, 95, 31, 0.6)" }}
             whileTap={{ scale: 0.95 }}
             onClick={() => { setEditingOrder(null); reset(); setIsModalOpen(true); }}
-            className="bg-primary hover:bg-white hover:text-black text-black font-black py-4 px-10 rounded-[1.5rem] transition-all duration-300 flex items-center gap-3 uppercase tracking-widest text-xs"
+            className="bg-primary hover:bg-white hover:text-black text-black font-black py-4 px-10 rounded-2xl transition-all duration-300 flex items-center gap-3 uppercase tracking-widest text-xs"
           >
               <Zap size={20} fill="currentColor" />
               Nova Ordem
           </motion.button>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 relative z-10">
-          {/* KPI PRINCIPAL */}
-          <ImpactCard className="col-span-1 lg:col-span-2 row-span-1 min-h-[260px]">
-            <div className="flex justify-between items-start">
-               <div className="p-4 bg-black rounded-2xl border border-zinc-800 group-hover:border-primary transition-all duration-300">
-                  <Layers size={24} className="text-primary" />
-               </div>
-               <div className="px-3 py-1.5 rounded-full bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest border border-primary/20 flex items-center gap-2">
-                  <TrendingUp size={12} /> Atividade Real
-               </div>
-            </div>
-            
-            <div className="mt-6">
-               <h2 className="text-8xl font-black text-white tracking-tighter group-hover:text-primary transition-colors leading-none">
-                 <AnimatedNumber value={stats.total - stats.concluido} />
-               </h2>
-               <p className="text-zinc-500 text-base font-black uppercase tracking-widest mt-2">Ordens Ativas</p>
-               
-               <div className="w-full h-2 bg-zinc-800 rounded-full mt-6 overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: "65%" }}
-                    transition={{ duration: 1.5, delay: 0.5 }}
-                    className="h-full bg-primary shadow-[0_0_15px_rgba(255,95,31,0.8)]"
-                  />
-               </div>
-            </div>
-          </ImpactCard>
+        {/* PRODUCTION HUB UNIFICADO */}
+        <section className="relative z-10">
+          <ProductionHub stats={stats} orders={orders} />
+        </section>
 
-          {/* GRÁFICO BENTO */}
-          <ImpactCard className="col-span-1 lg:col-span-2 p-0 overflow-hidden" delay={0.1}>
-            <div className="h-full w-full">
-              <ProductionChart orders={orders} />
-            </div>
-          </ImpactCard>
-
+        <div className="space-y-12 relative z-10">
           {/* WAR ROOM: CRÍTICOS */}
           <AnimatePresence>
             {delayedOrders.length > 0 && (
-              <div className="col-span-1 lg:col-span-4 space-y-6">
+              <div className="space-y-6">
                 <div className="flex items-center justify-between px-2">
                   <h3 className="text-base font-black text-white tracking-tight flex items-center gap-3 uppercase tracking-tighter">
                     <AlertTriangle className="text-destructive w-5 h-5 animate-bounce" />
-                    War Room: Protocolos Críticos
+                    War Room: Alertas Críticos
                   </h3>
                   <span className="bg-destructive/10 text-destructive border border-destructive/20 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
                     {delayedOrders.length} em atraso
@@ -370,7 +277,7 @@ export default function DashboardPage() {
           </AnimatePresence>
 
           {/* PRODUÇÃO RECENTE */}
-          <div className="col-span-1 lg:col-span-4 space-y-6">
+          <div className="space-y-6">
              <div className="flex items-center justify-between px-2">
                 <h3 className="text-base font-black text-white tracking-tight flex items-center gap-3 uppercase tracking-tighter">
                    <div className="w-2 h-5 bg-primary rounded-full shadow-[0_0_15px_#FF5F1F]" />
