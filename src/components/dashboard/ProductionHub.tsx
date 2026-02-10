@@ -4,6 +4,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, Fingerprint, Zap } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface ProductionHubProps {
   stats: {
