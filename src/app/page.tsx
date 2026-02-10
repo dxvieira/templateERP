@@ -6,19 +6,18 @@ import { motion, useSpring, useTransform, useMotionValue, AnimatePresence } from
 import { 
   Zap, 
   Layers, 
-  ArrowUpRight, 
   Clock, 
-  Calendar, 
   Activity, 
-  AlertTriangle,
   TrendingUp,
-  ChevronRight
+  ChevronRight,
+  PieChart as PieChartIcon
 } from 'lucide-react';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { useOrders } from '@/hooks/use-orders';
 import { useUser } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { ProductionChart } from '@/components/dashboard/ProductionChart';
 
 // --- COMPONENTE: CONTADOR ANIMADO ---
 const AnimatedNumber = ({ value }: { value: number }) => {
@@ -69,7 +68,6 @@ const ImpactCard = ({
       className
     )}
   >
-    {/* Spotlight Effect */}
     <div className={cn(
       "absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-1 blur-[8px] opacity-0 group-hover:opacity-100 transition-opacity duration-500",
       isCritical ? "bg-destructive" : "bg-primary"
@@ -81,7 +79,7 @@ const ImpactCard = ({
   </motion.div>
 );
 
-// --- COMPONENTE: ROW DE PEDIDO (Estilo Cyberpunk) ---
+// --- COMPONENTE: ROW DE PEDIDO ---
 const ImpactRow = ({ order, index, isDelayed = false }: { order: any, index: number, isDelayed?: boolean }) => {
   const themeColor = isDelayed ? "text-destructive" : "text-primary";
   const bgColor = isDelayed ? "from-destructive/20" : "from-primary/20";
@@ -94,7 +92,6 @@ const ImpactRow = ({ order, index, isDelayed = false }: { order: any, index: num
       whileHover={{ scale: 1.005, x: 5 }}
       className="group relative flex items-center justify-between p-4 rounded-2xl border border-transparent bg-white/5 mb-2 cursor-pointer overflow-hidden"
     >
-      {/* Background que desliza no hover */}
       <div className={cn(
         "absolute inset-0 bg-gradient-to-r to-transparent translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-300 ease-out",
         bgColor
@@ -114,12 +111,12 @@ const ImpactRow = ({ order, index, isDelayed = false }: { order: any, index: num
         </div>
         <div className="truncate">
           <h4 className={cn(
-            "text-white font-bold text-base transition-colors",
+            "text-white font-bold text-sm transition-colors",
             isDelayed ? "group-hover:text-destructive" : "group-hover:text-primary"
           )}>
             {order.client}
           </h4>
-          <p className="text-zinc-500 text-xs font-medium truncate">
+          <p className="text-zinc-500 text-[10px] font-medium truncate uppercase tracking-tighter">
             {order.items?.[0]?.desc || 'Sem descrição'}
           </p>
         </div>
@@ -135,10 +132,10 @@ const ImpactRow = ({ order, index, isDelayed = false }: { order: any, index: num
         </div>
 
         <div className="text-right min-w-[100px]">
-          <p className="text-white font-mono font-bold text-lg group-hover:scale-105 transition-transform">
+          <p className="text-white font-mono font-bold text-base group-hover:scale-105 transition-transform">
             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.totalValue || 0)}
           </p>
-          <div className="flex items-center justify-end gap-1 text-zinc-600 text-[10px] group-hover:text-zinc-400">
+          <div className="flex items-center justify-end gap-1 text-zinc-600 text-[9px] group-hover:text-zinc-400 uppercase tracking-tighter">
              <Clock size={10} /> {order.deliveryDate || 'Sem data'}
           </div>
         </div>
@@ -182,11 +179,9 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden selection:bg-primary selection:text-black relative font-body">
       <DashboardSidebar />
-      
-      {/* Background Lighting Sutil */}
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.05] blur-[150px] pointer-events-none rounded-full z-0" />
 
-      <main className="flex-1 md:ml-64 p-6 md:p-10 space-y-12 mt-16 md:mt-0 z-10">
+      <main className="flex-1 md:ml-64 p-6 md:p-8 space-y-8 mt-16 md:mt-0 z-10">
         <header className="flex flex-col md:flex-row justify-between items-end relative z-10 gap-6">
           <div>
             <motion.div 
@@ -195,10 +190,10 @@ export default function DashboardPage() {
               className="flex items-center gap-2 text-primary mb-1"
             >
               <Activity size={16} className="animate-pulse" />
-              <span className="text-xs font-bold uppercase tracking-[0.3em]">Protocolo Terminal VisComm</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.4em]">Protocolo Terminal VisComm</span>
             </motion.div>
-            <h1 className="text-6xl font-black tracking-tighter text-white leading-none">
-              VISÃO <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-400">GERAL</span>
+            <h1 className="text-6xl font-black tracking-tighter text-white leading-none uppercase">
+              Visão <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-400">Geral</span>
             </h1>
           </div>
           
@@ -206,30 +201,30 @@ export default function DashboardPage() {
             whileHover={{ scale: 1.05, boxShadow: "0 0 30px -5px rgba(255, 95, 31, 0.6)" }}
             whileTap={{ scale: 0.95 }}
             onClick={() => router.push('/orders')}
-            className="bg-primary hover:bg-white hover:text-black text-black font-black py-4 px-8 rounded-2xl transition-all duration-300 flex items-center gap-3"
+            className="bg-primary hover:bg-white hover:text-black text-black font-black py-4 px-8 rounded-2xl transition-all duration-300 flex items-center gap-3 uppercase tracking-widest text-[10px]"
           >
               <Zap size={20} fill="currentColor" />
-              NOVA ORDEM
+              Nova Ordem
           </motion.button>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 relative z-10">
           {/* KPI PRINCIPAL: PRODUÇÃO ATIVA */}
-          <ImpactCard className="col-span-1 md:col-span-2 row-span-2 min-h-[340px] !bg-zinc-900/40">
+          <ImpactCard className="col-span-1 lg:col-span-2 row-span-2 min-h-[380px] !bg-zinc-900/40">
             <div className="flex justify-between items-start">
                <div className="p-4 bg-black rounded-2xl border border-zinc-800 group-hover:border-primary group-hover:bg-primary group-hover:text-black transition-all duration-300">
                   <Layers size={28} />
                </div>
                <div className="px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest border border-primary/20 flex items-center gap-2">
-                  <TrendingUp size={14} /> Atividade Cloud
+                  <TrendingUp size={14} /> Atividade Real
                </div>
             </div>
             
             <div className="mt-auto">
                <h2 className="text-9xl font-black text-white tracking-tighter group-hover:text-primary transition-colors duration-300 leading-none">
-                 <AnimatedNumber value={stats.total - stats.concluido} />
+                 <AnimatedNumber value={stats.total - (stats.concluido)} />
                </h2>
-               <p className="text-zinc-500 text-lg font-black uppercase tracking-widest mt-2 group-hover:text-white transition-colors">Ordens em Produção</p>
+               <p className="text-zinc-500 text-lg font-black uppercase tracking-widest mt-2 group-hover:text-white transition-colors">Ordens Ativas</p>
                
                <div className="w-full h-2 bg-zinc-800 rounded-full mt-8 overflow-hidden">
                   <motion.div 
@@ -242,43 +237,18 @@ export default function DashboardPage() {
             </div>
           </ImpactCard>
 
-          {/* KPI 2: FATURAMENTO */}
-          <ImpactCard className="col-span-1 min-h-[200px]" delay={0.1}>
-             <div className="flex justify-between mb-2">
-                <span className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.2em]">Faturamento Total</span>
-             </div>
-             <h3 className="text-4xl font-black text-white mb-2 group-hover:text-primary transition-colors">
-               R$ <AnimatedNumber value={Math.floor(orders.reduce((acc, o) => acc + (o.totalValue || 0), 0) / 1000)} />k
-             </h3>
-             <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-tight">Protocolos Processados: <span className="text-white">{stats.total}</span></p>
-             
-             <div className="mt-auto pt-4 flex gap-1 items-end h-16 opacity-30 group-hover:opacity-100 transition-opacity">
-                {[30, 50, 40, 70, 90, 60, 85, 45].map((h, i) => (
-                  <div key={i} style={{height: `${h}%`}} className="flex-1 bg-zinc-800 rounded-sm group-hover:bg-primary transition-colors duration-500" />
-                ))}
-             </div>
-          </ImpactCard>
-
-          {/* KPI 3: ENTREGAS HOJE */}
-          <ImpactCard className="col-span-1 min-h-[200px]" delay={0.2}>
-             <div className="flex justify-between items-center mb-4">
-                <span className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.2em]">Entregas Hoje</span>
-                <Calendar size={18} className="text-zinc-600 group-hover:text-white transition-colors" />
-             </div>
-             <h3 className="text-6xl font-black text-white mb-1 group-hover:scale-110 origin-left transition-transform duration-300">
-               <AnimatedNumber value={orders.filter(o => o.deliveryDate === todayStr).length} />
-             </h3>
-             <div className="mt-auto px-4 py-3 bg-black/60 rounded-xl border border-white/5 flex items-center gap-2 group-hover:border-primary/30 transition-colors">
-                <Clock size={14} className="text-primary animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-300">Terminal Sincronizado</span>
-             </div>
+          {/* CARD DE GRÁFICO INTEGRADO */}
+          <ImpactCard className="col-span-1 lg:col-span-2 row-span-2 min-h-[380px] p-0 overflow-hidden" delay={0.1}>
+            <div className="h-full w-full">
+              <ProductionChart orders={orders} />
+            </div>
           </ImpactCard>
 
           {/* WAR ROOM (ORDENS ATRASADAS) */}
           <AnimatePresence>
             {delayedOrders.length > 0 && (
-              <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-8">
-                <div className="flex items-center justify-between mb-6">
+              <div className="col-span-1 lg:col-span-4 mt-4">
+                <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xl font-black text-white tracking-tight flex items-center gap-3">
                     <span className="w-2 h-8 bg-destructive rounded-full shadow-[0_0_15px_rgba(255,0,0,0.8)] animate-pulse" />
                     WAR ROOM: PROTOCOLOS CRÍTICOS
@@ -297,8 +267,8 @@ export default function DashboardPage() {
           </AnimatePresence>
 
           {/* ATIVIDADE RECENTE */}
-          <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-8">
-             <div className="flex items-center justify-between mb-6">
+          <div className="col-span-1 lg:col-span-4 mt-4">
+             <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-black text-white tracking-tight flex items-center gap-3">
                    <span className="w-2 h-8 bg-primary rounded-full shadow-[0_0_15px_rgba(255,95,31,0.8)]" />
                    PRODUÇÃO RECENTE
@@ -312,7 +282,7 @@ export default function DashboardPage() {
              </div>
              
              <div className="flex flex-col">
-                {orders.slice(0, 5).map((order, idx) => (
+                {orders.slice(0, 6).map((order, idx) => (
                   <ImpactRow key={order.id} order={order} index={idx} />
                 ))}
                 {orders.length === 0 && (
@@ -327,3 +297,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
