@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { collection, doc, query, orderBy, serverTimestamp, setDoc, deleteDoc } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
+import { useSearchParams } from 'next/navigation';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { 
   Users, 
@@ -26,10 +27,11 @@ import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
-export default function ClientsPage() {
+function ClientsContent() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
   
   // --- 1. ESTADOS DE SEGURANÇA (VOLÁTIL) ---
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -37,7 +39,7 @@ export default function ClientsPage() {
   const [isPassError, setIsPassError] = useState(false);
 
   // --- 2. ESTADOS DE GESTÃO ---
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -504,5 +506,13 @@ export default function ClientsPage() {
         </AnimatePresence>
       </main>
     </div>
+  );
+}
+
+export default function ClientsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin" /></div>}>
+      <ClientsContent />
+    </Suspense>
   );
 }

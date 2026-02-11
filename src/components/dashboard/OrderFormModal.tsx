@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, 
@@ -9,11 +9,12 @@ import {
   Trash2, 
   Box, 
   FileText, 
-  Hash, 
   ChevronDown, 
   Activity,
-  Loader2
+  Loader2,
+  ExternalLink
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useOrders } from '@/hooks/use-orders';
 import { useToast } from '@/hooks/use-toast';
 
@@ -33,6 +34,7 @@ interface OrderFormModalProps {
 }
 
 export function OrderFormModal({ order, isOpen, onClose }: OrderFormModalProps) {
+  const router = useRouter();
   const { createOrder, updateOrder, deleteOrder } = useOrders();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -75,6 +77,13 @@ export function OrderFormModal({ order, isOpen, onClose }: OrderFormModalProps) 
   };
 
   const currentColor = getStatusColor(status);
+
+  // --- LINK PROFUNDO PARA CLIENTE ---
+  const handleGoToClient = () => {
+    if (!client) return;
+    onClose();
+    router.push(`/clients?search=${encodeURIComponent(client)}`);
+  };
 
   // Gerenciamento de Itens
   const handleAddItem = () => {
@@ -215,7 +224,16 @@ export function OrderFormModal({ order, isOpen, onClose }: OrderFormModalProps) 
                 {/* 2. DADOS PRINCIPAIS */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-1.5">
-                    <label className="text-[9px] text-zinc-500 uppercase font-black tracking-widest ml-1">Cliente / Projeto</label>
+                    <div className="flex justify-between items-center mb-1 ml-1">
+                      <label className="text-[9px] text-zinc-500 uppercase font-black tracking-widest">Cliente / Projeto</label>
+                      <button 
+                        type="button"
+                        onClick={handleGoToClient}
+                        className="flex items-center gap-1 text-[9px] font-black uppercase text-cyan-500 hover:text-cyan-400 transition-colors"
+                      >
+                        Ver Perfil <ExternalLink size={10} />
+                      </button>
+                    </div>
                     <input
                       required
                       value={client}
