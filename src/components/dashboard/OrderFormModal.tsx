@@ -229,9 +229,10 @@ export function OrderFormModal({ order, isOpen, onClose }: OrderFormModalProps) 
                       <button 
                         type="button"
                         onClick={handleGoToClient}
-                        className="flex items-center gap-1 text-[9px] font-black uppercase text-cyan-500 hover:text-cyan-400 transition-colors"
+                        className="flex items-center gap-1 text-[9px] font-black uppercase text-primary hover:text-white transition-all group/link"
                       >
-                        Ver Perfil <ExternalLink size={10} />
+                        <span className="group-hover/link:underline">Ver Perfil</span>
+                        <ExternalLink size={10} className="group-hover/link:translate-x-0.5 group-hover/link:-translate-y-0.5 transition-transform" />
                       </button>
                     </div>
                     <input
