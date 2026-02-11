@@ -1,7 +1,6 @@
-
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -40,7 +39,10 @@ import {
   Trash2,
   Hash,
   Box,
-  FileText
+  FileText,
+  Lock,
+  ShieldCheck,
+  ArrowRight
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useOrders } from '@/hooks/use-orders';
@@ -73,6 +75,31 @@ const orderSchema = z.object({
 type OrderFormValues = z.infer<typeof orderSchema>;
 
 export default function OrdersManagerPage() {
+  // --- SEGURANÇA (LOCK SCREEN) ---
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [isPassError, setIsPassError] = useState(false);
+
+  useEffect(() => {
+    const granted = sessionStorage.getItem('orders_access_granted') === 'true';
+    if (granted) setIsAuthenticated(true);
+    setIsCheckingAuth(false);
+  }, []);
+
+  const handleUnlock = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordInput === '@impactoADM') {
+      setIsAuthenticated(true);
+      sessionStorage.setItem('orders_access_granted', 'true');
+      setIsPassError(false);
+    } else {
+      setIsPassError(true);
+      setTimeout(() => setIsPassError(false), 500);
+    }
+  };
+
+  // --- ESTADOS DE GESTÃO ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [orderIdToDelete, setOrderIdToDelete] = useState<string | null>(null);
@@ -87,8 +114,8 @@ export default function OrdersManagerPage() {
   const { orders, createOrder, updateOrder, deleteOrder, isLoading } = useOrders();
 
   const clientsQuery = useMemoFirebase(() => 
-    firestore ? query(collection(firestore, 'clients'), orderBy('name', 'asc')) : null
-  , [firestore]);
+    firestore && isAuthenticated ? query(collection(firestore, 'clients'), orderBy('name', 'asc')) : null
+  , [firestore, isAuthenticated]);
   const { data: clients } = useCollection(clientsQuery);
 
   const { register, control, handleSubmit, reset, watch } = useForm<OrderFormValues>({
@@ -172,6 +199,90 @@ export default function OrdersManagerPage() {
     setIsModalOpen(true);
   };
 
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+        <Loader2 className="w-10 h-10 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  // --- VIEW: LOCK SCREEN ---
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="absolute top-[-20%] left-[-20%] w-[50%] h-[50%] bg-primary/5 blur-[120px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-[-20%] right-[-20%] w-[50%] h-[50%] bg-zinc-800/20 blur-[120px] rounded-full pointer-events-none" />
+
+        <motion.div 
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ 
+            scale: 1, 
+            opacity: 1,
+            x: isPassError ? [0, -10, 10, -10, 10, 0] : 0 
+          }}
+          className="w-full max-w-md bg-[#09090b] border border-zinc-800 rounded-[2.5rem] p-8 shadow-2xl relative z-10"
+        >
+          <div className="flex flex-col items-center mb-10">
+            <div className={`
+              p-5 rounded-3xl mb-6 transition-all duration-300 border
+              ${isPassError ? 'bg-destructive/10 text-destructive border-destructive/30 shadow-[0_0_20px_rgba(255,0,0,0.2)]' : 'bg-primary/10 text-primary border-primary/30 shadow-[0_0_20px_rgba(255,95,31,0.2)]'}
+            `}>
+              <Lock size={32} />
+            </div>
+            <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Acesso Restrito</h2>
+            <p className="text-zinc-500 text-[10px] mt-2 text-center uppercase tracking-[0.3em] font-bold">
+              Terminal de Comando VisComm <br/> Identifique-se para gerenciar pedidos
+            </p>
+          </div>
+
+          <form onSubmit={handleUnlock} className="space-y-5">
+            <div className="relative group">
+              <input 
+                type="password"
+                placeholder="SENHA ADMINISTRATIVA"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                className={`
+                  w-full bg-zinc-900/50 border rounded-2xl py-4 pl-4 pr-12 text-center text-white tracking-[0.5em] outline-none transition-all duration-300 font-bold
+                  placeholder:tracking-normal placeholder:text-zinc-700 placeholder:text-[10px]
+                  ${isPassError 
+                    ? 'border-destructive/50 focus:border-destructive shadow-[0_0_30px_rgba(255,0,0,0.15)]' 
+                    : 'border-zinc-800 focus:border-primary/50 focus:shadow-[0_0_30px_rgba(255,95,31,0.1)]'
+                  }
+                `}
+              />
+              <div className="absolute right-5 top-1/2 -translate-y-1/2">
+                {isPassError ? <X size={20} className="text-destructive" /> : <ShieldCheck size={20} className="text-zinc-700 group-focus-within:text-primary transition-colors" />}
+              </div>
+            </div>
+
+            <Button 
+              type="submit"
+              className="
+                w-full h-14 rounded-2xl bg-primary text-black font-black uppercase tracking-widest text-[10px]
+                hover:bg-white transition-all duration-300 shadow-[0_5px_20px_-5px_rgba(255,95,31,0.4)]
+                flex items-center justify-center gap-2 group
+              "
+            >
+              Desbloquear Painel <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+            </Button>
+          </form>
+
+          {isPassError && (
+            <motion.p 
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              className="text-destructive text-[9px] font-black text-center mt-6 uppercase tracking-[0.2em]"
+            >
+              Credencial Inválida • Acesso Negado
+            </motion.p>
+          )}
+        </motion.div>
+      </div>
+    );
+  }
+
+  // --- VIEW: AUTHENTICATED CONTENT ---
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden relative selection:bg-primary selection:text-black">
       <DashboardSidebar />
@@ -393,7 +504,6 @@ export default function OrdersManagerPage() {
                       className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 md:p-6 relative group hover:border-white/10 transition-colors"
                     >
                       <div className="flex flex-col gap-4">
-                        {/* Linha 1: Material + Qtd */}
                         <div className="flex gap-4 items-end">
                           <div className="flex-1 space-y-1.5">
                             <Label className="text-[9px] text-zinc-500 uppercase font-black tracking-widest flex items-center gap-1">
@@ -412,7 +522,6 @@ export default function OrdersManagerPage() {
                           </button>
                         </div>
 
-                        {/* Linha 2: Observações */}
                         <div className="space-y-1.5">
                           <Label className="text-[9px] text-zinc-500 uppercase font-black tracking-widest flex items-center gap-1">
                             <FileText size={10} className="text-primary" /> Observações Técnicas
