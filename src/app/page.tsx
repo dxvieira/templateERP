@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -17,7 +16,8 @@ import {
   Hash,
   Box,
   FileText,
-  Trash2
+  Trash2,
+  Save
 } from 'lucide-react';
 import { startOfWeek, endOfWeek, isWithinInterval, parseISO } from 'date-fns';
 
@@ -99,7 +99,6 @@ export default function DashboardPage() {
   const weekStart = startOfWeek(today, { weekStartsOn: 0 });
   const weekEnd = endOfWeek(today, { weekStartsOn: 0 });
 
-  // 1. Contador de Pedidos Pendentes da Semana
   const weeklyPendingCount = useMemo(() => {
     return orders.filter(o => {
       if (!o.deliveryDate || ['Concluído', 'Entregue'].includes(o.status)) return false;
@@ -112,7 +111,6 @@ export default function DashboardPage() {
     }).length;
   }, [orders, weekStart, weekEnd]);
 
-  // 2. Pedidos Críticos (War Room): Atrasados ou Hoje
   const warRoom = useMemo(() => {
     return orders.filter(o => 
       !['Concluído', 'Entregue'].includes(o.status) && 
@@ -121,7 +119,6 @@ export default function DashboardPage() {
     ).sort((a, b) => (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
   }, [orders, todayStr]);
 
-  // 3. Fila de Pedidos (Fluxo Nominal): Futuro
   const productionQueue = useMemo(() => {
     return orders.filter(o => 
       !['Concluído', 'Entregue'].includes(o.status) && 
@@ -129,7 +126,6 @@ export default function DashboardPage() {
     ).sort((a, b) => (a.deliveryDate || '9999').localeCompare(b.deliveryDate || '9999'));
   }, [orders, todayStr]);
 
-  // 4. Pedidos Concluídos
   const completedList = useMemo(() => {
     return orders.filter(o => ['Concluído', 'Entregue'].includes(o.status))
       .sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
@@ -181,11 +177,14 @@ export default function DashboardPage() {
     }
   };
 
-  const handleQuickConclude = async (orderId: string) => {
-    try {
-      await updateOrder(orderId, { status: 'Concluído' });
-      toast({ title: "Finalizado", description: "Pedido movido para concluídos." });
-    } catch (err) {}
+  const handleDeleteOrder = async () => {
+    if (!editingOrder) return;
+    if (window.confirm("Remover este pedido permanentemente?")) {
+      await deleteOrder(editingOrder.id);
+      setIsModalOpen(false);
+      setEditingOrder(null);
+      toast({ title: "Removido", description: "Pedido excluído do sistema." });
+    }
   };
 
   if (isUserLoading || isLoading) {
@@ -201,23 +200,23 @@ export default function DashboardPage() {
       <DashboardSidebar />
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
 
-      <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-8 mt-16 md:mt-0 z-10 pb-24">
-        <header className="flex flex-col md:flex-row justify-between items-end gap-6">
+      <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-6 mt-16 md:mt-0 z-10 pb-24">
+        <header className="flex flex-col md:flex-row justify-between items-end gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-primary">
               <Activity size={14} className="animate-pulse" />
               <span className="text-[9px] font-black uppercase tracking-[0.4em]">Terminal Operacional VisComm</span>
             </div>
-            <h1 className="text-3xl md:text-3xl font-black tracking-tighter text-white uppercase leading-none">
+            <h1 className="text-3xl font-black tracking-tighter text-white uppercase leading-none">
               Gestão de <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-400">Fluxo</span>
             </h1>
           </div>
           
           <Button 
             onClick={() => { setEditingOrder(null); reset(); setIsModalOpen(true); }}
-            className="bg-primary text-black font-black h-12 px-8 rounded-xl transition-all duration-300 flex items-center gap-3 uppercase tracking-widest text-[10px] shadow-[0_5px_20px_-5px_rgba(255,95,31,0.3)] hover:bg-white active:scale-95"
+            className="bg-primary text-black font-black h-10 px-6 rounded-xl transition-all duration-300 flex items-center gap-2 uppercase tracking-widest text-[10px] shadow-[0_5px_20px_-5px_rgba(255,95,31,0.3)] hover:bg-white active:scale-95"
           >
-              <Plus size={18} strokeWidth={3} />
+              <Plus size={16} strokeWidth={3} />
               Lançar Pedido
           </Button>
         </header>
@@ -253,11 +252,10 @@ export default function DashboardPage() {
                       client: order.client,
                       description: order.items?.[0]?.desc || 'Sem descrição',
                       status: order.status,
-                      deliveryDate: order.deliveryDate
+                      deliveryDate: order.deliveryDate,
+                      items: order.items
                     }} 
                     onClick={() => setEditingOrder(order)} 
-                    onQuickConclude={handleQuickConclude}
-                    onDelete={deleteOrder}
                   />
                 </div>
               ))}
@@ -285,11 +283,10 @@ export default function DashboardPage() {
                     client: order.client,
                     description: order.items?.[0]?.desc || 'Sem descrição',
                     status: order.status,
-                    deliveryDate: order.deliveryDate
+                    deliveryDate: order.deliveryDate,
+                    items: order.items
                   }} 
                   onClick={() => setEditingOrder(order)} 
-                  onQuickConclude={handleQuickConclude}
-                  onDelete={deleteOrder}
                 />
               </div>
             ))}
@@ -317,10 +314,10 @@ export default function DashboardPage() {
                       client: order.client,
                       description: order.items?.[0]?.desc || 'Sem descrição',
                       status: order.status,
-                      deliveryDate: order.deliveryDate
+                      deliveryDate: order.deliveryDate,
+                      items: order.items
                     }} 
                     onClick={() => setEditingOrder(order)} 
-                    onDelete={deleteOrder}
                   />
                 </div>
               ))}
@@ -330,12 +327,17 @@ export default function DashboardPage() {
 
         <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
           <DialogContent className="max-w-3xl bg-[#0A0A0A] border-white/5 text-white rounded-[2rem] overflow-hidden p-0 shadow-2xl">
-            <DialogHeader className="p-6 md:p-8 border-b border-white/5 flex flex-row items-center justify-between bg-zinc-900/30">
-              <DialogTitle className="text-xl font-black text-primary uppercase tracking-tighter">
+            <DialogHeader className="p-6 border-b border-white/5 flex flex-row items-center justify-between bg-zinc-900/30">
+              <DialogTitle className="text-lg font-black text-primary uppercase tracking-tighter">
                 {editingOrder ? 'Ajustar Pedido' : 'Novo Lançamento'}
               </DialogTitle>
+              {editingOrder && (
+                <button onClick={handleDeleteOrder} className="p-2 text-zinc-500 hover:text-destructive transition-colors mr-8">
+                  <Trash2 size={18} />
+                </button>
+              )}
             </DialogHeader>
-            <form onSubmit={handleSubmit(onSubmit)} className="p-6 md:p-8 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
+            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1.5">
                   <Label className="text-[9px] uppercase tracking-widest text-zinc-500 font-black">Cliente*</Label>
@@ -424,7 +426,7 @@ export default function DashboardPage() {
 
               <div className="flex items-center justify-end pt-6 border-t border-white/5">
                 <Button type="submit" disabled={isSubmitting} className="w-full md:w-48 h-10 bg-primary text-black font-black uppercase tracking-widest rounded-xl text-[10px] hover:shadow-[0_0_30px_rgba(255,95,31,0.5)] transition-all">
-                  {isSubmitting ? <Loader2 className="w-4 animate-spin" /> : 'Gravar Pedido'}
+                  {isSubmitting ? <Loader2 className="w-4 animate-spin" /> : <><Save size={14} className="mr-2" /> Gravar Pedido</>}
                 </Button>
               </div>
             </form>

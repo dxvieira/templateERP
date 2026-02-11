@@ -1,8 +1,14 @@
 'use client';
 
 import React, { memo } from 'react';
-import { Calendar, ChevronRight, Package, CheckCircle2, Trash2 } from 'lucide-react';
+import { Calendar, ChevronRight, Package, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+export interface OrderItem {
+  desc?: string;
+  quantity?: number;
+  observation?: string;
+}
 
 export interface Order {
   id: string;
@@ -10,22 +16,25 @@ export interface Order {
   description: string;
   status: string;
   deliveryDate: string;
+  items?: OrderItem[];
 }
 
 interface OrderCardProps {
   order: Order;
   onClick?: (order: Order) => void;
-  onQuickConclude?: (orderId: string) => void;
-  onDelete?: (orderId: string) => void;
 }
 
-export const OrderCard = memo(({ order, onClick, onQuickConclude, onDelete }: OrderCardProps) => {
+export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
   const isDone = order.status === 'Concluído' || order.status === 'Entregue';
   
+  // Tratamento de Data robusto
   const dateObj = order.deliveryDate ? new Date(order.deliveryDate.includes('T') ? order.deliveryDate : order.deliveryDate + 'T12:00:00') : null;
   const formattedDate = dateObj ? dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '--/--';
+  
+  // Verifica atraso (Atrasado se data < hoje E não concluído)
   const isLate = dateObj && new Date() > dateObj && !isDone;
 
+  // Sistema de Cores Industrial
   const getStatusColor = (status: string) => {
     switch(status) {
       case 'Arte': return '#d946ef';
@@ -46,7 +55,7 @@ export const OrderCard = memo(({ order, onClick, onQuickConclude, onDelete }: Or
       onClick={() => onClick?.(order)}
       className={cn(
         "group relative w-full cursor-pointer bg-[#09090b] border border-zinc-800 rounded-lg overflow-hidden transition-all duration-300 ease-out",
-        "hover:-translate-y-0.5 flex flex-col sm:flex-row items-start sm:items-center",
+        "hover:-translate-y-0.5 flex flex-col sm:flex-row items-stretch",
         isDone ? "border-green-500/10" : ""
       )}
       style={{ 
@@ -57,13 +66,13 @@ export const OrderCard = memo(({ order, onClick, onQuickConclude, onDelete }: Or
       {/* Glow de Hover Dinâmico */}
       <div className="absolute inset-0 border border-transparent rounded-lg pointer-events-none transition-all duration-300 group-hover:border-[var(--hover-color)] group-hover:shadow-[0_0_15px_-5px_var(--hover-color)] opacity-40 group-hover:opacity-100" />
 
-      {/* BARRA LATERAL DE STATUS - Compacta (w-1) */}
+      {/* BARRA LATERAL DE STATUS */}
       <div 
-        className="absolute left-0 top-0 bottom-0 w-1 transition-all group-hover:w-1.5"
+        className="w-1 transition-all group-hover:w-1.5 shrink-0"
         style={{ backgroundColor: statusColor, boxShadow: `0 0 10px ${statusColor}` }}
       />
 
-      {/* CONTEÚDO PRINCIPAL - Padding Reduzido (p-2.5) */}
+      {/* CONTEÚDO PRINCIPAL */}
       <div className="relative z-10 flex-1 w-full p-2.5 pl-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-4">
         
         <div className="flex flex-col gap-0.5 min-w-0 flex-1">
@@ -84,13 +93,19 @@ export const OrderCard = memo(({ order, onClick, onQuickConclude, onDelete }: Or
           )}>
             {order.client}
           </h3>
+          
+          {/* Resumo de Itens de Produção */}
           <div className="flex items-center gap-1 text-zinc-500">
             <Package size={8} />
-            <p className="text-[8px] uppercase truncate font-medium tracking-widest">{order.description}</p>
+            <p className="text-[8px] uppercase truncate font-medium tracking-widest">
+              {order.description || 'Sem descrição'}
+              {order.items && order.items.length > 1 && ` +${order.items.length - 1}`}
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-3">
+        {/* LADO DIREITO: PRAZO E NAVEGAÇÃO */}
+        <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-3 border-t sm:border-t-0 border-zinc-800/50 pt-2 sm:pt-0">
           <div className={cn(
             "flex items-center gap-2 px-2 py-1 rounded-md border transition-all",
             isLate ? "bg-red-500/10 border-red-500/30" : "bg-zinc-900/50 border-zinc-800",
@@ -107,25 +122,7 @@ export const OrderCard = memo(({ order, onClick, onQuickConclude, onDelete }: Or
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {!isDone && onQuickConclude && (
-              <button 
-                onClick={(e) => { e.stopPropagation(); onQuickConclude(order.id); }}
-                className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-primary hover:border-primary/50 transition-all"
-              >
-                <CheckCircle2 size={14} />
-              </button>
-            )}
-            {onDelete && (
-              <button 
-                onClick={(e) => { e.stopPropagation(); onDelete(order.id); }}
-                className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-destructive hover:border-destructive/50 transition-all"
-              >
-                <Trash2 size={14} />
-              </button>
-            )}
-            <ChevronRight className="text-zinc-800 group-hover:text-[var(--hover-color)] group-hover:translate-x-1 transition-all hidden sm:block" size={14} />
-          </div>
+          <ChevronRight className="text-zinc-800 group-hover:text-[var(--hover-color)] group-hover:translate-x-1 transition-all hidden sm:block" size={14} />
         </div>
       </div>
     </div>

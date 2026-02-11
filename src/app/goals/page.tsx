@@ -51,7 +51,6 @@ import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
-// --- SCHEMAS E TIPOS ---
 const orderSchema = z.object({
   client: z.string().min(1, 'Cliente obrigatório'),
   deliveryDate: z.string().default(''),
@@ -67,7 +66,6 @@ const orderSchema = z.object({
 
 type OrderFormValues = z.infer<typeof orderSchema>;
 
-// --- COMPONENTE PRINCIPAL ---
 export default function WeeklyGoalsPage() {
   const router = useRouter();
   const firestore = useFirestore();
@@ -77,7 +75,6 @@ export default function WeeklyGoalsPage() {
   const [editingOrder, setEditingOrder] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 1. CÁLCULO DE INTERVALO (MEMOIZADO)
   const weekInterval = useMemo(() => {
     const now = new Date();
     return {
@@ -88,7 +85,6 @@ export default function WeeklyGoalsPage() {
     };
   }, []);
 
-  // 2. QUERY NATIVA OTIMIZADA (LEITURA MÍNIMA)
   const weeklyQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
@@ -101,18 +97,14 @@ export default function WeeklyGoalsPage() {
 
   const { data: orders, isLoading } = useCollection(weeklyQuery);
 
-  // 3. PROCESSAMENTO DE DADOS (DERIVED STATE)
   const { pendingOrders, completedOrders, progress } = useMemo(() => {
     if (!orders) return { pendingOrders: [], completedOrders: [], progress: 0 };
-
     const pending = orders.filter(o => !['Concluído', 'Entregue'].includes(o.status));
     const completed = orders.filter(o => ['Concluído', 'Entregue'].includes(o.status));
     const percentage = orders.length > 0 ? Math.round((completed.length / orders.length) * 100) : 0;
-
     return { pendingOrders: pending, completedOrders: completed, progress: percentage };
   }, [orders]);
 
-  // 4. FORMULÁRIO DE EDIÇÃO
   const { register, control, handleSubmit, reset } = useForm<OrderFormValues>({
     resolver: zodResolver(orderSchema)
   });
@@ -133,14 +125,13 @@ export default function WeeklyGoalsPage() {
   const handleUpdate = async (data: OrderFormValues) => {
     if (!firestore || !editingOrder) return;
     setIsSubmitting(true);
-    
     const orderRef = doc(firestore, 'orders', editingOrder.id);
     const totalValue = data.items.reduce((acc, item) => acc + (item.quantity * (item.unitValue || 0)), 0);
     const payload = { ...data, totalValue, updatedAt: serverTimestamp() };
 
     updateDoc(orderRef, payload)
       .then(() => {
-        toast({ title: "Missão Atualizada", description: `Pedido #${editingOrder.id} salvo.` });
+        toast({ title: "Meta Atualizada" });
         setEditingOrder(null);
       })
       .catch(async (err) => {
@@ -153,18 +144,14 @@ export default function WeeklyGoalsPage() {
       .finally(() => setIsSubmitting(false));
   };
 
-  const handleQuickConclude = useCallback(async (orderId: string) => {
-    if (!firestore) return;
-    const orderRef = doc(firestore, 'orders', orderId);
-    updateDoc(orderRef, { status: 'Concluído', updatedAt: serverTimestamp() })
-      .catch(async () => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: orderRef.path,
-          operation: 'update',
-          requestResourceData: { status: 'Concluído' }
-        }));
-      });
-  }, [firestore]);
+  const handleDelete = async () => {
+    if (!firestore || !editingOrder) return;
+    if (window.confirm("Remover este pedido?")) {
+      deleteDoc(doc(firestore, 'orders', editingOrder.id));
+      setEditingOrder(null);
+      toast({ title: "Removido" });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -178,247 +165,83 @@ export default function WeeklyGoalsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden selection:bg-green-500 selection:text-black">
+    <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden relative selection:bg-green-500 selection:text-black">
       <DashboardSidebar />
-      
-      <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-8 mt-16 md:mt-0 pb-24 relative">
+      <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-6 mt-16 md:mt-0 pb-24 relative">
         <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-green-600 opacity-[0.03] blur-[150px] pointer-events-none rounded-full" />
-
-        {/* --- HEADER --- */}
         <header className="space-y-4">
-          <Button 
-            variant="ghost" 
-            onClick={() => router.push('/')}
-            className="text-zinc-500 hover:text-green-400 p-0 h-auto gap-2 uppercase text-[9px] font-black tracking-widest transition-colors"
-          >
-            <ChevronLeft size={12} /> Voltar ao Terminal
-          </Button>
-          
+          <Button variant="ghost" onClick={() => router.push('/')} className="text-zinc-500 hover:text-green-400 p-0 h-auto gap-2 uppercase text-[9px] font-black tracking-widest transition-colors"><ChevronLeft size={12} /> Voltar ao Terminal</Button>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div className="space-y-1">
-              <div className="flex items-center gap-2 text-zinc-500 font-bold uppercase text-[9px] tracking-widest bg-white/5 px-2.5 py-1 rounded-full border border-white/5 w-fit">
-                <CalendarDays size={10} className="text-green-500" /> 
-                {format(weekInterval.displayStart, "dd 'de' MMM", { locale: ptBR })} a {format(weekInterval.displayEnd, "dd 'de' MMM", { locale: ptBR })}
-              </div>
-              <h1 className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-emerald-300 to-green-600 uppercase tracking-tighter leading-none">
-                Meta da Semana
-              </h1>
+              <div className="flex items-center gap-2 text-zinc-500 font-bold uppercase text-[9px] tracking-widest bg-white/5 px-2.5 py-1 rounded-full border border-white/5 w-fit"><CalendarDays size={10} className="text-green-500" /> {format(weekInterval.displayStart, "dd 'de' MMM", { locale: ptBR })} a {format(weekInterval.displayEnd, "dd 'de' MMM", { locale: ptBR })}</div>
+              <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-600 uppercase tracking-tighter leading-none">Meta da Semana</h1>
             </div>
           </div>
         </header>
 
-        {/* --- HUD DE PROGRESSO INTERATIVO --- */}
-        <section className="
-          group relative bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6 
-          transition-all duration-500 ease-out hover:border-green-500/50 
-          hover:shadow-[0_0_50px_-10px_rgba(34,197,94,0.2)]
-        ">
-          <div className="flex justify-between items-end mb-5 relative z-10">
+        <section className="group relative bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6 transition-all duration-500 hover:border-green-500/50 hover:shadow-[0_0_50px_-10px_rgba(34,197,94,0.2)]">
+          <div className="flex justify-between items-end mb-5">
             <div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-5xl md:text-6xl font-black text-white tracking-tighter transition-colors group-hover:text-green-400">
-                  {completedOrders.length}
-                </span>
-                <span className="text-xl text-zinc-600 font-black">
-                  / {orders?.length || 0} PEDIDOS
-                </span>
-              </div>
-              <p className="text-green-500 text-[9px] font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
-                 <Zap size={10} fill="currentColor" className="animate-pulse" /> Status da Missão
-              </p>
+              <div className="flex items-baseline gap-2"><span className="text-5xl font-black text-white tracking-tighter group-hover:text-green-400">{completedOrders.length}</span><span className="text-xl text-zinc-600 font-black">/ {orders?.length || 0} PEDIDOS</span></div>
+              <p className="text-green-500 text-[9px] font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2"><Zap size={10} fill="currentColor" className="animate-pulse" /> Status da Missão</p>
             </div>
-            
-            <motion.div 
-               animate={progress === 100 ? { rotate: [0, -10, 10, 0], scale: 1.1 } : {}}
-               transition={{ duration: 0.5, repeat: progress === 100 ? Infinity : 0, repeatDelay: 2 }}
-               className={`p-4 rounded-xl border transition-all duration-500 ${progress === 100 ? 'bg-green-500 text-black border-green-400 shadow-[0_0_20px_#22c55e]' : 'bg-black/40 border-zinc-800 text-zinc-600 group-hover:text-green-500'}`}
-            >
-               {progress === 100 ? <Trophy size={24} fill="currentColor" /> : <Target size={24} />}
-            </motion.div>
+            <motion.div animate={progress === 100 ? { rotate: [0, -10, 10, 0], scale: 1.1 } : {}} transition={{ duration: 0.5, repeat: progress === 100 ? Infinity : 0, repeatDelay: 2 }} className={`p-4 rounded-xl border transition-all duration-500 ${progress === 100 ? 'bg-green-500 text-black border-green-400 shadow-[0_0_20px_#22c55e]' : 'bg-black/40 border-zinc-800 text-zinc-600 group-hover:text-green-500'}`}>{progress === 100 ? <Trophy size={24} fill="currentColor" /> : <Target size={24} />}</motion.div>
           </div>
-
-          {/* BARRA DE ENERGIA HUD */}
-          <div className="h-6 w-full bg-[#050505] rounded-lg relative overflow-hidden border border-zinc-800 shadow-inner z-10 group-hover:border-green-900/50 transition-colors">
-            <div className="absolute inset-0 flex justify-between px-2 z-0 opacity-20">
-               {[...Array(15)].map((_, i) => <div key={i} className="w-[1px] h-full bg-zinc-600" />)}
-            </div>
-            <motion.div 
-               initial={{ width: 0 }} 
-               animate={{ width: `${progress}%` }}
-               transition={{ duration: 1.5, ease: "circOut" }} 
-               className="h-full relative z-10 rounded-r-md overflow-hidden"
-            >
-               <div className="absolute inset-0 bg-gradient-to-r from-green-900 via-green-600 to-emerald-400" />
-               <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
-               <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white shadow-[0_0_15px_rgba(255,255,255,1)]" />
-            </motion.div>
-          </div>
-
-          <div className="flex justify-end mt-3">
-             <p className="text-[8px] text-zinc-600 font-mono uppercase tracking-[0.2em] group-hover:text-green-400 transition-colors">
-                {progress === 100 ? "Missão Cumprida. Sistema Otimizado." : "Processando fluxo de produção..."}
-             </p>
+          <div className="h-6 w-full bg-[#050505] rounded-lg relative overflow-hidden border border-zinc-800 shadow-inner z-10">
+            <motion.div initial={{ width: 0 }} animate={{ width: `${progress}%` }} transition={{ duration: 1.5, ease: "circOut" }} className="h-full relative z-10 rounded-r-md overflow-hidden"><div className="absolute inset-0 bg-gradient-to-r from-green-900 to-emerald-400" /><div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white shadow-[0_0_15px_rgba(255,255,255,1)]" /></motion.div>
           </div>
         </section>
 
-        {/* --- LISTAGEM: FILA ATIVA --- */}
         <section className="space-y-4">
           <div className="flex items-center gap-3 px-2 border-b border-white/5 pb-3">
-            <div className="p-1.5 bg-green-500/10 rounded-lg border border-green-500/20">
-              <ListTodo className="text-green-400 w-4 h-4" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-[10px] font-black text-white uppercase tracking-[0.3em] flex items-center gap-2">
-                Fila da Semana <span className="bg-white/5 text-zinc-500 text-[8px] px-2 py-0.5 rounded-full border border-white/10 font-bold uppercase">{pendingOrders.length} RESTANTES</span>
-              </h3>
-            </div>
+            <div className="p-1.5 bg-green-500/10 rounded-lg"><ListTodo className="text-green-400 w-4 h-4" /></div>
+            <h3 className="text-[10px] font-black text-white uppercase tracking-[0.3em]">Fila da Semana <span className="bg-white/5 text-zinc-500 text-[8px] px-2 py-0.5 rounded-full border border-white/10 ml-2">{pendingOrders.length} RESTANTES</span></h3>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <AnimatePresence mode='popLayout'>
-              {pendingOrders.length > 0 ? (
-                pendingOrders.map((order) => (
-                  <motion.div
-                    layout
-                    key={order.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                  >
-                    <OrderCard 
-                      order={{
-                        id: order.id,
-                        client: order.client,
-                        description: order.items?.[0]?.desc || 'Sem descrição técnica',
-                        status: order.status,
-                        deliveryDate: order.deliveryDate
-                      }} 
-                      onClick={() => openEdit(order)} 
-                      onQuickConclude={handleQuickConclude}
-                    />
-                  </motion.div>
-                ))
-              ) : (
-                <div className="col-span-full py-16 flex flex-col items-center justify-center text-center space-y-4 bg-white/[0.01] border border-dashed border-white/5 rounded-2xl">
-                  <Rocket className="text-green-400 w-10 h-10 opacity-20" />
-                  <p className="text-[9px] text-zinc-500 uppercase tracking-[0.3em] font-bold">Fila Zerada. Missão Cumprida.</p>
-                </div>
-              )}
-            </AnimatePresence>
+            {pendingOrders.map((order) => (
+              <OrderCard key={order.id} order={{ id: order.id, client: order.client, description: order.items?.[0]?.desc || 'Sem descrição', status: order.status, deliveryDate: order.deliveryDate, items: order.items }} onClick={() => openEdit(order)} />
+            ))}
           </div>
         </section>
 
-        {/* --- LISTAGEM: CONQUISTADOS --- */}
         {completedOrders.length > 0 && (
           <section className="space-y-4 pt-4 border-t border-white/5">
-            <div className="flex items-center gap-3 px-2 pb-3">
-              <div className="p-1.5 bg-emerald-500/10 rounded-lg">
-                <CheckCircle2 className="text-emerald-500 w-4 h-4" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em]">Objetivos Conquistados</h3>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 opacity-80 hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-3 px-2 pb-3"><div className="p-1.5 bg-emerald-500/10 rounded-lg"><CheckCircle2 className="text-emerald-500 w-4 h-4" /></div><h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em]">Objetivos Conquistados</h3></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {completedOrders.map((order) => (
-                <OrderCard 
-                  key={order.id} 
-                  order={{
-                    id: order.id,
-                    client: order.client,
-                    description: order.items?.[0]?.desc || 'Sem descrição técnica',
-                    status: order.status,
-                    deliveryDate: order.deliveryDate
-                  }} 
-                  onClick={() => openEdit(order)} 
-                />
+                <OrderCard key={order.id} order={{ id: order.id, client: order.client, description: order.items?.[0]?.desc || 'Sem descrição', status: order.status, deliveryDate: order.deliveryDate, items: order.items }} onClick={() => openEdit(order)} />
               ))}
             </div>
           </section>
         )}
 
-        {/* --- MODAL DE COMANDO (EDIÇÃO) --- */}
         <Dialog open={!!editingOrder} onOpenChange={(open) => !open && setEditingOrder(null)}>
           <DialogContent className="max-w-3xl bg-[#0A0A0A] border-white/5 text-white rounded-[2rem] overflow-hidden p-0 shadow-2xl">
-            <DialogHeader className="p-6 md:p-8 border-b border-white/5 flex flex-row items-center justify-between bg-zinc-900/30">
-              <DialogTitle className="text-xl font-black text-green-500 uppercase tracking-tighter">Ajustar Pedido</DialogTitle>
-              <Button 
-                variant="ghost" 
-                onClick={() => {
-                  if (window.confirm("Remover este pedido permanentemente?")) {
-                    deleteDoc(doc(firestore!, 'orders', editingOrder.id));
-                    setEditingOrder(null);
-                  }
-                }} 
-                className="p-2 text-zinc-500 hover:text-destructive transition-colors"
-              >
-                <Trash2 size={18} />
-              </Button>
+            <DialogHeader className="p-6 border-b border-white/5 flex flex-row items-center justify-between bg-zinc-900/30">
+              <DialogTitle className="text-lg font-black text-green-500 uppercase tracking-tighter">Ajustar Pedido</DialogTitle>
+              <Button variant="ghost" onClick={handleDelete} className="p-2 text-zinc-500 hover:text-destructive mr-8"><Trash2 size={18} /></Button>
             </DialogHeader>
-            <form onSubmit={handleSubmit(handleUpdate)} className="p-6 md:p-8 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
+            <form onSubmit={handleSubmit(handleUpdate)} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1.5">
-                  <Label className="text-[9px] uppercase tracking-widest text-zinc-500 font-black">Cliente*</Label>
-                  <Input {...register('client')} className="bg-white/5 border-white/5 h-10 rounded-lg text-sm focus:border-green-500/50" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[9px] uppercase tracking-widest text-zinc-500 font-black">Entrega</Label>
-                  <Input type="date" {...register('deliveryDate')} className="bg-white/5 border-white/5 h-10 rounded-lg text-sm focus:border-green-500/50" />
-                </div>
+                <div className="space-y-1.5"><Label className="text-[9px] uppercase tracking-widest text-zinc-500 font-black">Cliente*</Label><Input {...register('client')} className="bg-white/5 border-white/5 h-10 rounded-lg text-sm" /></div>
+                <div className="space-y-1.5"><Label className="text-[9px] uppercase tracking-widest text-zinc-500 font-black">Entrega</Label><Input type="date" {...register('deliveryDate')} className="bg-white/5 border-white/5 h-10 rounded-lg text-sm" /></div>
               </div>
-              
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-[10px] font-black text-green-500 uppercase tracking-[0.4em]">Itens da Produção</h3>
-                  <button type="button" onClick={() => append({ desc: '', quantity: 1, unitValue: 0, observation: '' })} className="text-green-500 text-[8px] font-black uppercase tracking-widest bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20">
-                    + Item
-                  </button>
-                </div>
-                
+                <div className="flex items-center justify-between"><h3 className="text-[10px] font-black text-green-500 uppercase tracking-[0.4em]">Itens da Produção</h3><button type="button" onClick={() => append({ desc: '', quantity: 1, unitValue: 0, observation: '' })} className="text-green-500 text-[8px] font-black uppercase tracking-widest bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20">+ Item</button></div>
                 <div className="space-y-3">
                   {fields.map((field, index) => (
-                    <motion.div 
-                      layout
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      key={field.id} 
-                      className="bg-white/[0.02] border border-white/5 rounded-xl p-4 relative group"
-                    >
-                      <div className="flex flex-col gap-3">
-                        <div className="flex gap-3 items-end">
-                          <div className="flex-1 space-y-1">
-                            <Label className="text-[8px] text-zinc-500 uppercase font-black tracking-widest flex items-center gap-1">
-                              <Box size={8} /> Material
-                            </Label>
-                            <Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/5 h-9 text-xs" />
-                          </div>
-                          <div className="w-16 space-y-1">
-                            <Label className="text-[8px] text-zinc-500 uppercase font-black tracking-widest flex items-center gap-1">
-                              <Hash size={8} /> Qtd.
-                            </Label>
-                            <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-9 text-center text-xs" />
-                          </div>
-                          <button type="button" onClick={() => remove(index)} className="p-2 text-zinc-600 hover:text-destructive transition-colors">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[8px] text-zinc-500 uppercase font-black tracking-widest flex items-center gap-1">
-                            <FileText size={8} /> Obs. Técnica
-                          </Label>
-                          <Textarea {...register(`items.${index}.observation`)} className="bg-transparent border-white/5 min-h-[50px] text-xs resize-none" placeholder="Detalhes..." />
-                        </div>
+                    <div key={field.id} className="bg-white/[0.02] border border-white/5 rounded-xl p-4 space-y-3">
+                      <div className="flex gap-3 items-end">
+                        <div className="flex-1 space-y-1"><Label className="text-[8px] text-zinc-500 uppercase font-black"><Box size={8} /> Material</Label><Input {...register(`items.${index}.desc`)} className="bg-transparent border-white/5 h-9 text-xs" /></div>
+                        <div className="w-16 space-y-1"><Label className="text-[8px] text-zinc-500 uppercase font-black"><Hash size={8} /> Qtd.</Label><Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-9 text-center text-xs" /></div>
+                        <button type="button" onClick={() => remove(index)} className="p-2 text-zinc-600 hover:text-destructive"><Trash2 size={14} /></button>
                       </div>
-                    </motion.div>
+                      <div className="space-y-1"><Label className="text-[8px] text-zinc-500 uppercase font-black"><FileText size={8} /> Obs. Técnica</Label><Textarea {...register(`items.${index}.observation`)} className="bg-transparent border-white/5 min-h-[50px] text-xs resize-none" /></div>
+                    </div>
                   ))}
                 </div>
               </div>
-
-              <div className="flex items-center justify-end pt-6 border-t border-white/5">
-                <Button type="submit" disabled={isSubmitting} className="w-full md:w-48 h-10 bg-green-600 text-black font-black uppercase tracking-widest rounded-xl text-[10px] shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:bg-white transition-all">
-                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> Salvar Alterações</>}
-                </Button>
-              </div>
+              <div className="flex items-center justify-end pt-6 border-t border-white/5"><Button type="submit" disabled={isSubmitting} className="w-full md:w-48 h-10 bg-green-600 text-black font-black uppercase tracking-widest rounded-xl text-[10px] shadow-[0_0_20px_rgba(34,197,94,0.3)]">{isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} className="mr-2" /> Salvar Alterações</>}</Button></div>
             </form>
           </DialogContent>
         </Dialog>
