@@ -1,7 +1,6 @@
-
 'use client';
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -18,17 +17,19 @@ import {
   Save,
   Box,
   Hash,
-  FileText
+  FileText,
+  X
 } from 'lucide-react';
-import { startOfWeek, endOfWeek, isWithinInterval, parseISO, format } from 'date-fns';
+import { startOfWeek, endOfWeek, format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
-import { useOrders } from '@/hooks/use-orders';
-import { DashboardSidebar } from '@/components/dashboard/Sidebar';
+import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
+import { query, collection, where, orderBy, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { OrderCard } from '@/components/dashboard/OrderCard';
+import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { Button } from '@/components/ui/button';
 import { 
   Dialog, 
@@ -47,9 +48,12 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
+// --- SCHEMAS E TIPOS ---
 const orderSchema = z.object({
-  client: z.string().min(1, 'Nome do cliente é obrigatório'),
+  client: z.string().min(1, 'Cliente obrigatório'),
   deliveryDate: z.string().default(''),
   seller: z.string().default('Vendedor Geral'),
   status: z.enum(['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Concluído']).default('Arte'),
@@ -63,97 +67,124 @@ const orderSchema = z.object({
 
 type OrderFormValues = z.infer<typeof orderSchema>;
 
+// --- COMPONENTE PRINCIPAL ---
 export default function WeeklyGoalsPage() {
   const router = useRouter();
+  const firestore = useFirestore();
+  const { user } = useUser();
   const { toast } = useToast();
-  const { orders, isLoading, updateOrder, deleteOrder } = useOrders();
 
   const [editingOrder, setEditingOrder] = useState<any>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // 1. CÁLCULO DE INTERVALO (MEMOIZADO)
+  const weekInterval = useMemo(() => {
+    const now = new Date();
+    return {
+      start: format(startOfWeek(now, { weekStartsOn: 0 }), 'yyyy-MM-dd'),
+      end: format(endOfWeek(now, { weekStartsOn: 0 }), 'yyyy-MM-dd'),
+      displayStart: startOfWeek(now, { weekStartsOn: 0 }),
+      displayEnd: endOfWeek(now, { weekStartsOn: 0 })
+    };
+  }, []);
+
+  // 2. QUERY NATIVA OTIMIZADA (LEITURA MÍNIMA)
+  const weeklyQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(
+      collection(firestore, 'orders'),
+      where('deliveryDate', '>=', weekInterval.start),
+      where('deliveryDate', '<=', weekInterval.end),
+      orderBy('deliveryDate', 'asc')
+    );
+  }, [firestore, user, weekInterval]);
+
+  const { data: orders, isLoading } = useCollection(weeklyQuery);
+
+  // 3. PROCESSAMENTO DE DADOS (DERIVED STATE)
+  const { pendingOrders, completedOrders, progress } = useMemo(() => {
+    if (!orders) return { pendingOrders: [], completedOrders: [], progress: 0 };
+
+    const pending = orders.filter(o => !['Concluído', 'Entregue'].includes(o.status));
+    const completed = orders.filter(o => ['Concluído', 'Entregue'].includes(o.status));
+    const percentage = orders.length > 0 ? Math.round((completed.length / orders.length) * 100) : 0;
+
+    return { pendingOrders: pending, completedOrders: completed, progress: percentage };
+  }, [orders]);
+
+  // 4. FORMULÁRIO DE EDIÇÃO
   const { register, control, handleSubmit, reset } = useForm<OrderFormValues>({
     resolver: zodResolver(orderSchema)
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
 
-  const today = new Date();
-  const weekStart = startOfWeek(today, { weekStartsOn: 0 });
-  const weekEnd = endOfWeek(today, { weekStartsOn: 0 });
-
-  const { pendingOrders, completedOrders, totalWeekly, progress } = useMemo(() => {
-    const weekly = orders.filter(order => {
-      if (!order.deliveryDate) return false;
-      try {
-        const d = parseISO(order.deliveryDate);
-        return isWithinInterval(d, { start: weekStart, end: weekEnd });
-      } catch (e) {
-        return false;
-      }
+  const openEdit = useCallback((order: any) => {
+    setEditingOrder(order);
+    reset({
+      client: order.client || '',
+      deliveryDate: order.deliveryDate || '',
+      seller: order.seller || 'Vendedor Geral',
+      status: order.status || 'Arte',
+      items: order.items?.length ? order.items : [{ desc: '', quantity: 1, unitValue: 0, observation: '' }]
     });
+  }, [reset]);
 
-    const pending = weekly.filter(o => !['Concluído', 'Entregue'].includes(o.status))
-      .sort((a, b) => (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
-
-    const completed = weekly.filter(o => ['Concluído', 'Entregue'].includes(o.status))
-      .sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
-
-    const percentage = weekly.length > 0 ? Math.round((completed.length / weekly.length) * 100) : 0;
-
-    return { pendingOrders: pending, completedOrders: completed, totalWeekly: weekly.length, progress: percentage };
-  }, [orders, weekStart, weekEnd]);
-
-  useEffect(() => {
-    if (editingOrder) {
-      reset({
-        client: editingOrder.client,
-        deliveryDate: editingOrder.deliveryDate || '',
-        seller: editingOrder.seller || 'Vendedor Geral',
-        status: editingOrder.status,
-        items: editingOrder.items || [{ desc: '', quantity: 1, unitValue: 0, observation: '' }]
-      });
-      setIsModalOpen(true);
-    }
-  }, [editingOrder, reset]);
-
-  const onUpdateSubmit = async (data: OrderFormValues) => {
-    if (!editingOrder) return;
+  const handleUpdate = async (data: OrderFormValues) => {
+    if (!firestore || !editingOrder) return;
     setIsSubmitting(true);
-    try {
-      const totalValue = data.items.reduce((acc, item) => acc + (item.quantity * item.unitValue), 0);
-      await updateOrder(editingOrder.id, { ...data, totalValue });
-      toast({ title: "Pedido Atualizado" });
-      setIsModalOpen(false);
-      setEditingOrder(null);
-    } catch (err) {
-    } finally {
-      setIsSubmitting(false);
-    }
+    
+    const orderRef = doc(firestore, 'orders', editingOrder.id);
+    const totalValue = data.items.reduce((acc, item) => acc + (item.quantity * (item.unitValue || 0)), 0);
+    const payload = { ...data, totalValue, updatedAt: serverTimestamp() };
+
+    updateDoc(orderRef, payload)
+      .then(() => {
+        toast({ title: "Missão Atualizada", description: `Pedido #${editingOrder.id} salvo.` });
+        setEditingOrder(null);
+      })
+      .catch(async (err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: orderRef.path,
+          operation: 'update',
+          requestResourceData: payload
+        }));
+      })
+      .finally(() => setIsSubmitting(false));
   };
 
-  const handleQuickConclude = async (orderId: string) => {
-    try {
-      await updateOrder(orderId, { status: 'Concluído' });
-      toast({ title: "Objetivo Conquistado" });
-    } catch (err) {}
-  };
+  const handleQuickConclude = useCallback(async (orderId: string) => {
+    if (!firestore) return;
+    const orderRef = doc(firestore, 'orders', orderId);
+    updateDoc(orderRef, { status: 'Concluído', updatedAt: serverTimestamp() })
+      .catch(async () => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: orderRef.path,
+          operation: 'update',
+          requestResourceData: { status: 'Concluído' }
+        }));
+      });
+  }, [firestore]);
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-green-500 animate-spin" />
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 text-green-500 animate-spin" />
+          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em]">Sincronizando Metas...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden relative selection:bg-green-500 selection:text-black">
+    <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden selection:bg-green-500 selection:text-black">
       <DashboardSidebar />
-      <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-green-600 opacity-[0.05] blur-[150px] pointer-events-none rounded-full z-0" />
+      
+      <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-8 mt-16 md:mt-0 pb-24 relative">
+        <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-green-600 opacity-[0.03] blur-[150px] pointer-events-none rounded-full" />
 
-      <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-8 mt-16 md:mt-0 z-10 pb-24">
-        
+        {/* --- HEADER --- */}
         <header className="space-y-4">
           <Button 
             variant="ghost" 
@@ -167,55 +198,70 @@ export default function WeeklyGoalsPage() {
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-zinc-500 font-bold uppercase text-[9px] tracking-widest bg-white/5 px-2.5 py-1 rounded-full border border-white/5 w-fit">
                 <CalendarDays size={10} className="text-green-500" /> 
-                {format(weekStart, "dd 'de' MMM", { locale: ptBR })} a {format(weekEnd, "dd 'de' MMM", { locale: ptBR })}
+                {format(weekInterval.displayStart, "dd 'de' MMM", { locale: ptBR })} a {format(weekInterval.displayEnd, "dd 'de' MMM", { locale: ptBR })}
               </div>
-              <h1 className="text-3xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-emerald-300 to-green-600 uppercase tracking-tighter leading-none">
+              <h1 className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-emerald-300 to-green-600 uppercase tracking-tighter leading-none">
                 Meta da Semana
               </h1>
             </div>
           </div>
         </header>
 
-        <section className="group relative bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6 transition-all duration-500 hover:border-green-500/50 overflow-hidden">
+        {/* --- HUD DE PROGRESSO INTERATIVO --- */}
+        <section className="
+          group relative bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6 
+          transition-all duration-500 ease-out hover:border-green-500/50 
+          hover:shadow-[0_0_50px_-10px_rgba(34,197,94,0.2)]
+        ">
           <div className="flex justify-between items-end mb-5 relative z-10">
             <div>
               <div className="flex items-baseline gap-2">
-                <span className="text-5xl md:text-5xl font-black text-white tracking-tighter transition-colors group-hover:text-green-400">
+                <span className="text-5xl md:text-6xl font-black text-white tracking-tighter transition-colors group-hover:text-green-400">
                   {completedOrders.length}
                 </span>
                 <span className="text-xl text-zinc-600 font-black">
-                  / {totalWeekly} PEDIDOS
+                  / {orders?.length || 0} PEDIDOS
                 </span>
               </div>
               <p className="text-green-500 text-[9px] font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
-                 <Zap size={10} fill="currentColor" /> Status da Missão
+                 <Zap size={10} fill="currentColor" className="animate-pulse" /> Status da Missão
               </p>
             </div>
             
             <motion.div 
                animate={progress === 100 ? { rotate: [0, -10, 10, 0], scale: 1.1 } : {}}
                transition={{ duration: 0.5, repeat: progress === 100 ? Infinity : 0, repeatDelay: 2 }}
-               className={`p-4 rounded-xl border transition-all duration-500 ${progress === 100 ? 'bg-green-500 text-black border-green-400' : 'bg-black/40 border-zinc-800 text-zinc-600 group-hover:text-green-500'}`}
+               className={`p-4 rounded-xl border transition-all duration-500 ${progress === 100 ? 'bg-green-500 text-black border-green-400 shadow-[0_0_20px_#22c55e]' : 'bg-black/40 border-zinc-800 text-zinc-600 group-hover:text-green-500'}`}
             >
                {progress === 100 ? <Trophy size={24} fill="currentColor" /> : <Target size={24} />}
             </motion.div>
           </div>
 
-          <div className="h-6 w-full bg-[#050505] rounded-lg relative overflow-hidden border border-zinc-800 shadow-inner z-10">
+          {/* BARRA DE ENERGIA HUD */}
+          <div className="h-6 w-full bg-[#050505] rounded-lg relative overflow-hidden border border-zinc-800 shadow-inner z-10 group-hover:border-green-900/50 transition-colors">
             <div className="absolute inset-0 flex justify-between px-2 z-0 opacity-20">
                {[...Array(15)].map((_, i) => <div key={i} className="w-[1px] h-full bg-zinc-600" />)}
             </div>
             <motion.div 
-               initial={{ width: 0 }} animate={{ width: `${progress}%` }}
+               initial={{ width: 0 }} 
+               animate={{ width: `${progress}%` }}
                transition={{ duration: 1.5, ease: "circOut" }} 
                className="h-full relative z-10 rounded-r-md overflow-hidden"
             >
                <div className="absolute inset-0 bg-gradient-to-r from-green-900 via-green-600 to-emerald-400" />
+               <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
                <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white shadow-[0_0_15px_rgba(255,255,255,1)]" />
             </motion.div>
           </div>
+
+          <div className="flex justify-end mt-3">
+             <p className="text-[8px] text-zinc-600 font-mono uppercase tracking-[0.2em] group-hover:text-green-400 transition-colors">
+                {progress === 100 ? "Missão Cumprida. Sistema Otimizado." : "Processando fluxo de produção..."}
+             </p>
+          </div>
         </section>
 
+        {/* --- LISTAGEM: FILA ATIVA --- */}
         <section className="space-y-4">
           <div className="flex items-center gap-3 px-2 border-b border-white/5 pb-3">
             <div className="p-1.5 bg-green-500/10 rounded-lg border border-green-500/20">
@@ -229,60 +275,95 @@ export default function WeeklyGoalsPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {pendingOrders.length > 0 ? (
-              pendingOrders.map((order) => (
-                <OrderCard 
-                  key={order.id} order={{ id: order.id, client: order.client, description: order.items?.[0]?.desc || 'Sem descrição técnica', status: order.status, deliveryDate: order.deliveryDate }} 
-                  onClick={() => setEditingOrder(order)} onQuickConclude={handleQuickConclude} onDelete={deleteOrder}
-                />
-              ))
-            ) : (
-              <div className="col-span-full py-16 flex flex-col items-center justify-center text-center space-y-4 bg-white/[0.01] border border-dashed border-white/5 rounded-2xl">
-                <Rocket className="text-green-400 w-10 h-10" />
-                <p className="text-[9px] text-zinc-500 uppercase tracking-[0.3em] font-bold">Fila Zerada. Sistema Pronto.</p>
-              </div>
-            )}
+            <AnimatePresence mode='popLayout'>
+              {pendingOrders.length > 0 ? (
+                pendingOrders.map((order) => (
+                  <motion.div
+                    layout
+                    key={order.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                  >
+                    <OrderCard 
+                      order={{
+                        id: order.id,
+                        client: order.client,
+                        description: order.items?.[0]?.desc || 'Sem descrição técnica',
+                        status: order.status,
+                        deliveryDate: order.deliveryDate
+                      }} 
+                      onClick={() => openEdit(order)} 
+                      onQuickConclude={handleQuickConclude}
+                    />
+                  </motion.div>
+                ))
+              ) : (
+                <div className="col-span-full py-16 flex flex-col items-center justify-center text-center space-y-4 bg-white/[0.01] border border-dashed border-white/5 rounded-2xl">
+                  <Rocket className="text-green-400 w-10 h-10 opacity-20" />
+                  <p className="text-[9px] text-zinc-500 uppercase tracking-[0.3em] font-bold">Fila Zerada. Missão Cumprida.</p>
+                </div>
+              )}
+            </AnimatePresence>
           </div>
         </section>
 
+        {/* --- LISTAGEM: CONQUISTADOS --- */}
         {completedOrders.length > 0 && (
-          <section className="space-y-4">
-            <div className="flex items-center gap-3 px-2 border-b border-green-500/20 pb-3">
+          <section className="space-y-4 pt-4 border-t border-white/5">
+            <div className="flex items-center gap-3 px-2 pb-3">
               <div className="p-1.5 bg-emerald-500/10 rounded-lg">
                 <CheckCircle2 className="text-emerald-500 w-4 h-4" />
               </div>
               <div className="flex-1">
-                <h3 className="text-[10px] font-black text-white uppercase tracking-[0.3em]">Objetivos Conquistados</h3>
+                <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em]">Objetivos Conquistados</h3>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 opacity-80 hover:opacity-100 transition-opacity">
               {completedOrders.map((order) => (
                 <OrderCard 
-                  key={order.id} order={{ id: order.id, client: order.client, description: order.items?.[0]?.desc || 'Sem descrição técnica', status: order.status, deliveryDate: order.deliveryDate }} 
-                  onClick={() => setEditingOrder(order)} onDelete={deleteOrder}
+                  key={order.id} 
+                  order={{
+                    id: order.id,
+                    client: order.client,
+                    description: order.items?.[0]?.desc || 'Sem descrição técnica',
+                    status: order.status,
+                    deliveryDate: order.deliveryDate
+                  }} 
+                  onClick={() => openEdit(order)} 
                 />
               ))}
             </div>
           </section>
         )}
 
-        <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingOrder(null); }}>
+        {/* --- MODAL DE COMANDO (EDIÇÃO) --- */}
+        <Dialog open={!!editingOrder} onOpenChange={(open) => !open && setEditingOrder(null)}>
           <DialogContent className="max-w-3xl bg-[#0A0A0A] border-white/5 text-white rounded-[2rem] overflow-hidden p-0 shadow-2xl">
             <DialogHeader className="p-6 md:p-8 border-b border-white/5 flex flex-row items-center justify-between bg-zinc-900/30">
               <DialogTitle className="text-xl font-black text-green-500 uppercase tracking-tighter">Ajustar Pedido</DialogTitle>
-              <Button variant="ghost" onClick={() => { if (editingOrder) { deleteOrder(editingOrder.id); setIsModalOpen(false); } }} className="text-destructive font-black uppercase text-[8px] tracking-widest gap-2 h-8 px-3 rounded-lg border border-destructive/10">
-                <Trash2 className="w-3 h-3" /> Remover
+              <Button 
+                variant="ghost" 
+                onClick={() => {
+                  if (window.confirm("Remover este pedido permanentemente?")) {
+                    deleteDoc(doc(firestore!, 'orders', editingOrder.id));
+                    setEditingOrder(null);
+                  }
+                }} 
+                className="p-2 text-zinc-500 hover:text-destructive transition-colors"
+              >
+                <Trash2 size={18} />
               </Button>
             </DialogHeader>
-            <form onSubmit={handleSubmit(onUpdateSubmit)} className="p-6 md:p-8 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
+            <form onSubmit={handleSubmit(handleUpdate)} className="p-6 md:p-8 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1.5">
                   <Label className="text-[9px] uppercase tracking-widest text-zinc-500 font-black">Cliente*</Label>
-                  <Input {...register('client')} className="bg-white/5 border-white/5 h-10 rounded-lg text-sm" />
+                  <Input {...register('client')} className="bg-white/5 border-white/5 h-10 rounded-lg text-sm focus:border-green-500/50" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-[9px] uppercase tracking-widest text-zinc-500 font-black">Entrega</Label>
-                  <Input type="date" {...register('deliveryDate')} className="bg-white/5 border-white/5 h-10 rounded-lg text-sm" />
+                  <Input type="date" {...register('deliveryDate')} className="bg-white/5 border-white/5 h-10 rounded-lg text-sm focus:border-green-500/50" />
                 </div>
               </div>
               
@@ -296,7 +377,13 @@ export default function WeeklyGoalsPage() {
                 
                 <div className="space-y-3">
                   {fields.map((field, index) => (
-                    <div key={field.id} className="bg-white/[0.02] border border-white/5 rounded-xl p-4 relative group">
+                    <motion.div 
+                      layout
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      key={field.id} 
+                      className="bg-white/[0.02] border border-white/5 rounded-xl p-4 relative group"
+                    >
                       <div className="flex flex-col gap-3">
                         <div className="flex gap-3 items-end">
                           <div className="flex-1 space-y-1">
@@ -311,7 +398,7 @@ export default function WeeklyGoalsPage() {
                             </Label>
                             <Input type="number" {...register(`items.${index}.quantity`, { valueAsNumber: true })} className="bg-transparent border-white/5 h-9 text-center text-xs" />
                           </div>
-                          <button type="button" onClick={() => remove(index)} className="p-2 text-zinc-600 hover:text-destructive">
+                          <button type="button" onClick={() => remove(index)} className="p-2 text-zinc-600 hover:text-destructive transition-colors">
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -322,13 +409,15 @@ export default function WeeklyGoalsPage() {
                           <Textarea {...register(`items.${index}.observation`)} className="bg-transparent border-white/5 min-h-[50px] text-xs resize-none" placeholder="Detalhes..." />
                         </div>
                       </div>
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
               </div>
 
               <div className="flex items-center justify-end pt-6 border-t border-white/5">
-                <Button type="submit" disabled={isSubmitting} className="w-full md:w-48 h-10 bg-green-600 text-black font-black uppercase tracking-widest rounded-xl text-[10px]">Confirmar Ajustes</Button>
+                <Button type="submit" disabled={isSubmitting} className="w-full md:w-48 h-10 bg-green-600 text-black font-black uppercase tracking-widest rounded-xl text-[10px] shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:bg-white transition-all">
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> Salvar Alterações</>}
+                </Button>
               </div>
             </form>
           </DialogContent>
