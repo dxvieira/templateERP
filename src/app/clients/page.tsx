@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, Suspense } from 'react';
@@ -21,7 +22,11 @@ import {
   FileBadge,
   Lock,
   ArrowRight,
-  ShieldCheck
+  ShieldCheck,
+  MapPin,
+  Smartphone,
+  MessageCircle,
+  FileText
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -44,15 +49,21 @@ function ClientsContent() {
   const [editingClient, setEditingClient] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Estados do Formulário
+  // Formulário Expandido
   const [formData, setFormData] = useState({
     name: '',
     company: '',
     phone: '',
     email: '',
-    address: '',
+    cpfCnpj: '',
+    stateInscription: '',
+    landline: '',
+    mobile: '',
     zip: '',
-    cpfCnpj: ''
+    street: '',
+    number: '',
+    neighborhood: '',
+    complement: ''
   });
 
   // --- 3. LÓGICA DE DESBLOQUEIO ---
@@ -67,7 +78,7 @@ function ClientsContent() {
     }
   };
 
-  // --- 4. CARREGAR CLIENTES (SÓ SE AUTENTICADO) ---
+  // --- 4. CARREGAR CLIENTES ---
   const clientsQuery = useMemoFirebase(() => {
     if (!firestore || !user || !isAuthenticated) return null;
     return query(collection(firestore, 'clients'), orderBy('name', 'asc'));
@@ -86,6 +97,13 @@ function ClientsContent() {
     );
   }, [clients, searchTerm]);
 
+  // Função para abrir WhatsApp
+  const openWhatsApp = (number: string) => {
+    if (!number) return;
+    const cleanNum = number.replace(/\D/g, '');
+    window.open(`https://wa.me/55${cleanNum}`, '_blank');
+  };
+
   // --- AÇÕES DO CRUD ---
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,9 +112,13 @@ function ClientsContent() {
     setIsSubmitting(true);
     const clientRef = editingClient ? doc(firestore, 'clients', editingClient.id) : doc(collection(firestore, 'clients'));
     
+    // Concatena endereço para visualização rápida se necessário
+    const fullAddress = `${formData.street}, ${formData.number}${formData.neighborhood ? ` - ${formData.neighborhood}` : ''}`;
+
     const payload = {
       ...formData,
       id: clientRef.id,
+      address: fullAddress, // Mantém campo address para compatibilidade
       updatedAt: serverTimestamp(),
       ...(editingClient ? {} : { createdAt: serverTimestamp() })
     };
@@ -141,13 +163,24 @@ function ClientsContent() {
         company: client.company || '', 
         phone: client.phone || '', 
         email: client.email || '',
-        address: client.address || '',
+        cpfCnpj: client.cpfCnpj || '',
+        stateInscription: client.stateInscription || '',
+        landline: client.landline || '',
+        mobile: client.mobile || '',
         zip: client.zip || '',
-        cpfCnpj: client.cpfCnpj || ''
+        street: client.street || '',
+        number: client.number || '',
+        neighborhood: client.neighborhood || '',
+        complement: client.complement || ''
       });
     } else {
       setEditingClient(null);
-      setFormData({ name: '', company: '', phone: '', email: '', address: '', zip: '', cpfCnpj: '' });
+      setFormData({ 
+        name: '', company: '', phone: '', email: '', 
+        cpfCnpj: '', stateInscription: '', landline: '', 
+        mobile: '', zip: '', street: '', number: '', 
+        neighborhood: '', complement: '' 
+      });
     }
     setIsModalOpen(true);
   };
@@ -218,28 +251,17 @@ function ClientsContent() {
               Acessar Base <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
             </button>
           </form>
-
-          {isPassError && (
-            <motion.p 
-              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-              className="text-destructive text-[9px] font-black text-center mt-6 uppercase tracking-[0.2em]"
-            >
-              Senha Incorreta • Acesso Negado
-            </motion.p>
-          )}
         </motion.div>
       </div>
     );
   }
 
-  // --- VIEW: AUTHENTICATED CONTENT ---
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col md:flex-row overflow-x-hidden selection:bg-[#FF5F1F] selection:text-black">
       <DashboardSidebar />
       
       <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-6 mt-16 md:mt-0 pb-24">
         
-        {/* --- HEADER COMPACTO --- */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-white/5 pb-6">
           <div className="space-y-1">
              <div className="flex items-center gap-2 mb-1">
@@ -265,7 +287,6 @@ function ClientsContent() {
           </button>
         </div>
 
-        {/* --- BUSCA --- */}
         <div className="relative group max-w-3xl">
           <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
             <Search className="text-zinc-600 group-focus-within:text-[#FF5F1F] transition-colors" size={18} />
@@ -282,12 +303,8 @@ function ClientsContent() {
               text-sm font-medium
             "
           />
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[8px] font-black text-zinc-500 tracking-widest uppercase">
-            {filteredClients.length} Registros
-          </div>
         </div>
 
-        {/* --- GRID DE CARDS --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           <AnimatePresence mode="popLayout">
             {filteredClients.map((client, idx) => (
@@ -323,11 +340,6 @@ function ClientsContent() {
                             <Building2 size={10} className="text-[#FF5F1F]" /> {client.company}
                           </p>
                         )}
-                        {client.cpfCnpj && (
-                          <p className="text-[8px] font-mono text-zinc-600 flex items-center gap-1 mt-0.5 truncate uppercase">
-                            <FileBadge size={10} className="text-zinc-700" /> {client.cpfCnpj}
-                          </p>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -336,8 +348,8 @@ function ClientsContent() {
 
                 <div className="space-y-1.5 relative z-10">
                   <div className="flex items-center gap-2.5 text-[9px] font-bold text-zinc-400">
-                    <Phone size={12} className="text-zinc-700 group-hover:text-[#FF5F1F] transition-colors" />
-                    <span className="truncate">{client.phone || 'Sem telefone'}</span>
+                    <Smartphone size={12} className="text-zinc-700 group-hover:text-[#FF5F1F] transition-colors" />
+                    <span className="truncate">{client.mobile || client.phone || 'Sem telefone'}</span>
                   </div>
                   <div className="flex items-center gap-2.5 text-[9px] font-bold text-zinc-400">
                     <Mail size={12} className="text-zinc-700 group-hover:text-[#FF5F1F] transition-colors" />
@@ -354,13 +366,6 @@ function ClientsContent() {
               <p className="text-[8px] font-black text-zinc-600 uppercase tracking-[0.4em]">Sincronizando Registros...</p>
             </div>
           )}
-
-          {!isLoading && filteredClients.length === 0 && (
-            <div className="col-span-full py-16 text-center border border-dashed border-zinc-900 rounded-2xl bg-zinc-900/20">
-              <Users size={32} className="mx-auto mb-3 text-zinc-800" />
-              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nenhum parceiro localizado</p>
-            </div>
-          )}
         </div>
 
         {/* MODAL DE DOSSIÊ COMPLETO */}
@@ -374,15 +379,15 @@ function ClientsContent() {
               />
               <motion.div
                 initial={{ scale: 0.9, y: 15 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 15 }}
-                className="w-full max-w-2xl bg-[#0A0A0A] border border-white/5 rounded-2xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]"
+                className="w-full max-w-4xl bg-[#0A0A0A] border border-white/5 rounded-2xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]"
               >
                 <div className="flex items-center justify-between p-6 pb-4 border-b border-white/5 bg-white/[0.01]">
                   <div>
                     <h2 className="text-lg font-black text-white uppercase tracking-tighter flex items-center gap-2">
-                      {editingClient ? 'Detalhes do Parceiro' : 'Novo Cadastro'}
+                      {editingClient ? 'Ficha do Parceiro' : 'Novo Cadastro'}
                       <div className="w-1.5 h-1.5 rounded-full bg-[#FF5F1F] animate-pulse shadow-[0_0_10px_rgba(255,95,31,1)]" />
                     </h2>
-                    <p className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">Sincronização em Tempo Real Ativa</p>
+                    <p className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">Base de Dados Industrial</p>
                   </div>
                   <button onClick={closeModal} className="p-2 bg-white/5 rounded-full text-zinc-500 hover:text-white transition-colors">
                     <X size={18}/>
@@ -390,85 +395,170 @@ function ClientsContent() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 pt-4 custom-scrollbar">
-                  <form id="clientForm" onSubmit={handleSave} className="space-y-6">
-                    <div className="space-y-4">
-                      <div className="space-y-1.5">
-                        <label className="text-[8px] text-[#FF5F1F] uppercase font-black tracking-[0.2em] ml-1">Nome Completo do Contato *</label>
-                        <input 
-                          required 
-                          className="w-full bg-white/[0.02] border border-white/5 rounded-xl p-3 text-sm text-white focus:border-[#FF5F1F] outline-none transition-all" 
-                          value={formData.name} 
-                          onChange={e => setFormData({...formData, name: e.target.value})} 
-                          placeholder="Ex: João Silva"
-                        />
+                  <form id="clientForm" onSubmit={handleSave} className="space-y-8">
+                    
+                    {/* SEÇÃO 1: IDENTIFICAÇÃO FISCAL */}
+                    <section className="space-y-4">
+                      <div className="flex items-center gap-2 border-b border-white/5 pb-2">
+                        <FileBadge size={14} className="text-[#FF5F1F]" />
+                        <h3 className="text-[10px] text-white font-black uppercase tracking-[0.2em]">Dados Fiscais e Pessoais</h3>
                       </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="text-[8px] text-zinc-500 uppercase font-black tracking-widest ml-1">CPF ou CNPJ</label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="lg:col-span-2 space-y-1.5">
+                          <label className="input-label">Nome Completo do Contato *</label>
                           <input 
-                            className="w-full bg-white/[0.02] border border-white/5 rounded-xl p-3 text-sm text-white focus:border-[#FF5F1F] outline-none transition-all font-mono" 
+                            required 
+                            className="input-field" 
+                            value={formData.name} 
+                            onChange={e => setFormData({...formData, name: e.target.value})} 
+                            placeholder="Ex: João Silva"
+                          />
+                        </div>
+                        <div className="lg:col-span-2 space-y-1.5">
+                          <label className="input-label">Razão Social / Nome Fantasia</label>
+                          <input 
+                            className="input-field" 
+                            value={formData.company} 
+                            onChange={e => setFormData({...formData, company: e.target.value})} 
+                            placeholder="Empresa LTDA"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="input-label">CPF ou CNPJ</label>
+                          <input 
+                            className="input-field font-mono" 
                             value={formData.cpfCnpj} 
                             onChange={e => setFormData({...formData, cpfCnpj: e.target.value})} 
                             placeholder="000.000.000-00"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-[8px] text-zinc-500 uppercase font-black tracking-widest ml-1">Empresa / Organização</label>
+                          <label className="input-label">Inscrição Estadual</label>
                           <input 
-                            className="w-full bg-white/[0.02] border border-white/5 rounded-xl p-3 text-sm text-white focus:border-[#FF5F1F] outline-none transition-all" 
-                            value={formData.company} 
-                            onChange={e => setFormData({...formData, company: e.target.value})} 
-                            placeholder="Opcional"
+                            className="input-field font-mono" 
+                            value={formData.stateInscription} 
+                            onChange={e => setFormData({...formData, stateInscription: e.target.value})} 
+                            placeholder="Isento ou Nº"
                           />
                         </div>
                       </div>
-                    </div>
+                    </section>
 
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="text-[8px] text-zinc-500 uppercase font-black tracking-widest ml-1">WhatsApp / Telefone</label>
-                          <input 
-                            className="w-full bg-white/[0.02] border border-white/5 rounded-xl p-3 text-sm text-white focus:border-[#FF5F1F] outline-none transition-all" 
-                            value={formData.phone} 
-                            onChange={e => setFormData({...formData, phone: e.target.value})} 
-                            placeholder="(00) 00000-0000"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[8px] text-zinc-500 uppercase font-black tracking-widest ml-1">E-mail Corporativo</label>
-                          <input 
-                            type="email"
-                            className="w-full bg-white/[0.02] border border-white/5 rounded-xl p-3 text-sm text-white focus:border-[#FF5F1F] outline-none transition-all" 
-                            value={formData.email} 
-                            onChange={e => setFormData({...formData, email: e.target.value})} 
-                            placeholder="parceiro@viscomm.com"
-                          />
-                        </div>
+                    {/* SEÇÃO 2: CONTATO */}
+                    <section className="space-y-4">
+                      <div className="flex items-center gap-2 border-b border-white/5 pb-2">
+                        <Smartphone size={14} className="text-[#FF5F1F]" />
+                        <h3 className="text-[10px] text-white font-black uppercase tracking-[0.2em]">Canais de Contato</h3>
                       </div>
-
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="md:col-span-2 space-y-1.5">
-                          <label className="text-[8px] text-zinc-500 uppercase font-black tracking-widest ml-1">Endereço Completo</label>
-                          <input 
-                            className="w-full bg-white/[0.02] border border-white/5 rounded-xl p-3 text-sm text-white focus:border-[#FF5F1F] outline-none transition-all" 
-                            value={formData.address} 
-                            onChange={e => setFormData({...formData, address: e.target.value})} 
-                            placeholder="Rua, Número, Bairro, Cidade"
-                          />
-                        </div>
                         <div className="space-y-1.5">
-                          <label className="text-[8px] text-zinc-500 uppercase font-black tracking-widest ml-1">CEP</label>
+                          <label className="input-label">Telefone Fixo</label>
+                          <div className="relative">
+                            <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"/>
+                            <input 
+                              className="input-field pl-9" 
+                              value={formData.landline} 
+                              onChange={e => setFormData({...formData, landline: e.target.value})} 
+                              placeholder="(00) 0000-0000" 
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-1.5">
+                          <label className="input-label">Celular / WhatsApp</label>
+                          <div className="flex gap-2">
+                            <div className="relative flex-1">
+                              <Smartphone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"/>
+                              <input 
+                                className="input-field pl-9" 
+                                value={formData.mobile} 
+                                onChange={e => setFormData({...formData, mobile: e.target.value})} 
+                                placeholder="(00) 90000-0000" 
+                              />
+                            </div>
+                            {formData.mobile && (
+                              <button 
+                                type="button" 
+                                onClick={() => openWhatsApp(formData.mobile)}
+                                className="bg-green-600 hover:bg-green-500 text-white p-3 rounded-xl transition-colors shadow-lg shadow-green-900/20"
+                                title="Abrir WhatsApp"
+                              >
+                                <MessageCircle size={18} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="input-label">E-mail Corporativo</label>
+                          <div className="relative">
+                            <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"/>
+                            <input 
+                              type="email"
+                              className="input-field pl-9" 
+                              value={formData.email} 
+                              onChange={e => setFormData({...formData, email: e.target.value})} 
+                              placeholder="parceiro@viscomm.com"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* SEÇÃO 3: ENDEREÇO */}
+                    <section className="space-y-4">
+                      <div className="flex items-center gap-2 border-b border-white/5 pb-2">
+                        <MapPin size={14} className="text-[#FF5F1F]" />
+                        <h3 className="text-[10px] text-white font-black uppercase tracking-[0.2em]">Endereço e Localização</h3>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="input-label">CEP</label>
                           <input 
-                            className="w-full bg-white/[0.02] border border-white/5 rounded-xl p-3 text-sm text-white focus:border-[#FF5F1F] outline-none transition-all" 
+                            className="input-field font-mono" 
                             value={formData.zip} 
                             onChange={e => setFormData({...formData, zip: e.target.value})} 
                             placeholder="00000-000"
                           />
                         </div>
+                        <div className="md:col-span-2 space-y-1.5">
+                          <label className="input-label">Rua / Avenida</label>
+                          <input 
+                            className="input-field" 
+                            value={formData.street} 
+                            onChange={e => setFormData({...formData, street: e.target.value})} 
+                            placeholder="Logradouro"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="input-label">Número</label>
+                          <input 
+                            className="input-field" 
+                            value={formData.number} 
+                            onChange={e => setFormData({...formData, number: e.target.value})} 
+                            placeholder="Nº"
+                          />
+                        </div>
+                        <div className="md:col-span-2 space-y-1.5">
+                          <label className="input-label">Bairro</label>
+                          <input 
+                            className="input-field" 
+                            value={formData.neighborhood} 
+                            onChange={e => setFormData({...formData, neighborhood: e.target.value})} 
+                            placeholder="Bairro"
+                          />
+                        </div>
+                        <div className="md:col-span-2 space-y-1.5">
+                          <label className="input-label">Complemento</label>
+                          <input 
+                            className="input-field" 
+                            value={formData.complement} 
+                            onChange={e => setFormData({...formData, complement: e.target.value})} 
+                            placeholder="Apto, Bloco, Referência..."
+                          />
+                        </div>
                       </div>
-                    </div>
+                    </section>
                   </form>
                 </div>
 
@@ -505,6 +595,11 @@ function ClientsContent() {
           )}
         </AnimatePresence>
       </main>
+
+      <style jsx>{`
+        .input-label { @apply text-[8px] text-zinc-500 uppercase font-black tracking-widest ml-1 block; }
+        .input-field { @apply w-full bg-white/[0.02] border border-white/5 rounded-xl p-3 text-sm text-white focus:border-[#FF5F1F] outline-none transition-all; }
+      `}</style>
     </div>
   );
 }
