@@ -114,42 +114,24 @@ export default function DashboardPage() {
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
 
       <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-8 mt-16 md:mt-0 z-10 pb-24">
-        {/* --- HEADER HIERÁRQUICO --- */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-6">
+        {/* --- HEADER: MINIMALISTA & ELEGANTE --- */}
+        <header className="flex flex-col justify-end items-start mb-8 pt-4">
           
-          <style>{`
-            @keyframes liquid {
-              0% { background-position: 0% 50%; }
-              50% { background-position: 100% 50%; }
-              100% { background-position: 0% 50%; }
-            }
-            .text-liquid {
-              background-size: 300% auto;
-              animation: liquid 8s ease-in-out infinite;
-            }
-          `}</style>
+          {/* 1. Título Principal (Sóbrio e Forte) */}
+          <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight leading-snug">
+            Central de Comando
+            {/* Ponto Laranja: Assinatura da marca sem gritar */}
+            <span className="text-[#FF5F1F]">.</span>
+          </h1>
 
-          <div>
-             {/* Linha 1: Nome da Empresa (Pulsando junto com o Pin) */}
-             <div className="flex items-center gap-3 mb-2">
-               <span className="relative flex h-2 w-2">
-                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF5F1F] opacity-75 duration-1000"></span>
-                 <span className="relative inline-flex rounded-full h-2 w-2 bg-[#FF5F1F]"></span>
-               </span>
-               <span className="text-[#FF5F1F] text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] animate-pulse">
-                  Impacto comunicação visual
-               </span>
-             </div>
-
-             {/* Linha 2: Título Sólido */}
-             <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter leading-none uppercase">
-               GESTÃO
-             </h1>
-
-             {/* Linha 3: Subtítulo Líquido (Abaixo) */}
-             <h2 className="mt-1 text-xl md:text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-[#FF5F1F] via-zinc-200 to-[#FF5F1F] text-liquid uppercase">
-               Focada em Eficiência
-             </h2>
+          {/* 2. Subtítulo (Abaixo, com linha de conexão) */}
+          <div className="flex items-center gap-3 mt-2 group">
+             {/* Linha decorativa que fica laranja ao passar o mouse */}
+             <div className="h-[1px] w-6 bg-zinc-700 group-hover:bg-[#FF5F1F] group-hover:w-10 transition-all duration-500"></div>
+             
+             <span className="text-zinc-500 text-[10px] md:text-xs font-medium uppercase tracking-[0.2em] group-hover:text-zinc-300 transition-colors">
+               Impacto Comunicação Visual
+             </span>
           </div>
         </header>
 
