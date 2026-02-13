@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { 
   Activity, 
-  Plus,
   Loader2,
   AlertTriangle,
   Layers,
@@ -22,7 +21,6 @@ import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { ProductionHub } from '@/components/dashboard/ProductionHub';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { WeeklyTargetCard } from '@/components/dashboard/WeeklyTargetCard';
-import { Button } from '@/components/ui/button';
 import { OrderFormModal } from '@/components/dashboard/OrderFormModal';
 
 // --- UTILITÁRIOS DE DATA (Puras e Estáveis) ---
@@ -91,11 +89,6 @@ export default function DashboardPage() {
   const { warRoom, productionQueue, completedList, weeklyPendingCount } = categorizedOrders;
 
   // --- HANDLERS MEMOIZADOS ---
-  const handleOpenNewOrder = useCallback(() => {
-    setEditingOrder(null);
-    setIsModalOpen(true);
-  }, []);
-
   const handleEditOrder = useCallback((order: any) => {
     setEditingOrder(order);
     setIsModalOpen(true);
@@ -121,24 +114,19 @@ export default function DashboardPage() {
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
 
       <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-8 mt-16 md:mt-0 z-10 pb-24">
-        <header className="flex flex-col md:flex-row justify-between items-end gap-4">
+        {/* HEADER SEM O BOTÃO */}
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-6">
           <div className="space-y-1">
-            <div className="flex items-center gap-2 text-primary">
-              <Activity size={14} className="animate-pulse" />
-              <span className="text-[9px] font-black uppercase tracking-[0.4em]">Terminal Operacional VisComm</span>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="text-primary text-xs font-bold uppercase tracking-[0.2em] flex items-center gap-2">
+                <Activity size={14} className="animate-pulse" />
+                TERMINAL OPERACIONAL VISCOMM
+              </div>
             </div>
-            <h1 className="text-3xl font-black tracking-tighter text-white uppercase leading-none">
-              Gestão de <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-400">Fluxo</span>
+            <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tight leading-none">
+              Gestão de <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">Fluxo</span>
             </h1>
           </div>
-          
-          <Button 
-            onClick={handleOpenNewOrder}
-            className="bg-primary text-black font-black h-10 px-6 rounded-xl transition-all duration-300 flex items-center gap-2 uppercase tracking-widest text-[10px] shadow-[0_5px_20px_-5px_rgba(255,95,31,0.3)] hover:bg-white active:scale-95"
-          >
-              <Plus size={16} strokeWidth={3} />
-              Lançar Pedido
-          </Button>
         </header>
 
         {/* --- HUB DE INTELIGÊNCIA --- */}
