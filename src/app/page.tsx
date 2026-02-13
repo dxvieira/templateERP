@@ -114,23 +114,23 @@ export default function DashboardPage() {
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
 
       <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-8 mt-16 md:mt-0 z-10 pb-24">
-        {/* --- HEADER: IDENTITY FIXED --- */}
+        {/* --- HEADER: UPPERCASE & MINIMAL --- */}
         <header className="flex flex-col justify-end items-start mb-8 pt-4">
           
-          {/* 1. Título Principal */}
+          {/* 1. Título Principal (AGORA EM MAIÚSCULO) */}
           <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight leading-snug">
-            Central de Comando
+            CENTRAL DE COMANDO
             <span className="text-[#FF5F1F]">.</span>
           </h1>
 
           {/* 2. Subtítulo (Laranja Fixo + Animação de Expansão) */}
           <div className="flex items-center gap-3 mt-2 group cursor-default">
-             {/* Linha: Cresce e brilha no hover */}
+             {/* Linha: Cresce e fica laranja no hover */}
              <div className="h-[1px] w-6 bg-zinc-800 group-hover:w-12 group-hover:bg-[#FF5F1F] transition-all duration-300 ease-out"></div>
              
-             {/* Texto: Já é Laranja. No hover, ele "espaça" as letras (tracking) */}
+             {/* Texto: Laranja fixo. No hover, ele expande (tracking) e fica branco para contraste */}
              <span className="text-[#FF5F1F] text-[10px] md:text-xs font-bold uppercase tracking-[0.2em] transition-all duration-300 group-hover:tracking-[0.35em] group-hover:text-white">
-               Impacto Comunicação Visual
+               IMPACTO COMUNICAÇÃO VISUAL
              </span>
           </div>
         </header>
@@ -185,7 +185,7 @@ export default function DashboardPage() {
               </div>
             )) : (
               <div className="w-full py-10 text-center border border-dashed border-zinc-800 rounded-2xl bg-zinc-900/20">
-                <p className="text-[9px] text-zinc-600 font-black uppercase tracking-[0.4em]">Fila Nominal Limpa</p>
+                <p className="text-[9px] text-zinc-600 font-black uppercase tracking-rawer">Fila Nominal Limpa</p>
               </div>
             )}
           </div>
