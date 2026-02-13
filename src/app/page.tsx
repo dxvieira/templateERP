@@ -114,18 +114,40 @@ export default function DashboardPage() {
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
 
       <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-8 mt-16 md:mt-0 z-10 pb-24">
-        {/* HEADER SEM O BOTÃO */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-6">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="text-primary text-xs font-bold uppercase tracking-[0.2em] flex items-center gap-2">
-                <Activity size={14} className="animate-pulse" />
-                TERMINAL OPERACIONAL VISCOMM
-              </div>
-            </div>
-            <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tight leading-none">
-              Gestão de <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">Fluxo</span>
-            </h1>
+        {/* --- HEADER NOVO E ANIMADO --- */}
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6">
+          
+          <style>{`
+            @keyframes shine {
+              0% { background-position: 0% 50%; }
+              50% { background-position: 100% 50%; }
+              100% { background-position: 0% 50%; }
+            }
+            .text-shine-effect {
+              background-size: 200% auto;
+              animation: shine 3s linear infinite;
+            }
+          `}</style>
+
+          <div>
+             {/* Linha Superior: Nome da Empresa com Ícone Pulsante */}
+             <div className="flex items-center gap-3 mb-2 group">
+               <span className="relative flex h-2.5 w-2.5">
+                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF5F1F] opacity-75"></span>
+                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#FF5F1F] shadow-[0_0_15px_#FF5F1F]"></span>
+               </span>
+               <span className="text-[#FF5F1F] text-[10px] md:text-xs font-bold uppercase tracking-[0.25em] transition-all group-hover:tracking-[0.3em] duration-500">
+                  Impacto comunicação visual
+               </span>
+             </div>
+
+             {/* Título Principal */}
+             <h1 className="text-4xl md:text-6xl font-black text-white tracking-tighter leading-none uppercase">
+               GESTÃO <br className="md:hidden" />
+               <span className="md:ml-3 text-transparent bg-clip-text bg-gradient-to-r from-[#FF5F1F] via-white to-[#FF5F1F] text-shine-effect">
+                 FOCADA EM EFICIÊNCIA
+               </span>
+             </h1>
           </div>
         </header>
 
