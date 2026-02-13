@@ -114,22 +114,22 @@ export default function DashboardPage() {
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
 
       <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-8 mt-16 md:mt-0 z-10 pb-24">
-        {/* --- HEADER: MINIMALISTA & ELEGANTE --- */}
+        {/* --- HEADER: IDENTITY FIXED --- */}
         <header className="flex flex-col justify-end items-start mb-8 pt-4">
           
-          {/* 1. Título Principal (Sóbrio e Forte) */}
+          {/* 1. Título Principal */}
           <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight leading-snug">
             Central de Comando
-            {/* Ponto Laranja: Assinatura da marca sem gritar */}
             <span className="text-[#FF5F1F]">.</span>
           </h1>
 
-          {/* 2. Subtítulo (Abaixo, com linha de conexão) */}
-          <div className="flex items-center gap-3 mt-2 group">
-             {/* Linha decorativa que fica laranja ao passar o mouse */}
-             <div className="h-[1px] w-6 bg-zinc-700 group-hover:bg-[#FF5F1F] group-hover:w-10 transition-all duration-500"></div>
+          {/* 2. Subtítulo (Laranja Fixo + Animação de Expansão) */}
+          <div className="flex items-center gap-3 mt-2 group cursor-default">
+             {/* Linha: Cresce e brilha no hover */}
+             <div className="h-[1px] w-6 bg-zinc-800 group-hover:w-12 group-hover:bg-[#FF5F1F] transition-all duration-300 ease-out"></div>
              
-             <span className="text-zinc-500 text-[10px] md:text-xs font-medium uppercase tracking-[0.2em] group-hover:text-zinc-300 transition-colors">
+             {/* Texto: Já é Laranja. No hover, ele "espaça" as letras (tracking) */}
+             <span className="text-[#FF5F1F] text-[10px] md:text-xs font-bold uppercase tracking-[0.2em] transition-all duration-300 group-hover:tracking-[0.35em] group-hover:text-white">
                Impacto Comunicação Visual
              </span>
           </div>
