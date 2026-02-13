@@ -114,7 +114,7 @@ export default function DashboardPage() {
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
 
       <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-8 mt-16 md:mt-0 z-10 pb-24">
-        {/* --- HEADER PROFISSIONAL (Liquid Flow) --- */}
+        {/* --- HEADER HIERÁRQUICO --- */}
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-6">
           
           <style>{`
@@ -130,24 +130,26 @@ export default function DashboardPage() {
           `}</style>
 
           <div>
-             {/* Linha Superior: Nome da Empresa */}
-             <div className="flex items-center gap-3 mb-1 group">
+             {/* Linha 1: Nome da Empresa (Pulsando junto com o Pin) */}
+             <div className="flex items-center gap-3 mb-2">
                <span className="relative flex h-2 w-2">
                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF5F1F] opacity-75 duration-1000"></span>
                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#FF5F1F]"></span>
                </span>
-               <span className="text-zinc-400 text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] group-hover:text-[#FF5F1F] transition-colors duration-500">
+               <span className="text-[#FF5F1F] text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] animate-pulse">
                   Impacto comunicação visual
                </span>
              </div>
 
-             {/* Título Principal (Reduzido e Fluido) */}
-             <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter leading-tight uppercase">
-               GESTÃO <br className="md:hidden" />
-               <span className="md:ml-2 text-transparent bg-clip-text bg-gradient-to-r from-[#FF5F1F] via-zinc-200 to-[#FF5F1F] text-liquid">
-                 FOCADA EM EFICIÊNCIA
-               </span>
+             {/* Linha 2: Título Sólido */}
+             <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter leading-none uppercase">
+               GESTÃO
              </h1>
+
+             {/* Linha 3: Subtítulo Líquido (Abaixo) */}
+             <h2 className="mt-1 text-xl md:text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-[#FF5F1F] via-zinc-200 to-[#FF5F1F] text-liquid uppercase">
+               Focada em Eficiência
+             </h2>
           </div>
         </header>
 
