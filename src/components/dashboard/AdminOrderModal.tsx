@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { 
   X, Save, Plus, Trash2, Box, FileText, 
@@ -49,7 +49,14 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       setInstallments(order.installments || 1);
       setMachine(order.machine || '');
       setObservations(order.observations || '');
-      setItems(order.items?.map((item: any) => ({ ...item })) || [{ productCode: '', desc: '', quantity: 1, unitValue: 0 }]);
+      // Ensure all fields exist to avoid controlled/uncontrolled warning
+      const loadedItems = order.items?.map((item: any) => ({
+        productCode: item.productCode || '',
+        desc: item.desc || '',
+        quantity: item.quantity || 0,
+        unitValue: item.unitValue || 0
+      })) || [{ productCode: '', desc: '', quantity: 1, unitValue: 0 }];
+      setItems(loadedItems);
     } else {
       setClient('');
       setSeller('');
@@ -176,15 +183,15 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                <div className="space-y-2">
                   {items.map((item, index) => (
                     <div key={index} className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-12 items-center gap-3">
-                       <input placeholder="CÓD" value={item.productCode} onChange={e => handleItemChange(index, 'productCode', e.target.value)} className={`${inputClass} md:col-span-1 p-2 text-center text-xs font-mono`} />
-                       <input placeholder="Descrição..." value={item.desc} onChange={e => handleItemChange(index, 'desc', e.target.value)} className={`${inputClass} md:col-span-5 p-2 text-xs`} />
-                       <input type="number" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value)} className={`${inputClass} md:col-span-1 p-2 text-center text-xs`} />
+                       <input placeholder="CÓD" value={item.productCode || ''} onChange={e => handleItemChange(index, 'productCode', e.target.value)} className={`${inputClass} md:col-span-1 p-2 text-center text-xs font-mono`} />
+                       <input placeholder="Descrição..." value={item.desc || ''} onChange={e => handleItemChange(index, 'desc', e.target.value)} className={`${inputClass} md:col-span-5 p-2 text-xs`} />
+                       <input type="number" value={item.quantity || 0} onChange={e => handleItemChange(index, 'quantity', e.target.value)} className={`${inputClass} md:col-span-1 p-2 text-center text-xs`} />
                        <div className="md:col-span-2 relative">
                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-600 text-[10px]">R$</span>
-                         <input type="number" step="0.01" value={item.unitValue} onChange={e => handleItemChange(index, 'unitValue', e.target.value)} className={`${inputClass} pl-7 p-2 text-right text-xs text-emerald-400`} />
+                         <input type="number" step="0.01" value={item.unitValue || 0} onChange={e => handleItemChange(index, 'unitValue', e.target.value)} className={`${inputClass} pl-7 p-2 text-right text-xs text-emerald-400`} />
                        </div>
                        <div className="md:col-span-2 text-right font-mono text-xs font-black text-zinc-400 bg-black/20 p-2 rounded-lg border border-zinc-800">
-                         {(item.quantity * item.unitValue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                         {((item.quantity || 0) * (item.unitValue || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                        </div>
                        <button type="button" onClick={() => handleRemoveItem(index)} className="md:col-span-1 p-2 text-zinc-700 hover:text-red-500 ml-auto"><Trash2 size={14}/></button>
                     </div>

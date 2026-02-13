@@ -33,7 +33,13 @@ export function OrderFormModal({ order, isOpen, onClose }: OrderFormModalProps) 
       setDeliveryDate(order.deliveryDate || '');
       setStatus(order.status || 'Arte');
       setSeller(order.seller || 'Vendedor Geral');
-      setItems(order.items || [{ desc: '', quantity: 1, observation: '' }]);
+      // Ensure all fields exist to avoid controlled/uncontrolled warning
+      const loadedItems = order.items?.map((item: any) => ({
+        desc: item.desc || '',
+        quantity: item.quantity || 0,
+        observation: item.observation || ''
+      })) || [{ desc: '', quantity: 1, observation: '' }];
+      setItems(loadedItems);
     } else {
       setClient('');
       setDeliveryDate('');
@@ -136,11 +142,11 @@ export function OrderFormModal({ order, isOpen, onClose }: OrderFormModalProps) 
                   <label className={labelClass}>Cliente / Projeto</label>
                   <button type="button" onClick={handleGoToClient} className="flex items-center gap-1 text-[9px] font-black uppercase text-primary hover:text-white transition-all">Ver Perfil <ExternalLink size={10} /></button>
                 </div>
-                <input required value={client} onChange={(e) => setClient(e.target.value)} className={inputClass} placeholder="Identificação..." />
+                <input required value={client || ''} onChange={(e) => setClient(e.target.value)} className={inputClass} placeholder="Identificação..." />
               </div>
               <div>
                 <label className={labelClass}>Prazo de Entrega</label>
-                <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className={inputClass} />
+                <input type="date" value={deliveryDate || ''} onChange={(e) => setDeliveryDate(e.target.value)} className={inputClass} />
               </div>
             </div>
 
@@ -153,10 +159,10 @@ export function OrderFormModal({ order, isOpen, onClose }: OrderFormModalProps) 
                 {items.map((item, index) => (
                   <div key={index} className="bg-black/40 border border-zinc-800 rounded-2xl p-4 space-y-4">
                     <div className="flex gap-4">
-                      <input placeholder="Material..." value={item.desc} onChange={(e) => handleItemChange(index, 'desc', e.target.value)} className={`${inputClass} flex-1`} />
-                      <input type="number" value={item.quantity} onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} className={`${inputClass} w-20 text-center`} />
+                      <input placeholder="Material..." value={item.desc || ''} onChange={(e) => handleItemChange(index, 'desc', e.target.value)} className={`${inputClass} flex-1`} />
+                      <input type="number" value={item.quantity || 0} onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} className={`${inputClass} w-20 text-center`} />
                     </div>
-                    <textarea rows={2} placeholder="Notas técnicas..." value={item.observation} onChange={(e) => handleItemChange(index, 'observation', e.target.value)} className={`${inputClass} text-xs text-zinc-400`} />
+                    <textarea rows={2} placeholder="Notas técnicas..." value={item.observation || ''} onChange={(e) => handleItemChange(index, 'observation', e.target.value)} className={`${inputClass} text-xs text-zinc-400`} />
                     <button type="button" onClick={() => handleRemoveItem(index)} className="p-2 text-zinc-700 hover:text-red-500 flex ml-auto"><Trash2 size={16} /></button>
                   </div>
                 ))}
