@@ -50,7 +50,7 @@ export default function WeeklyGoalsPage() {
 
   const { data: orders, isLoading } = useCollection(weeklyQuery);
 
-  // --- 2. BUSCAR TODOS OS PEDIDOS PENDENTES (PARA IMPORTAÇÃO) ---
+  // --- 2. BUSCAR TODOS OS PEDIDOS PENDENTES (PARA SELEÇÃO) ---
   const availableOrdersQuery = useMemoFirebase(() => {
     if (!firestore || !user || !isImportModalOpen) return null;
     return query(
@@ -69,7 +69,7 @@ export default function WeeklyGoalsPage() {
       await updateDoc(orderRef, { weekly_priority: true });
       toast({ title: "Adicionado à meta" });
     } catch (err) {
-      console.error(err);
+      console.error("Erro ao adicionar à meta:", err);
     }
   }, [firestore, toast]);
 
@@ -86,31 +86,34 @@ export default function WeeklyGoalsPage() {
       await updateDoc(orderRef, { weekly_priority: false });
       toast({ title: "Removido da meta" });
     } catch (err) {
-      console.error(err);
+      console.error("Erro ao remover da meta:", err);
     }
   }, [firestore, toast]);
 
-  // --- FILTRAGEM E ORDENAÇÃO DO MODAL ---
+  // --- FILTRAGEM DE SEGURANÇA E ORDENAÇÃO DO MODAL ---
   const modalList = useMemo(() => {
     if (!availableOrders) return [];
     
-    let filtered = [...availableOrders];
+    const term = searchTerm.toLowerCase();
     
-    // Filtro por busca
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(o => 
-        o.client?.toLowerCase().includes(term) || 
-        o.id?.toLowerCase().includes(term)
-      );
-    }
+    return availableOrders
+      .filter(order => {
+        // 1. Filtro de Busca
+        const matchesSearch = 
+          order.client?.toLowerCase().includes(term) || 
+          order.id?.toLowerCase().includes(term);
+        
+        // 2. CAMADA DE SEGURANÇA: Status Não Concluído
+        const isNotFinished = order.status !== 'Concluído' && order.status !== 'Entregue';
 
-    // Ordenação: Selecionados primeiro
-    return filtered.sort((a, b) => {
-      const aSel = a.weekly_priority ? 1 : 0;
-      const bSel = b.weekly_priority ? 1 : 0;
-      return bSel - aSel;
-    });
+        return matchesSearch && isNotFinished;
+      })
+      .sort((a, b) => {
+        // Ordenação: Selecionados primeiro para facilitar gestão
+        const aSel = a.weekly_priority ? 1 : 0;
+        const bSel = b.weekly_priority ? 1 : 0;
+        return bSel - aSel;
+      });
   }, [availableOrders, searchTerm]);
 
   const { pendingOrders, completedOrders, progress, totalValue } = useMemo(() => {
@@ -246,7 +249,7 @@ export default function WeeklyGoalsPage() {
           </section>
         )}
 
-        {/* MODAL DE IMPORTAÇÃO (CHECKLIST) */}
+        {/* MODAL DE SELEÇÃO COM FILTRO DE SEGURANÇA */}
         <AnimatePresence>
           {isImportModalOpen && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" onClick={() => setIsImportModalOpen(false)}>
@@ -262,7 +265,7 @@ export default function WeeklyGoalsPage() {
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-primary/10 rounded-xl border border-primary/20"><Search size={20} className="text-primary" /></div>
                       <div>
-                        <span className="text-primary text-[9px] font-black uppercase tracking-[0.3em]">Fila Geral de OS</span>
+                        <span className="text-primary text-[9px] font-black uppercase tracking-[0.3em]">Gestor de Prioridades</span>
                         <h2 className="text-xl font-black text-white uppercase tracking-tight">Selecionar Pedidos</h2>
                       </div>
                     </div>
@@ -273,7 +276,7 @@ export default function WeeklyGoalsPage() {
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-primary transition-colors" size={20} />
                     <input 
                       autoFocus
-                      placeholder="Identifique o cliente ou número da OS..."
+                      placeholder="Busque por cliente ou número da OS..."
                       value={searchTerm}
                       onChange={e => setSearchTerm(e.target.value)}
                       className="w-full bg-black border border-zinc-800 rounded-2xl py-5 pl-14 pr-4 text-white placeholder-zinc-700 outline-none text-lg focus:border-primary/50 transition-all"
@@ -287,7 +290,7 @@ export default function WeeklyGoalsPage() {
                    ) : modalList.length === 0 ? (
                      <div className="text-center py-20 text-zinc-600">
                         <Box size={40} className="mx-auto mb-4 opacity-10" />
-                        <p className="text-[10px] uppercase tracking-widest font-black">Nenhum pedido disponível</p>
+                        <p className="text-[10px] uppercase tracking-widest font-black">Nenhum pedido em produção encontrado</p>
                      </div>
                    ) : (
                      modalList.map(order => {
@@ -329,10 +332,13 @@ export default function WeeklyGoalsPage() {
                        );
                      })
                    )}
+                   <div className="hidden last:block text-center text-zinc-600 py-8 text-[10px] uppercase tracking-widest font-black">
+                      Verifique os filtros de busca se não encontrar o pedido.
+                   </div>
                 </div>
                 
                 <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 text-center">
-                  <p className="text-[9px] text-zinc-600 uppercase font-black tracking-[0.3em]">Gerenciador de Prioridades VisComm</p>
+                  <p className="text-[9px] text-zinc-600 uppercase font-black tracking-[0.3em]">Apenas pedidos ativos em produção são exibidos</p>
                 </div>
               </motion.div>
             </div>
