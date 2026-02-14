@@ -1,6 +1,6 @@
 'use client';
 
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { Calendar, ChevronRight, Package, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -25,18 +25,22 @@ interface OrderCardProps {
 }
 
 export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
-  const isDone = order.status === 'Concluído' || order.status === 'Entregue';
+  const isDone = useMemo(() => order.status === 'Concluído' || order.status === 'Entregue', [order.status]);
   
-  // Tratamento de Data robusto
-  const dateObj = order.deliveryDate ? new Date(order.deliveryDate.includes('T') ? order.deliveryDate : order.deliveryDate + 'T12:00:00') : null;
-  const formattedDate = dateObj ? dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '--/--';
-  
-  // Verifica atraso (Atrasado se data < hoje E não concluído)
-  const isLate = dateObj && new Date() > dateObj && !isDone;
+  // Memoização do processamento de data
+  const { formattedDate, isLate } = useMemo(() => {
+    if (!order.deliveryDate) return { formattedDate: '--/--', isLate: false };
+    
+    const dateObj = new Date(order.deliveryDate.includes('T') ? order.deliveryDate : order.deliveryDate + 'T12:00:00');
+    const formatted = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    const late = new Date() > dateObj && !isDone;
+    
+    return { formattedDate: formatted, isLate: late };
+  }, [order.deliveryDate, isDone]);
 
-  // Sistema de Cores Industrial
-  const getStatusColor = (status: string) => {
-    switch(status) {
+  // Memoização das Cores Industriais
+  const statusColor = useMemo(() => {
+    switch(order.status) {
       case 'Arte': return '#d946ef';
       case 'Impressão': return '#3B82F6';
       case 'Serralheria': return '#EAB308';
@@ -46,9 +50,7 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
       case 'Entregue': return '#4ade80'; 
       default: return '#71717a';
     }
-  };
-
-  const statusColor = getStatusColor(order.status);
+  }, [order.status]);
 
   return (
     <div 
@@ -63,18 +65,14 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
         '--hover-color': statusColor, 
       } as React.CSSProperties}
     >
-      {/* Glow de Hover Dinâmico */}
       <div className="absolute inset-0 border border-transparent rounded-lg pointer-events-none transition-all duration-300 group-hover:border-[var(--hover-color)] group-hover:shadow-[0_0_15px_-5px_var(--hover-color)] opacity-40 group-hover:opacity-100" />
 
-      {/* BARRA LATERAL DE STATUS */}
       <div 
         className="w-1 transition-all group-hover:w-1.5 shrink-0"
         style={{ backgroundColor: statusColor, boxShadow: `0 0 10px ${statusColor}` }}
       />
 
-      {/* CONTEÚDO PRINCIPAL */}
       <div className="relative z-10 flex-1 w-full p-2.5 pl-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-4">
-        
         <div className="flex flex-col gap-0.5 min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-[8px] font-mono text-zinc-500 bg-zinc-900 px-1 py-0 rounded border border-zinc-800 uppercase">
@@ -94,7 +92,6 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
             {order.client}
           </h3>
           
-          {/* Resumo de Itens de Produção */}
           <div className="flex items-center gap-1 text-zinc-500">
             <Package size={8} />
             <p className="text-[8px] uppercase truncate font-medium tracking-widest">
@@ -104,7 +101,6 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
           </div>
         </div>
 
-        {/* LADO DIREITO: PRAZO E NAVEGAÇÃO */}
         <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-3 border-t sm:border-t-0 border-zinc-800/50 pt-2 sm:pt-0">
           <div className={cn(
             "flex items-center gap-2 px-2 py-1 rounded-md border transition-all",
@@ -121,7 +117,6 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
               </div>
             </div>
           </div>
-
           <ChevronRight className="text-zinc-800 group-hover:text-[var(--hover-color)] group-hover:translate-x-1 transition-all hidden sm:block" size={14} />
         </div>
       </div>

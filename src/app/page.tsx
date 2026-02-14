@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
@@ -23,9 +22,7 @@ import { OrderCard } from '@/components/dashboard/OrderCard';
 import { WeeklyTargetCard } from '@/components/dashboard/WeeklyTargetCard';
 import { OrderFormModal } from '@/components/dashboard/OrderFormModal';
 
-// --- UTILITÁRIOS DE DATA (Puras e Estáveis) ---
-const getTodayStr = () => new Date().toISOString().split('T')[0];
-
+// --- UTILITÁRIOS PUROS (Fora do ciclo de vida para performance) ---
 const isCompleted = (status: string) => ['Concluído', 'Entregue'].includes(status);
 
 export default function DashboardPage() {
@@ -36,7 +33,7 @@ export default function DashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
 
-  // --- MEMOIZAÇÃO DE DATAS ---
+  // --- MEMOIZAÇÃO DE DATAS DE REFERÊNCIA ---
   const dateBounds = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -47,7 +44,7 @@ export default function DashboardPage() {
     };
   }, []);
 
-  // --- SEPARAÇÃO DE LISTAS (OTIMIZAÇÃO EXTREMA) ---
+  // --- CATEGORIZAÇÃO DE ALTA PERFORMANCE (Otimização Extrema) ---
   const categorizedOrders = useMemo(() => {
     const warRoom: any[] = [];
     const productionQueue: any[] = [];
@@ -59,14 +56,14 @@ export default function DashboardPage() {
       const deliveryDate = order.deliveryDate || '';
       const done = isCompleted(status);
 
-      // Contador de Metas
+      // Lógica de Meta Semanal
       if (!done && deliveryDate) {
         try {
           const d = parseISO(deliveryDate);
           if (isWithinInterval(d, { start: dateBounds.weekStart, end: dateBounds.weekEnd })) {
             weeklyPendingCount++;
           }
-        } catch (e) { /* ignore invalid dates */ }
+        } catch (e) {}
       }
 
       if (done) {
@@ -78,7 +75,7 @@ export default function DashboardPage() {
       }
     });
 
-    // Ordenação Estável
+    // Sorts estáveis
     warRoom.sort((a, b) => (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
     productionQueue.sort((a, b) => (a.deliveryDate || '9999').localeCompare(b.deliveryDate || '9999'));
     completedList.sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
@@ -88,10 +85,15 @@ export default function DashboardPage() {
 
   const { warRoom, productionQueue, completedList, weeklyPendingCount } = categorizedOrders;
 
-  // --- HANDLERS MEMOIZADOS ---
+  // --- HANDLERS ESTABILIZADOS ---
   const handleEditOrder = useCallback((order: any) => {
     setEditingOrder(order);
     setIsModalOpen(true);
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    setIsModalOpen(false);
+    setEditingOrder(null);
   }, []);
 
   useEffect(() => {
@@ -114,21 +116,14 @@ export default function DashboardPage() {
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
 
       <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-8 mt-16 md:mt-0 z-10 pb-24">
-        {/* --- HEADER: UPPERCASE & MINIMAL --- */}
+        {/* --- HEADER: MINIMALISTA & ELEGANTE --- */}
         <header className="flex flex-col justify-end items-start mb-8 pt-4">
-          
-          {/* 1. Título Principal (AGORA EM MAIÚSCULO) */}
           <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight leading-snug">
             CENTRAL DE COMANDO
             <span className="text-[#FF5F1F]">.</span>
           </h1>
-
-          {/* 2. Subtítulo (Laranja Fixo + Animação de Expansão) */}
           <div className="flex items-center gap-3 mt-2 group cursor-default">
-             {/* Linha: Cresce e fica laranja no hover */}
              <div className="h-[1px] w-6 bg-zinc-800 group-hover:w-12 group-hover:bg-[#FF5F1F] transition-all duration-300 ease-out"></div>
-             
-             {/* Texto: Laranja fixo. No hover, ele expande (tracking) e fica branco para contraste */}
              <span className="text-[#FF5F1F] text-[10px] md:text-xs font-bold uppercase tracking-[0.2em] transition-all duration-300 group-hover:tracking-[0.35em] group-hover:text-white">
                IMPACTO COMUNICAÇÃO VISUAL
              </span>
@@ -145,7 +140,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* --- WAR ROOM (CARROSSEL MOBILE / GRID DESKTOP) --- */}
+        {/* --- WAR ROOM --- */}
         {warRoom.length > 0 && (
           <section className="space-y-4">
             <div className="flex items-center justify-between px-2 border-b border-destructive/20 pb-3">
@@ -185,7 +180,7 @@ export default function DashboardPage() {
               </div>
             )) : (
               <div className="w-full py-10 text-center border border-dashed border-zinc-800 rounded-2xl bg-zinc-900/20">
-                <p className="text-[9px] text-zinc-600 font-black uppercase tracking-rawer">Fila Nominal Limpa</p>
+                <p className="text-[9px] text-zinc-600 font-black uppercase tracking-widest">Fila Nominal Limpa</p>
               </div>
             )}
           </div>
@@ -215,7 +210,7 @@ export default function DashboardPage() {
         <OrderFormModal 
           isOpen={isModalOpen} 
           order={editingOrder} 
-          onClose={() => { setIsModalOpen(false); setEditingOrder(null); }} 
+          onClose={handleCloseModal} 
         />
       </main>
     </div>
