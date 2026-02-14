@@ -118,6 +118,23 @@
         }
       },
       "required": ["id", "name"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Information about material and service providers.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "cnpj": { "type": "string" },
+        "email": { "type": "string" },
+        "landline": { "type": "string" },
+        "mobile": { "type": "string" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name"]
     }
   },
   "auth": {
@@ -139,6 +156,12 @@
         "$ref": "#/backend/entities/Client"
       },
       "description": "Stores customer contact information."
+    },
+    "/suppliers/{supplierId}": {
+      "schema": {
+        "$ref": "#/backend/entities/Supplier"
+      },
+      "description": "Stores supplier information."
     }
   }
 }

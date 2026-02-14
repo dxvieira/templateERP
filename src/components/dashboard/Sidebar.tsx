@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useState, memo, useCallback } from 'react';
@@ -7,7 +8,7 @@ import {
   Settings, 
   Bell, 
   Target, 
-  Package,
+  Truck,
   Menu,
   X,
   Users,
@@ -24,7 +25,7 @@ const navItems = [
   { icon: Target, label: 'Meta da Semana', path: '/goals' },
   { icon: ClipboardList, label: 'Gestão de Pedidos', path: '/orders' },
   { icon: Users, label: 'Meus Clientes', path: '/clients' },
-  { icon: Package, label: 'Estoque', path: '#' },
+  { icon: Truck, label: 'Fornecedores', path: '/suppliers' },
   { icon: Bell, label: 'Notificações', path: '#' },
   { icon: Settings, label: 'Configurações', path: '#' },
 ];
