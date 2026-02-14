@@ -74,15 +74,21 @@ export default function WeeklyGoalsPage() {
     }
   }, [firestore, toast]);
 
-  const handleRemoveFromGoal = useCallback(async (orderId: string) => {
+  // --- LOGICA DE REMOÇÃO (CORRIGIDA COM STOP PROPAGATION) ---
+  const handleRemoveFromGoal = useCallback(async (e: React.MouseEvent, orderId: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+
     if (!firestore) return;
-    if (!window.confirm("Remover este pedido da meta semanal?")) return;
+    if (!window.confirm("Remover este pedido da meta semanal? (Ele continuará salvo na base de dados)")) return;
+    
     const orderRef = doc(firestore, 'orders', orderId);
     try {
       await updateDoc(orderRef, { weekly_priority: false });
       toast({ title: "Removido da meta" });
     } catch (err) {
-      console.error(err);
+      console.error("Erro ao remover da meta:", err);
+      toast({ variant: "destructive", title: "Erro ao atualizar" });
     }
   }, [firestore, toast]);
 
@@ -204,8 +210,10 @@ export default function WeeklyGoalsPage() {
                 <div key={order.id} className="relative group/card">
                    <OrderCard order={order} onClick={setEditingOrder} />
                    <button 
-                     onClick={(e) => { e.stopPropagation(); handleRemoveFromGoal(order.id); }}
-                     className="absolute -top-2 -right-2 p-1.5 bg-zinc-900 border border-zinc-800 rounded-full text-zinc-500 hover:text-red-500 opacity-0 group-hover/card:opacity-100 transition-all z-20 shadow-xl"
+                     type="button"
+                     onClick={(e) => handleRemoveFromGoal(e, order.id)}
+                     className="absolute -top-2 -right-2 p-1.5 bg-zinc-900 border border-zinc-800 rounded-full text-zinc-500 hover:text-red-500 hover:bg-red-500/10 hover:border-red-500/20 opacity-0 group-hover/card:opacity-100 transition-all z-20 shadow-xl"
+                     title="Remover da Meta (Não apaga o pedido)"
                    >
                      <X size={12} />
                    </button>
