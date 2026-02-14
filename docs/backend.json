@@ -49,6 +49,10 @@
         "installments": {
           "type": "string"
         },
+        "weekly_priority": {
+          "type": "boolean",
+          "description": "Flag to mark order as a priority for the current week."
+        },
         "items": {
           "type": "array",
           "items": {
