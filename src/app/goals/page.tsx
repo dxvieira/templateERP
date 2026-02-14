@@ -56,9 +56,7 @@ export default function WeeklyGoalsPage() {
     if (!firestore || !user || !isImportModalOpen) return null;
     return query(
       collection(firestore, 'orders'),
-      where('status', '!=', 'Concluído'),
-      orderBy('status'),
-      orderBy('createdAt', 'desc')
+      where('status', '!=', 'Entregue')
     );
   }, [firestore, user, isImportModalOpen]);
 
@@ -90,7 +88,8 @@ export default function WeeklyGoalsPage() {
 
   const filteredImportList = useMemo(() => {
     if (!availableOrders) return [];
-    const candidates = availableOrders.filter(o => !o.weekly_priority && o.status !== 'Entregue');
+    // Filtra localmente os que já são priority para não duplicar na lista
+    const candidates = availableOrders.filter(o => !o.weekly_priority && o.status !== 'Concluído' && o.status !== 'Entregue');
     if (!searchTerm) return candidates;
     const term = searchTerm.toLowerCase();
     return candidates.filter(o => 

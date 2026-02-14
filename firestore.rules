@@ -6,6 +6,7 @@ service cloud.firestore {
     /**
      * VISCOMM COMMAND CENTER - SECURE RULES
      * 
+     * Deployment Trigger: Fix list permission error for orders and stabilize auth checks.
      * Core Philosophy:
      * - Verified Identity: Only authenticated users can access data.
      * - Reliability: Simplified rules to ensure production flow is not blocked.
@@ -19,22 +20,22 @@ service cloud.firestore {
 
     // Permite leitura e escrita para ordens se o usuário estiver autenticado
     match /orders/{orderId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if request.auth != null && request.auth.uid != null;
     }
 
     // Permite leitura e escrita para clientes se o usuário estiver autenticado
     match /clients/{clientId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if request.auth != null && request.auth.uid != null;
     }
 
     // Permite leitura e escrita para contadores (IDs Sequenciais)
     match /counters/{counterId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if request.auth != null && request.auth.uid != null;
     }
 
     // Permite leitura e escrita para KPIs se o usuário estiver autenticado
     match /kpis/{kpiId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if request.auth != null && request.auth.uid != null;
     }
 
     // Default deny para qualquer outra coleção não mapeada
