@@ -19,11 +19,10 @@ import {
   Calendar,
   Box
 } from 'lucide-react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { startOfWeek, endOfWeek, isWithinInterval, parseISO } from 'date-fns';
 
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
-import { query, collection, where, orderBy, doc, updateDoc } from 'firebase/firestore';
+import { query, collection, where, doc, updateDoc } from 'firebase/firestore';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { Button } from '@/components/ui/button';
@@ -62,46 +61,56 @@ export default function WeeklyGoalsPage() {
 
   const { data: availableOrders, isLoading: isLoadingAvailable } = useCollection(availableOrdersQuery);
 
-  // --- LOGICA DE IMPORTAÇÃO ---
+  // --- LOGICA DE ADIÇÃO ---
   const handleAddToGoal = useCallback(async (orderId: string) => {
     if (!firestore) return;
     const orderRef = doc(firestore, 'orders', orderId);
     try {
       await updateDoc(orderRef, { weekly_priority: true });
-      toast({ title: "Pedido adicionado à meta" });
+      toast({ title: "Adicionado à meta" });
     } catch (err) {
       console.error(err);
     }
   }, [firestore, toast]);
 
-  // --- LOGICA DE REMOÇÃO (CORRIGIDA COM STOP PROPAGATION) ---
-  const handleRemoveFromGoal = useCallback(async (e: React.MouseEvent, orderId: string) => {
-    e.stopPropagation();
-    e.preventDefault();
+  // --- LOGICA DE REMOÇÃO ---
+  const handleRemoveFromGoal = useCallback(async (e: React.MouseEvent | null, orderId: string) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
 
     if (!firestore) return;
-    if (!window.confirm("Remover este pedido da meta semanal? (Ele continuará salvo na base de dados)")) return;
-    
     const orderRef = doc(firestore, 'orders', orderId);
     try {
       await updateDoc(orderRef, { weekly_priority: false });
       toast({ title: "Removido da meta" });
     } catch (err) {
-      console.error("Erro ao remover da meta:", err);
-      toast({ variant: "destructive", title: "Erro ao atualizar" });
+      console.error(err);
     }
   }, [firestore, toast]);
 
-  const filteredImportList = useMemo(() => {
+  // --- FILTRAGEM E ORDENAÇÃO DO MODAL ---
+  const modalList = useMemo(() => {
     if (!availableOrders) return [];
-    // Filtra localmente os que já são priority para não duplicar na lista
-    const candidates = availableOrders.filter(o => !o.weekly_priority && o.status !== 'Concluído' && o.status !== 'Entregue');
-    if (!searchTerm) return candidates;
-    const term = searchTerm.toLowerCase();
-    return candidates.filter(o => 
-      o.client?.toLowerCase().includes(term) || 
-      o.id?.toLowerCase().includes(term)
-    );
+    
+    let filtered = [...availableOrders];
+    
+    // Filtro por busca
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(o => 
+        o.client?.toLowerCase().includes(term) || 
+        o.id?.toLowerCase().includes(term)
+      );
+    }
+
+    // Ordenação: Selecionados primeiro
+    return filtered.sort((a, b) => {
+      const aSel = a.weekly_priority ? 1 : 0;
+      const bSel = b.weekly_priority ? 1 : 0;
+      return bSel - aSel;
+    });
   }, [availableOrders, searchTerm]);
 
   const { pendingOrders, completedOrders, progress, totalValue } = useMemo(() => {
@@ -153,7 +162,7 @@ export default function WeeklyGoalsPage() {
                 onClick={() => setIsImportModalOpen(true)}
                 className="bg-primary text-black font-black px-6 h-12 rounded-full uppercase tracking-widest text-[10px] shadow-[0_0_20px_rgba(255,95,31,0.4)] hover:bg-white transition-all"
               >
-                <Plus size={16} className="mr-2" /> Importar Pedidos
+                <Plus size={16} className="mr-2" /> Gerenciar Lista
               </Button>
             </div>
           </div>
@@ -213,7 +222,7 @@ export default function WeeklyGoalsPage() {
                      type="button"
                      onClick={(e) => handleRemoveFromGoal(e, order.id)}
                      className="absolute -top-2 -right-2 p-1.5 bg-zinc-900 border border-zinc-800 rounded-full text-zinc-500 hover:text-red-500 hover:bg-red-500/10 hover:border-red-500/20 opacity-0 group-hover/card:opacity-100 transition-all z-20 shadow-xl"
-                     title="Remover da Meta (Não apaga o pedido)"
+                     title="Remover da Meta"
                    >
                      <X size={12} />
                    </button>
@@ -237,7 +246,7 @@ export default function WeeklyGoalsPage() {
           </section>
         )}
 
-        {/* MODAL DE IMPORTAÇÃO */}
+        {/* MODAL DE IMPORTAÇÃO (CHECKLIST) */}
         <AnimatePresence>
           {isImportModalOpen && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" onClick={() => setIsImportModalOpen(false)}>
@@ -254,7 +263,7 @@ export default function WeeklyGoalsPage() {
                       <div className="p-2 bg-primary/10 rounded-xl border border-primary/20"><Search size={20} className="text-primary" /></div>
                       <div>
                         <span className="text-primary text-[9px] font-black uppercase tracking-[0.3em]">Fila Geral de OS</span>
-                        <h2 className="text-xl font-black text-white uppercase tracking-tight">Buscar Pedidos</h2>
+                        <h2 className="text-xl font-black text-white uppercase tracking-tight">Selecionar Pedidos</h2>
                       </div>
                     </div>
                     <button onClick={() => setIsImportModalOpen(false)} className="p-2 rounded-full hover:bg-zinc-800 text-zinc-500 hover:text-white transition-colors"><X size={24}/></button>
@@ -275,39 +284,55 @@ export default function WeeklyGoalsPage() {
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3 bg-[#050505]">
                    {isLoadingAvailable ? (
                      <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 text-primary animate-spin" /></div>
-                   ) : filteredImportList.length === 0 ? (
+                   ) : modalList.length === 0 ? (
                      <div className="text-center py-20 text-zinc-600">
                         <Box size={40} className="mx-auto mb-4 opacity-10" />
                         <p className="text-[10px] uppercase tracking-widest font-black">Nenhum pedido disponível</p>
                      </div>
                    ) : (
-                     filteredImportList.map(order => (
-                       <div key={order.id} className="flex items-center justify-between p-4 rounded-2xl bg-zinc-900/30 border border-zinc-800 hover:border-primary/40 hover:bg-zinc-900/60 transition-all group">
-                          <div className="flex items-center gap-4">
-                             <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-primary font-black text-xs">
-                               {(order.client || '??').substring(0,2).toUpperCase()}
-                             </div>
-                             <div>
-                                <h4 className="font-bold text-white text-sm uppercase truncate max-w-[200px]">{order.client}</h4>
-                                <div className="flex items-center gap-3 mt-1.5">
-                                   <span className="text-[9px] bg-black px-1.5 py-0.5 rounded border border-zinc-800 text-zinc-500 font-mono">#{order.id}</span>
-                                   <span className="text-[9px] font-black uppercase text-zinc-500 tracking-widest">{order.status}</span>
-                                </div>
-                             </div>
-                          </div>
-                          <Button 
-                            onClick={() => handleAddToGoal(order.id)}
-                            className="bg-zinc-800 text-zinc-400 hover:bg-primary hover:text-black rounded-xl px-4 h-10 text-[10px] font-black uppercase tracking-widest transition-all group-hover:shadow-[0_0_15px_rgba(255,95,31,0.3)]"
-                          >
-                            Add <ArrowRight size={14} className="ml-1.5" />
-                          </Button>
-                       </div>
-                     ))
+                     modalList.map(order => {
+                       const isSelected = !!order.weekly_priority;
+                       return (
+                         <div 
+                           key={order.id} 
+                           className={`
+                             flex items-center justify-between p-4 rounded-2xl border transition-all group
+                             ${isSelected 
+                               ? 'bg-primary/10 border-primary shadow-[0_0_15px_rgba(255,95,31,0.15)]' 
+                               : 'bg-zinc-900/30 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/60'}
+                           `}
+                         >
+                            <div className="flex items-center gap-4">
+                               <div className={`w-10 h-10 rounded-xl border flex items-center justify-center font-black text-xs transition-colors ${isSelected ? 'bg-primary text-black border-primary' : 'bg-zinc-900 text-primary border-zinc-800'}`}>
+                                 {(order.client || '??').substring(0,2).toUpperCase()}
+                               </div>
+                               <div>
+                                  <h4 className={`font-bold text-sm uppercase truncate max-w-[200px] ${isSelected ? 'text-primary' : 'text-white'}`}>{order.client}</h4>
+                                  <div className="flex items-center gap-3 mt-1.5">
+                                     <span className="text-[9px] bg-black px-1.5 py-0.5 rounded border border-zinc-800 text-zinc-500 font-mono">#{order.id}</span>
+                                     <span className="text-[9px] font-black uppercase text-zinc-500 tracking-widest">{order.status}</span>
+                                  </div>
+                               </div>
+                            </div>
+                            <Button 
+                              onClick={() => isSelected ? handleRemoveFromGoal(null, order.id) : handleAddToGoal(order.id)}
+                              className={`
+                                rounded-xl px-4 h-10 text-[10px] font-black uppercase tracking-widest transition-all
+                                ${isSelected 
+                                  ? 'bg-zinc-900 text-zinc-500 hover:bg-destructive hover:text-white border border-zinc-800 hover:border-destructive' 
+                                  : 'bg-zinc-800 text-zinc-300 hover:bg-primary hover:text-black hover:shadow-[0_0_15px_rgba(255,95,31,0.3)]'}
+                              `}
+                            >
+                              {isSelected ? <>Remover <X size={14} className="ml-1.5" /></> : <>Adicionar <ArrowRight size={14} className="ml-1.5" /></>}
+                            </Button>
+                         </div>
+                       );
+                     })
                    )}
                 </div>
                 
                 <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 text-center">
-                  <p className="text-[9px] text-zinc-600 uppercase font-black tracking-[0.3em]">Terminal de Importação VisComm v1.2</p>
+                  <p className="text-[9px] text-zinc-600 uppercase font-black tracking-[0.3em]">Gerenciador de Prioridades VisComm</p>
                 </div>
               </motion.div>
             </div>
