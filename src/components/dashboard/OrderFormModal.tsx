@@ -1,21 +1,27 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, Plus, Trash2, Box, FileText, ChevronDown, Activity, Loader2, ExternalLink } from 'lucide-react';
+import { X, Save, Plus, Trash2, Box, ChevronDown, Activity, Loader2, ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useOrders } from '@/hooks/use-orders';
 import { useToast } from '@/hooks/use-toast';
 
 const PRODUCTION_STAGES = ['Arte', 'Serralheria', 'Impressão', 'Acabamento', 'Instalação', 'Concluído'];
 
-interface OrderFormModalProps {
-  order?: any | null;
-  isOpen: boolean;
-  onClose: () => void;
-}
+const getStatusColor = (currentStatus: string) => {
+  switch(currentStatus) {
+    case 'Arte': return '#d946ef';
+    case 'Serralheria': return '#EAB308';
+    case 'Impressão': return '#3B82F6';
+    case 'Acabamento': return '#FF5F1F';
+    case 'Instalação': return '#8B5CF6';
+    case 'Concluído': return '#4ade80';
+    default: return '#71717A';
+  }
+};
 
-export function OrderFormModal({ order, isOpen, onClose }: OrderFormModalProps) {
+const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | null; isOpen: boolean; onClose: () => void }) => {
   const router = useRouter();
   const { createOrder, updateOrder, deleteOrder } = useOrders();
   const { toast } = useToast();
@@ -33,7 +39,6 @@ export function OrderFormModal({ order, isOpen, onClose }: OrderFormModalProps) 
       setDeliveryDate(order.deliveryDate || '');
       setStatus(order.status || 'Arte');
       setSeller(order.seller || 'Vendedor Geral');
-      // Ensure all fields exist to avoid controlled/uncontrolled warning
       const loadedItems = order.items?.map((item: any) => ({
         desc: item.desc || '',
         quantity: item.quantity || 0,
@@ -49,33 +54,29 @@ export function OrderFormModal({ order, isOpen, onClose }: OrderFormModalProps) 
     }
   }, [order, isOpen]);
 
-  const getStatusColor = (currentStatus: string) => {
-    switch(currentStatus) {
-      case 'Arte': return '#d946ef';
-      case 'Serralheria': return '#EAB308';
-      case 'Impressão': return '#3B82F6';
-      case 'Acabamento': return '#FF5F1F';
-      case 'Instalação': return '#8B5CF6';
-      case 'Concluído': return '#4ade80';
-      default: return '#71717A';
-    }
-  };
-
   const currentColor = getStatusColor(status);
 
-  const handleGoToClient = () => {
+  const handleGoToClient = useCallback(() => {
     if (!client) return;
     onClose();
     router.push(`/clients?search=${encodeURIComponent(client)}`);
-  };
+  }, [client, onClose, router]);
 
-  const handleAddItem = () => setItems([...items, { desc: '', quantity: 1, observation: '' }]);
-  const handleRemoveItem = (index: number) => setItems(items.filter((_, i) => i !== index));
-  const handleItemChange = (index: number, field: string, value: any) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
-    setItems(newItems);
-  };
+  const handleAddItem = useCallback(() => {
+    setItems(prev => [...prev, { desc: '', quantity: 1, observation: '' }]);
+  }, []);
+
+  const handleRemoveItem = useCallback((index: number) => {
+    setItems(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleItemChange = useCallback((index: number, field: string, value: any) => {
+    setItems(prev => {
+      const newItems = [...prev];
+      newItems[index] = { ...newItems[index], [field]: value };
+      return newItems;
+    });
+  }, []);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,7 +91,11 @@ export function OrderFormModal({ order, isOpen, onClose }: OrderFormModalProps) 
         toast({ title: "Lançamento Gravado" });
       }
       onClose();
-    } catch (err) {} finally { setLoading(false); }
+    } catch (err) {
+      // Erros tratados pelo hook/emitter
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -107,12 +112,18 @@ export function OrderFormModal({ order, isOpen, onClose }: OrderFormModalProps) 
 
   if (!isOpen) return null;
 
-  const labelClass = "text-[8px] text-zinc-500 uppercase font-black tracking-widest ml-1 block mb-1";
+  const labelClass = "text-[9px] text-zinc-500 uppercase font-black tracking-widest ml-1 block mb-1";
   const inputClass = "w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none transition-all";
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" onClick={onClose}>
-      <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={(e) => e.stopPropagation()} className="bg-[#09090b] w-full max-w-2xl border border-zinc-800 rounded-3xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden">
+      <motion.div 
+        initial={{ scale: 0.95, opacity: 0 }} 
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        onClick={(e) => e.stopPropagation()} 
+        className="bg-[#09090b] w-full max-w-2xl border border-zinc-800 rounded-3xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden"
+      >
         <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-zinc-900/30">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-black text-white uppercase tracking-tighter">{order ? 'Ajustar Pedido' : 'Novo Lançamento'}</h2>
@@ -127,9 +138,16 @@ export function OrderFormModal({ order, isOpen, onClose }: OrderFormModalProps) 
         <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar bg-[#050505]">
           <form id="orderForm" onSubmit={handleSave} className="space-y-8">
             <div className="space-y-3">
-              <label className="text-[10px] text-zinc-500 uppercase font-black tracking-[0.3em] flex items-center gap-2 ml-1"><Activity size={12} className="animate-pulse" /> Etapa da Produção</label>
+              <label className="text-[10px] text-zinc-500 uppercase font-black tracking-[0.3em] flex items-center gap-2 ml-1">
+                <Activity size={12} className="animate-pulse" /> Etapa da Produção
+              </label>
               <div className="relative group">
-                <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full appearance-none bg-black border-2 rounded-2xl py-4 pl-6 pr-12 text-xl font-black uppercase tracking-widest outline-none transition-all" style={{ borderColor: currentColor, color: currentColor, boxShadow: `0 0 30px -10px ${currentColor}40` }}>
+                <select 
+                  value={status} 
+                  onChange={(e) => setStatus(e.target.value)} 
+                  className="w-full appearance-none bg-black border-2 rounded-2xl py-4 pl-6 pr-12 text-xl font-black uppercase tracking-widest outline-none transition-all" 
+                  style={{ borderColor: currentColor, color: currentColor, boxShadow: `0 0 30px -10px ${currentColor}40` }}
+                >
                   {PRODUCTION_STAGES.map(s => <option key={s} value={s} className="bg-zinc-950 text-white font-bold text-sm">{s}</option>)}
                 </select>
                 <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: currentColor }} size={24} strokeWidth={3} />
@@ -142,11 +160,11 @@ export function OrderFormModal({ order, isOpen, onClose }: OrderFormModalProps) 
                   <label className={labelClass}>Cliente / Projeto</label>
                   <button type="button" onClick={handleGoToClient} className="flex items-center gap-1 text-[9px] font-black uppercase text-primary hover:text-white transition-all">Ver Perfil <ExternalLink size={10} /></button>
                 </div>
-                <input required value={client || ''} onChange={(e) => setClient(e.target.value)} className={inputClass} placeholder="Identificação..." />
+                <input required value={client} onChange={(e) => setClient(e.target.value)} className={inputClass} placeholder="Identificação..." />
               </div>
               <div>
                 <label className={labelClass}>Prazo de Entrega</label>
-                <input type="date" value={deliveryDate || ''} onChange={(e) => setDeliveryDate(e.target.value)} className={inputClass} />
+                <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className={inputClass} />
               </div>
             </div>
 
@@ -157,14 +175,51 @@ export function OrderFormModal({ order, isOpen, onClose }: OrderFormModalProps) 
               </div>
               <div className="space-y-3">
                 {items.map((item, index) => (
-                  <div key={index} className="bg-black/40 border border-zinc-800 rounded-2xl p-4 space-y-4">
-                    <div className="flex gap-4">
-                      <input placeholder="Material..." value={item.desc || ''} onChange={(e) => handleItemChange(index, 'desc', e.target.value)} className={`${inputClass} flex-1`} />
-                      <input type="number" value={item.quantity || 0} onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} className={`${inputClass} w-20 text-center`} />
+                  <motion.div layout key={index} className="bg-black/40 border border-zinc-800 rounded-2xl p-4 space-y-4 group relative">
+                    <div className="absolute left-0 top-6 bottom-6 w-1 rounded-r bg-zinc-800 group-hover:bg-primary transition-colors" />
+                    
+                    {/* LINHA 1: MATERIAL (flex-1) e QTD (w-20) */}
+                    <div className="flex gap-3">
+                      <div className="flex-1">
+                        <label className={labelClass}>Material</label>
+                        <input 
+                          placeholder="Descrição..." 
+                          value={item.desc} 
+                          onChange={(e) => handleItemChange(index, 'desc', e.target.value)} 
+                          className={inputClass} 
+                        />
+                      </div>
+                      <div className="w-20">
+                        <label className={`${labelClass} text-center`}>Qtd.</label>
+                        <input 
+                          type="number" 
+                          value={item.quantity} 
+                          onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} 
+                          className={`${inputClass} text-center`} 
+                        />
+                      </div>
                     </div>
-                    <textarea rows={2} placeholder="Notas técnicas..." value={item.observation || ''} onChange={(e) => handleItemChange(index, 'observation', e.target.value)} className={`${inputClass} text-xs text-zinc-400`} />
-                    <button type="button" onClick={() => handleRemoveItem(index)} className="p-2 text-zinc-700 hover:text-red-500 flex ml-auto"><Trash2 size={16} /></button>
-                  </div>
+
+                    {/* LINHA 2: OBS E DELETE */}
+                    <div className="flex gap-3 items-start">
+                      <div className="flex-1">
+                        <textarea 
+                          rows={2} 
+                          placeholder="Notas técnicas de acabamento..." 
+                          value={item.observation} 
+                          onChange={(e) => handleItemChange(index, 'observation', e.target.value)} 
+                          className={`${inputClass} text-xs text-zinc-400 resize-none`} 
+                        />
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => handleRemoveItem(index)} 
+                        className="h-10 w-10 flex items-center justify-center text-zinc-600 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-colors mt-1"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </motion.div>
                 ))}
               </div>
             </div>
@@ -180,4 +235,6 @@ export function OrderFormModal({ order, isOpen, onClose }: OrderFormModalProps) 
       </motion.div>
     </div>
   );
-}
+};
+
+export const OrderFormModal = memo(OrderFormModalComponent);
