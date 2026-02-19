@@ -6,116 +6,51 @@
       "description": "Represents a customer order within the VisComm Command Center application.",
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "client": {
-          "type": "string"
-        },
-        "clientId": {
-          "type": "string"
-        },
-        "emissionDate": {
-          "type": "string",
-          "format": "date"
-        },
-        "deliveryDate": {
-          "type": "string",
-          "format": "date"
-        },
-        "seller": {
-          "type": "string"
-        },
-        "observations": {
-          "type": "string"
-        },
+        "id": { "type": "string" },
+        "client": { "type": "string" },
+        "clientId": { "type": "string" },
+        "emissionDate": { "type": "string", "format": "date" },
+        "deliveryDate": { "type": "string", "format": "date" },
+        "seller": { "type": "string" },
+        "observations": { "type": "string" },
         "status": {
           "type": "string",
-          "enum": [
-            "Arte",
-            "Impressão",
-            "Serralheria",
-            "Acabamento",
-            "Instalação",
-            "Entregue"
-          ]
+          "enum": ["Arte", "Impressão", "Serralheria", "Acabamento", "Instalação", "Entregue"]
         },
-        "paymentMethod": {
-          "type": "string"
-        },
-        "machine": {
-          "type": "string"
-        },
-        "installments": {
-          "type": "string"
-        },
-        "weekly_priority": {
-          "type": "boolean",
-          "description": "Flag to mark order as a priority for the current week."
-        },
+        "paymentMethod": { "type": "string" },
+        "machine": { "type": "string" },
+        "installments": { "type": "string" },
+        "destinationAccount": { "type": "string", "description": "Lindóia or Serra Negra" },
+        "weekly_priority": { "type": "boolean" },
         "items": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "desc": {
-                "type": "string",
-                "description": "Material or service description"
-              },
-              "size": {
-                "type": "string"
-              },
-              "quantity": {
-                "type": "number"
-              },
-              "unitValue": {
-                "type": "number"
-              },
-              "observation": {
-                "type": "string",
-                "description": "Technical details for production"
-              }
+              "desc": { "type": "string" },
+              "size": { "type": "string" },
+              "quantity": { "type": "number" },
+              "unitValue": { "type": "number" },
+              "observation": { "type": "string" }
             }
           }
         },
-        "totalValue": {
-          "type": "number"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "totalValue": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": [
-        "id",
-        "client"
-      ]
+      "required": ["id", "client"]
     },
     "Client": {
       "title": "Client",
       "description": "Customer information.",
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "phone": {
-          "type": "string"
-        },
-        "email": {
-          "type": "string"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "name"]
     },
@@ -135,33 +70,29 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "name"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Records of financial outputs/costs.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string" },
+        "value": { "type": "number" },
+        "category": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "description", "value", "date"]
     }
   },
   "auth": {
-    "providers": [
-      "password",
-      "anonymous",
-      "google"
-    ]
+    "providers": ["password", "anonymous", "google"]
   },
   "firestore": {
-    "/orders/{orderId}": {
-      "schema": {
-        "$ref": "#/backend/entities/Order"
-      },
-      "description": "Stores customer orders."
-    },
-    "/clients/{clientId}": {
-      "schema": {
-        "$ref": "#/backend/entities/Client"
-      },
-      "description": "Stores customer contact information."
-    },
-    "/suppliers/{supplierId}": {
-      "schema": {
-        "$ref": "#/backend/entities/Supplier"
-      },
-      "description": "Stores supplier information."
-    }
+    "/orders/{orderId}": { "schema": { "$ref": "#/backend/entities/Order" }, "description": "Stores customer orders." },
+    "/clients/{clientId}": { "schema": { "$ref": "#/backend/entities/Client" }, "description": "Stores customer contact information." },
+    "/suppliers/{supplierId}": { "schema": { "$ref": "#/backend/entities/Supplier" }, "description": "Stores supplier information." },
+    "/expenses/{expenseId}": { "schema": { "$ref": "#/backend/entities/Expense" }, "description": "Stores financial outputs." }
   }
 }

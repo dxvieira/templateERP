@@ -5,8 +5,7 @@ service cloud.firestore {
 
     /**
      * VISCOMM COMMAND CENTER - SECURE RULES
-     * 
-     * Deployment Trigger: Add suppliers collection permissions.
+     * Deployment Trigger: Add expenses collection permissions.
      */
 
     function isSignedIn() {
@@ -22,6 +21,10 @@ service cloud.firestore {
     }
     
     match /suppliers/{supplierId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /expenses/{expenseId} {
       allow read, write: if isSignedIn();
     }
 
