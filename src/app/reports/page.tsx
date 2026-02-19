@@ -22,14 +22,13 @@ import { useToast } from '@/hooks/use-toast';
 
 /**
  * REPORTS MANAGER: O Cérebro Financeiro (NEXUS/FLUX)
- * Refatorado para Confirmação Manual de Filtros.
+ * Refatorado para Unificação de Status e Performance de Renderização.
  */
 export default function ReportsManagerPage() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
 
-  // --- LOGICA DE FILTRO MANUAL (DUPLO ESTADO) ---
   const [tempDateRange, setTempDateRange] = useState({
     start: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
     end: format(endOfMonth(new Date()), 'yyyy-MM-dd')
@@ -41,11 +40,10 @@ export default function ReportsManagerPage() {
     setAppliedDateRange({ ...tempDateRange });
     toast({ 
       title: "Filtro Aplicado", 
-      description: `Período: ${format(parseISO(tempDateRange.start), 'dd/MM')} até ${format(parseISO(tempDateRange.end), 'dd/MM')}` 
+      description: `Período sincronizado com o servidor.` 
     });
   }, [tempDateRange, toast]);
 
-  // --- DATA FETCHING ESTABILIZADO ---
   const ordersQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
@@ -64,16 +62,13 @@ export default function ReportsManagerPage() {
     description: '', value: '', category: 'Material', date: format(new Date(), 'yyyy-MM-dd')
   });
 
-  // --- MOTOR DE PROCESSAMENTO FINANCEIRO (Depende apenas do appliedDateRange) ---
   const financialData = useMemo(() => {
     if (!orders || !expenses) return null;
 
     const intervalStart = startOfDay(parseISO(appliedDateRange.start));
     const intervalEnd = endOfDay(parseISO(appliedDateRange.end));
 
-    // Filtragem de Pedidos
     const filteredOrders = orders.filter(o => {
-      // Prioriza emissionDate, usa createdAt como fallback
       const dateStr = o.emissionDate || (o.createdAt?.seconds ? format(new Date(o.createdAt.seconds * 1000), 'yyyy-MM-dd') : null);
       if (!dateStr) return false;
       try {
@@ -82,7 +77,6 @@ export default function ReportsManagerPage() {
       } catch (e) { return false; }
     });
 
-    // Filtragem de Despesas
     const filteredExpenses = expenses.filter(e => {
       if (!e.date) return false;
       try {
@@ -123,7 +117,41 @@ export default function ReportsManagerPage() {
     };
   }, [orders, expenses, appliedDateRange]);
 
-  // --- HANDLERS ---
+  // --- MOTOR DE AGRUPAMENTO POR ETAPA (UNIFICADO) ---
+  const stagesSummary = useMemo(() => {
+    if (!financialData?.filteredOrders) return [];
+
+    const summary: Record<string, any> = {
+      'Arte': { label: 'ARTE FINAL', count: 0, value: 0, color: '#d946ef' },
+      'Impressão': { label: 'IMPRESSÃO', count: 0, value: 0, color: '#3B82F6' },
+      'Serralheria': { label: 'SERRALHERIA', count: 0, value: 0, color: '#EAB308' },
+      'Acabamento': { label: 'ACABAMENTO', count: 0, value: 0, color: '#FF5F1F' },
+      'Instalação': { label: 'INSTALAÇÃO', count: 0, value: 0, color: '#8B5CF6' },
+      'Finalizado': { label: 'FINALIZADO', count: 0, value: 0, color: '#4ade80' } 
+    };
+
+    let maxCount = 0;
+
+    financialData.filteredOrders.forEach(order => {
+      const statusKey = (order.status === 'Concluído' || order.status === 'Entregue') 
+        ? 'Finalizado' 
+        : order.status;
+
+      if (summary[statusKey]) {
+        summary[statusKey].count += 1;
+        summary[statusKey].value += Number(order.totalValue) || 0;
+        if (summary[statusKey].count > maxCount) {
+          maxCount = summary[statusKey].count;
+        }
+      }
+    });
+
+    return Object.values(summary).map(stage => ({
+      ...stage,
+      percentage: maxCount === 0 ? 0 : (stage.count / maxCount) * 100 
+    }));
+  }, [financialData?.filteredOrders]);
+
   const handleSaveExpense = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore || !user) return;
@@ -173,7 +201,6 @@ export default function ReportsManagerPage() {
       <DashboardSidebar />
       <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-8 mt-16 md:mt-0 pb-24 relative z-10">
         
-        {/* --- HEADER: CONTROLE DE FILTROS --- */}
         <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 border-b border-white/5 pb-8">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-primary">
@@ -213,7 +240,6 @@ export default function ReportsManagerPage() {
           </div>
         </header>
 
-        {/* --- KPI CARDS --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <KPICard title="Entradas" value={financialData?.income || 0} icon={ArrowUpRight} color="text-green-500" />
           <KPICard title="Saídas" value={financialData?.outcome || 0} icon={ArrowDownRight} color="text-red-500" />
@@ -221,7 +247,6 @@ export default function ReportsManagerPage() {
           <KPICard title="Em Produção" value={financialData?.ops.totalValue || 0} icon={Briefcase} color="text-blue-400" />
         </div>
 
-        {/* --- CONTEÚDO PRINCIPAL --- */}
         <Tabs defaultValue="operacional" className="w-full">
           <TabsList className="bg-zinc-900/50 border border-zinc-800 mb-6">
             <TabsTrigger value="operacional" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-6">Operacional</TabsTrigger>
@@ -234,27 +259,27 @@ export default function ReportsManagerPage() {
               <Card className="lg:col-span-2 bg-zinc-900/30 border-zinc-800">
                 <CardHeader><CardTitle className="text-xs font-black uppercase tracking-widest text-zinc-500">Distribuição por Etapa (No Período)</CardTitle></CardHeader>
                 <CardContent className="space-y-5">
-                  {['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Entregue'].map(status => {
-                    const group = financialData?.filteredOrders.filter(o => o.status === status) || [];
-                    const val = group.reduce((a, b) => a + (Number(b.totalValue) || 0), 0);
-                    const pct = financialData?.filteredOrders.length ? (group.length / financialData.filteredOrders.length) * 100 : 0;
-                    return (
-                      <div key={status} className="space-y-2">
-                        <div className="flex justify-between items-end">
-                          <span className="text-[10px] font-black text-zinc-400 uppercase">{status} ({group.length})</span>
-                          <span className="text-xs font-mono font-bold text-white">{val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                        </div>
-                        <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
-                          <motion.div 
-                            initial={{ width: 0 }} 
-                            animate={{ width: `${pct}%` }} 
-                            transition={{ duration: 0.8, ease: "easeOut" }}
-                            className="h-full bg-primary" 
-                          />
-                        </div>
+                  {stagesSummary.map((stage) => (
+                    <div key={stage.label} className="space-y-2">
+                      <div className="flex justify-between items-end">
+                        <span className="text-[10px] font-black text-zinc-400 uppercase">
+                          {stage.label} <span className="text-zinc-600">({stage.count})</span>
+                        </span>
+                        <span className="text-xs font-mono font-bold text-white">
+                          {stage.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </span>
                       </div>
-                    );
-                  })}
+                      <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }} 
+                          animate={{ width: `${stage.percentage}%` }} 
+                          transition={{ duration: 0.8, ease: "easeOut" }}
+                          className="h-full" 
+                          style={{ backgroundColor: stage.color }}
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </CardContent>
               </Card>
               <Card className="bg-zinc-900/30 border-zinc-800 h-fit">
