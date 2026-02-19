@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   BarChart3, Calendar, ArrowUpRight, ArrowDownRight, Wallet, CreditCard, 
   Banknote, TrendingUp, FileText, Plus, Trash2, Loader2, DollarSign, 
-  Briefcase, AlertCircle, X
+  Briefcase, AlertCircle, X, RefreshCw, Filter
 } from 'lucide-react';
 import { startOfMonth, endOfMonth, format, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
@@ -21,24 +21,34 @@ import { FirestorePermissionError } from '@/firebase/errors';
 import { useToast } from '@/hooks/use-toast';
 
 /**
- * REPORTS MANAGER: O Cérebro Financeiro
- * Otimizado para cálculos pesados, transições fluidas e filtros de data inclusivos.
+ * REPORTS MANAGER: O Cérebro Financeiro (NEXUS/FLUX)
+ * Refatorado para Confirmação Manual de Filtros.
  */
 export default function ReportsManagerPage() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
 
-  // Estados de Filtro de Data
-  const [dateRange, setDateRange] = useState({
+  // --- LOGICA DE FILTRO MANUAL (DUPLO ESTADO) ---
+  const [tempDateRange, setTempDateRange] = useState({
     start: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
     end: format(endOfMonth(new Date()), 'yyyy-MM-dd')
   });
 
+  const [appliedDateRange, setAppliedDateRange] = useState({ ...tempDateRange });
+
+  const handleApplyFilter = useCallback(() => {
+    setAppliedDateRange({ ...tempDateRange });
+    toast({ 
+      title: "Filtro Aplicado", 
+      description: `Período: ${format(parseISO(tempDateRange.start), 'dd/MM')} até ${format(parseISO(tempDateRange.end), 'dd/MM')}` 
+    });
+  }, [tempDateRange, toast]);
+
   // --- DATA FETCHING ESTABILIZADO ---
   const ordersQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(collection(firestore, 'orders'), orderBy('emissionDate', 'desc'));
+    return query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
   }, [firestore, user]);
 
   const expensesQuery = useMemoFirebase(() => {
@@ -54,26 +64,31 @@ export default function ReportsManagerPage() {
     description: '', value: '', category: 'Material', date: format(new Date(), 'yyyy-MM-dd')
   });
 
-  // --- MOTOR DE PROCESSAMENTO FINANCEIRO (Otimizado com Janela Temporal Inclusiva) ---
+  // --- MOTOR DE PROCESSAMENTO FINANCEIRO (Depende apenas do appliedDateRange) ---
   const financialData = useMemo(() => {
     if (!orders || !expenses) return null;
 
-    // Normalização das datas para garantir que o intervalo cubra o dia inteiro
-    const intervalStart = startOfDay(parseISO(dateRange.start));
-    const intervalEnd = endOfDay(parseISO(dateRange.end));
+    const intervalStart = startOfDay(parseISO(appliedDateRange.start));
+    const intervalEnd = endOfDay(parseISO(appliedDateRange.end));
 
     // Filtragem de Pedidos
     const filteredOrders = orders.filter(o => {
-      if (!o.emissionDate) return false;
-      const orderDate = parseISO(o.emissionDate);
-      return isWithinInterval(orderDate, { start: intervalStart, end: intervalEnd });
+      // Prioriza emissionDate, usa createdAt como fallback
+      const dateStr = o.emissionDate || (o.createdAt?.seconds ? format(new Date(o.createdAt.seconds * 1000), 'yyyy-MM-dd') : null);
+      if (!dateStr) return false;
+      try {
+        const orderDate = parseISO(dateStr);
+        return isWithinInterval(orderDate, { start: intervalStart, end: intervalEnd });
+      } catch (e) { return false; }
     });
 
     // Filtragem de Despesas
     const filteredExpenses = expenses.filter(e => {
       if (!e.date) return false;
-      const expenseDate = parseISO(e.date);
-      return isWithinInterval(expenseDate, { start: intervalStart, end: intervalEnd });
+      try {
+        const expenseDate = parseISO(e.date);
+        return isWithinInterval(expenseDate, { start: intervalStart, end: intervalEnd });
+      } catch (e) { return false; }
     });
 
     const accounts = { caixa: 0, sicoobLindoia: 0, sicoobSerraNegra: 0, pagbank: 0, sipag: 0 };
@@ -106,7 +121,7 @@ export default function ReportsManagerPage() {
       ops, accounts, income, outcome, net: income - outcome, 
       filteredOrders, filteredExpenses 
     };
-  }, [orders, expenses, dateRange]); // Re-calcula instantaneamente quando a data muda
+  }, [orders, expenses, appliedDateRange]);
 
   // --- HANDLERS ---
   const handleSaveExpense = useCallback(async (e: React.FormEvent) => {
@@ -122,7 +137,7 @@ export default function ReportsManagerPage() {
     const docRef = doc(collection(firestore, 'expenses'));
     setDoc(docRef, { ...payload, id: docRef.id })
       .then(() => {
-        toast({ title: "Despesa Lançada com Sucesso" });
+        toast({ title: "Despesa Lançada" });
         setIsExpenseModalOpen(false);
         setExpenseForm({ description: '', value: '', category: 'Material', date: format(new Date(), 'yyyy-MM-dd') });
       })
@@ -157,35 +172,48 @@ export default function ReportsManagerPage() {
     <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden selection:bg-primary selection:text-black">
       <DashboardSidebar />
       <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-8 mt-16 md:mt-0 pb-24 relative z-10">
+        
+        {/* --- HEADER: CONTROLE DE FILTROS --- */}
         <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 border-b border-white/5 pb-8">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-primary">
-              <TrendingUp size={16} />
+              <BarChart3 size={16} />
               <span className="text-[10px] font-black uppercase tracking-[0.3em]">Cérebro Financeiro VisComm</span>
             </div>
             <h1 className="text-4xl font-black text-white uppercase tracking-tighter leading-none">
-              NEXUS <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">FLUX</span>
+              REPORTS <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">FLUX</span>
             </h1>
           </div>
 
-          <div className="flex items-center gap-3 bg-zinc-900/50 p-2 rounded-2xl border border-zinc-800">
-            <Calendar size={14} className="text-zinc-500 ml-2" />
-            <input 
-              type="date" 
-              value={dateRange.start} 
-              onChange={e => setDateRange(p => ({ ...p, start: e.target.value }))} 
-              className="bg-transparent border-none text-xs text-white focus:ring-0 outline-none cursor-pointer" 
-            />
-            <span className="text-zinc-700 font-bold">/</span>
-            <input 
-              type="date" 
-              value={dateRange.end} 
-              onChange={e => setDateRange(p => ({ ...p, end: e.target.value }))} 
-              className="bg-transparent border-none text-xs text-white focus:ring-0 outline-none cursor-pointer" 
-            />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+            <div className="flex items-center gap-3 bg-zinc-900/50 p-2 rounded-2xl border border-zinc-800 flex-1 sm:flex-none">
+              <Calendar size={14} className="text-zinc-500 ml-2" />
+              <input 
+                type="date" 
+                value={tempDateRange.start} 
+                onChange={e => setTempDateRange(p => ({ ...p, start: e.target.value }))} 
+                className="bg-transparent border-none text-xs text-white focus:ring-0 outline-none cursor-pointer" 
+              />
+              <span className="text-zinc-700 font-bold">/</span>
+              <input 
+                type="date" 
+                value={tempDateRange.end} 
+                onChange={e => setTempDateRange(p => ({ ...p, end: e.target.value }))} 
+                className="bg-transparent border-none text-xs text-white focus:ring-0 outline-none cursor-pointer" 
+              />
+            </div>
+            
+            <button 
+              onClick={handleApplyFilter}
+              className="flex items-center justify-center gap-2 bg-primary text-black font-black uppercase text-[10px] tracking-widest px-6 h-12 rounded-2xl hover:bg-white transition-all shadow-[0_0_20px_rgba(255,95,31,0.3)] active:scale-95 group"
+            >
+              <RefreshCw size={14} className="group-active:rotate-180 transition-transform duration-500" />
+              Atualizar Dados
+            </button>
           </div>
         </header>
 
+        {/* --- KPI CARDS --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <KPICard title="Entradas" value={financialData?.income || 0} icon={ArrowUpRight} color="text-green-500" />
           <KPICard title="Saídas" value={financialData?.outcome || 0} icon={ArrowDownRight} color="text-red-500" />
@@ -193,6 +221,7 @@ export default function ReportsManagerPage() {
           <KPICard title="Em Produção" value={financialData?.ops.totalValue || 0} icon={Briefcase} color="text-blue-400" />
         </div>
 
+        {/* --- CONTEÚDO PRINCIPAL --- */}
         <Tabs defaultValue="operacional" className="w-full">
           <TabsList className="bg-zinc-900/50 border border-zinc-800 mb-6">
             <TabsTrigger value="operacional" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-6">Operacional</TabsTrigger>
@@ -276,10 +305,10 @@ export default function ReportsManagerPage() {
               <Card className="bg-zinc-900/30 border-zinc-800 p-6 flex flex-col justify-center gap-4">
                 <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 flex gap-4">
                   <AlertCircle className="text-primary shrink-0" size={20} />
-                  <p className="text-[10px] text-zinc-400 uppercase leading-relaxed font-bold">Identificamos pedidos entregues sem registro de baixa total. O potencial de recebimento pode ser maior que o nominal.</p>
+                  <p className="text-[10px] text-zinc-400 uppercase leading-relaxed font-bold">O potencial de faturamento é baseado apenas em pedidos com valor total preenchido. Lembre-se de dar baixa total nos pedidos finalizados.</p>
                 </div>
                 <div className="text-center py-4">
-                  <span className="text-[9px] text-zinc-600 uppercase font-black tracking-widest">Potencial Bruto de Cartão</span>
+                  <span className="text-[9px] text-zinc-600 uppercase font-black tracking-widest">Receitas em Cartão</span>
                   <h3 className="text-3xl font-black text-white mt-1">{( (financialData?.accounts.pagbank || 0) + (financialData?.accounts.sipag || 0) ).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</h3>
                 </div>
               </Card>
