@@ -7,7 +7,7 @@ import {
   Banknote, TrendingUp, FileText, Plus, Trash2, Loader2, DollarSign, 
   Briefcase, AlertCircle, X
 } from 'lucide-react';
-import { startOfMonth, endOfMonth, format, isWithinInterval, parseISO } from 'date-fns';
+import { startOfMonth, endOfMonth, format, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
@@ -22,13 +22,14 @@ import { useToast } from '@/hooks/use-toast';
 
 /**
  * REPORTS MANAGER: O Cérebro Financeiro
- * Otimizado para cálculos pesados e transições fluidas.
+ * Otimizado para cálculos pesados, transições fluidas e filtros de data inclusivos.
  */
 export default function ReportsManagerPage() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
 
+  // Estados de Filtro de Data
   const [dateRange, setDateRange] = useState({
     start: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
     end: format(endOfMonth(new Date()), 'yyyy-MM-dd')
@@ -53,15 +54,27 @@ export default function ReportsManagerPage() {
     description: '', value: '', category: 'Material', date: format(new Date(), 'yyyy-MM-dd')
   });
 
-  // --- MOTOR DE PROCESSAMENTO FINANCEIRO (MEMOIZAÇÃO AGRESSIVA) ---
+  // --- MOTOR DE PROCESSAMENTO FINANCEIRO (Otimizado com Janela Temporal Inclusiva) ---
   const financialData = useMemo(() => {
     if (!orders || !expenses) return null;
 
-    const start = parseISO(dateRange.start);
-    const end = parseISO(dateRange.end);
+    // Normalização das datas para garantir que o intervalo cubra o dia inteiro
+    const intervalStart = startOfDay(parseISO(dateRange.start));
+    const intervalEnd = endOfDay(parseISO(dateRange.end));
 
-    const filteredOrders = orders.filter(o => o.emissionDate && isWithinInterval(parseISO(o.emissionDate), { start, end }));
-    const filteredExpenses = expenses.filter(e => e.date && isWithinInterval(parseISO(e.date), { start, end }));
+    // Filtragem de Pedidos
+    const filteredOrders = orders.filter(o => {
+      if (!o.emissionDate) return false;
+      const orderDate = parseISO(o.emissionDate);
+      return isWithinInterval(orderDate, { start: intervalStart, end: intervalEnd });
+    });
+
+    // Filtragem de Despesas
+    const filteredExpenses = expenses.filter(e => {
+      if (!e.date) return false;
+      const expenseDate = parseISO(e.date);
+      return isWithinInterval(expenseDate, { start: intervalStart, end: intervalEnd });
+    });
 
     const accounts = { caixa: 0, sicoobLindoia: 0, sicoobSerraNegra: 0, pagbank: 0, sipag: 0 };
     const ops = { abertos: 0, finalizados: 0, totalValue: 0 };
@@ -93,9 +106,9 @@ export default function ReportsManagerPage() {
       ops, accounts, income, outcome, net: income - outcome, 
       filteredOrders, filteredExpenses 
     };
-  }, [orders, expenses, dateRange]);
+  }, [orders, expenses, dateRange]); // Re-calcula instantaneamente quando a data muda
 
-  // --- HANDLERS ESTABILIZADOS ---
+  // --- HANDLERS ---
   const handleSaveExpense = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore || !user) return;
@@ -157,9 +170,19 @@ export default function ReportsManagerPage() {
 
           <div className="flex items-center gap-3 bg-zinc-900/50 p-2 rounded-2xl border border-zinc-800">
             <Calendar size={14} className="text-zinc-500 ml-2" />
-            <input type="date" value={dateRange.start} onChange={e => setDateRange(p => ({ ...p, start: e.target.value }))} className="bg-transparent border-none text-xs text-white focus:ring-0 outline-none" />
+            <input 
+              type="date" 
+              value={dateRange.start} 
+              onChange={e => setDateRange(p => ({ ...p, start: e.target.value }))} 
+              className="bg-transparent border-none text-xs text-white focus:ring-0 outline-none cursor-pointer" 
+            />
             <span className="text-zinc-700 font-bold">/</span>
-            <input type="date" value={dateRange.end} onChange={e => setDateRange(p => ({ ...p, end: e.target.value }))} className="bg-transparent border-none text-xs text-white focus:ring-0 outline-none" />
+            <input 
+              type="date" 
+              value={dateRange.end} 
+              onChange={e => setDateRange(p => ({ ...p, end: e.target.value }))} 
+              className="bg-transparent border-none text-xs text-white focus:ring-0 outline-none cursor-pointer" 
+            />
           </div>
         </header>
 
@@ -180,7 +203,7 @@ export default function ReportsManagerPage() {
           <TabsContent value="operacional" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <Card className="lg:col-span-2 bg-zinc-900/30 border-zinc-800">
-                <CardHeader><CardTitle className="text-xs font-black uppercase tracking-widest text-zinc-500">Distribuição por Etapa</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-xs font-black uppercase tracking-widest text-zinc-500">Distribuição por Etapa (No Período)</CardTitle></CardHeader>
                 <CardContent className="space-y-5">
                   {['Arte', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação', 'Entregue'].map(status => {
                     const group = financialData?.filteredOrders.filter(o => o.status === status) || [];
@@ -193,7 +216,12 @@ export default function ReportsManagerPage() {
                           <span className="text-xs font-mono font-bold text-white">{val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                         </div>
                         <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
-                          <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} className="h-full bg-primary" />
+                          <motion.div 
+                            initial={{ width: 0 }} 
+                            animate={{ width: `${pct}%` }} 
+                            transition={{ duration: 0.8, ease: "easeOut" }}
+                            className="h-full bg-primary" 
+                          />
                         </div>
                       </div>
                     );
@@ -206,7 +234,14 @@ export default function ReportsManagerPage() {
                   <div className="h-48 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={statusData} innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value">
+                        <Pie 
+                          data={statusData} 
+                          innerRadius={50} 
+                          outerRadius={70} 
+                          paddingAngle={5} 
+                          dataKey="value"
+                          animationDuration={1000}
+                        >
                           {statusData.map((e, i) => <Cell key={i} fill={e.color} />)}
                         </Pie>
                         <Tooltip contentStyle={{ backgroundColor: '#09090b', border: '1px solid #27272a', borderRadius: '12px' }} />
@@ -262,15 +297,19 @@ export default function ReportsManagerPage() {
                   <tr><th className="p-4">Data</th><th className="p-4">Descrição</th><th className="p-4">Categoria</th><th className="p-4 text-right">Valor</th><th className="p-4 text-right">Ações</th></tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {financialData?.filteredExpenses.map(e => (
-                    <tr key={e.id} className="hover:bg-white/5 transition-colors">
-                      <td className="p-4 text-zinc-400 font-mono">{format(parseISO(e.date), 'dd/MM/yy')}</td>
-                      <td className="p-4 text-white font-bold uppercase">{e.description}</td>
-                      <td className="p-4"><span className="px-2 py-1 bg-zinc-800 rounded text-zinc-500 uppercase font-black">{e.category}</span></td>
-                      <td className="p-4 text-right text-red-400 font-mono font-bold">{(Number(e.value) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                      <td className="p-4 text-right"><button onClick={() => handleDeleteExpense(e.id)} className="p-2 text-zinc-700 hover:text-red-500 transition-colors"><Trash2 size={14}/></button></td>
-                    </tr>
-                  ))}
+                  {financialData?.filteredExpenses.length === 0 ? (
+                    <tr><td colSpan={5} className="p-8 text-center text-zinc-600 uppercase font-bold">Nenhuma despesa no período</td></tr>
+                  ) : (
+                    financialData?.filteredExpenses.map(e => (
+                      <tr key={e.id} className="hover:bg-white/5 transition-colors">
+                        <td className="p-4 text-zinc-400 font-mono">{format(parseISO(e.date), 'dd/MM/yy')}</td>
+                        <td className="p-4 text-white font-bold uppercase">{e.description}</td>
+                        <td className="p-4"><span className="px-2 py-1 bg-zinc-800 rounded text-zinc-500 uppercase font-black">{e.category}</span></td>
+                        <td className="p-4 text-right text-red-400 font-mono font-bold">{(Number(e.value) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                        <td className="p-4 text-right"><button onClick={() => handleDeleteExpense(e.id)} className="p-2 text-zinc-700 hover:text-red-500 transition-colors"><Trash2 size={14}/></button></td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -280,7 +319,13 @@ export default function ReportsManagerPage() {
         <AnimatePresence>
           {isExpenseModalOpen && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" onClick={() => setIsExpenseModalOpen(false)}>
-              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#09090b] w-full max-w-md border border-zinc-800 rounded-3xl p-8 shadow-2xl">
+              <motion.div 
+                initial={{ scale: 0.95, opacity: 0 }} 
+                animate={{ scale: 1, opacity: 1 }} 
+                exit={{ scale: 0.95, opacity: 0 }} 
+                onClick={e => e.stopPropagation()} 
+                className="bg-[#09090b] w-full max-w-md border border-zinc-800 rounded-3xl p-8 shadow-2xl"
+              >
                 <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">Lançar Saída</h2>
                 <form onSubmit={handleSaveExpense} className="space-y-4">
                   <input required placeholder="Descrição" value={expenseForm.description} onChange={e => setExpenseForm(p => ({ ...p, description: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none" />
