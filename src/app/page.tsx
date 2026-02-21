@@ -25,7 +25,7 @@ import { OrderFormModal } from '@/components/dashboard/OrderFormModal';
 
 /**
  * DASHBOARD SUPREMO: NEXUS/FLUX
- * Refatorado para Latência Zero e 60FPS.
+ * Refatorado para Latência Zero e Estabilidade de Compilação.
  */
 export default function DashboardPage() {
   const router = useRouter();
@@ -42,7 +42,7 @@ export default function DashboardPage() {
   }, []);
 
   const handleCloseModal = useCallback(() => {
-    setIsModalOrder(false);
+    setIsModalOpen(false); // Corrigido typo setIsModalOrder -> setIsModalOpen
     setEditingOrder(null);
   }, []);
 
@@ -106,11 +106,9 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden selection:bg-primary selection:text-black">
       <DashboardSidebar />
       
-      {/* Background Orbs (GPU Accelerated) */}
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
 
       <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-10 mt-16 md:mt-0 z-10 pb-24">
-        {/* --- HEADER: UPPERCASE & MINIMAL --- */}
         <header className="flex flex-col justify-end items-start pt-4">
           <h1 className="text-3xl md:text-4xl font-black text-white tracking-tighter leading-none">
             CENTRAL DE COMANDO
@@ -124,7 +122,6 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* --- HUB DE INTELIGÊNCIA OPERACIONAL --- */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <ProductionHub stats={stats} />
@@ -134,7 +131,6 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* --- WAR ROOM: PEDIDOS CRÍTICOS --- */}
         {categorizedData.warRoom.length > 0 && (
           <section className="space-y-4">
             <div className="flex items-center justify-between px-2 border-b border-destructive/20 pb-3">
@@ -164,7 +160,6 @@ export default function DashboardPage() {
           </section>
         )}
 
-        {/* --- FILA DE PRODUÇÃO NOMINAL --- */}
         <section className="space-y-4">
           <div className="flex items-center gap-3 px-2 border-b border-white/5 pb-3">
             <div className="p-1.5 bg-primary/10 rounded-lg"><Layers className="text-primary w-4 h-4" /></div>
@@ -184,7 +179,6 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* --- HISTÓRICO DE ENTREGAS --- */}
         {categorizedData.recentHistory.length > 0 && (
           <section className="space-y-4">
             <div className="flex items-center gap-3 px-2 border-b border-green-500/20 pb-3">

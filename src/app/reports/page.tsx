@@ -22,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 
 /**
  * REPORTS MANAGER: O Cérebro Financeiro (NEXUS/FLUX)
- * Refatorado para Unificação de Status e Performance de Renderização.
+ * Refatorado para Unificação Total de Status e Máxima Performance.
  */
 export default function ReportsManagerPage() {
   const firestore = useFirestore();
@@ -117,7 +117,6 @@ export default function ReportsManagerPage() {
     };
   }, [orders, expenses, appliedDateRange]);
 
-  // --- MOTOR DE AGRUPAMENTO POR ETAPA (UNIFICADO) ---
   const stagesSummary = useMemo(() => {
     if (!financialData?.filteredOrders) return [];
 
