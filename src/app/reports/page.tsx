@@ -1,6 +1,7 @@
+
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   BarChart3, Calendar, ArrowUpRight, ArrowDownRight, Wallet, CreditCard, 
@@ -22,19 +23,25 @@ import { useToast } from '@/hooks/use-toast';
 
 /**
  * REPORTS MANAGER: O Cérebro Financeiro (NEXUS/FLUX)
- * Refatorado para Unificação Total de Status e Máxima Performance.
+ * Refatorado para Sincronização de Hidratação e Performance Máxima.
  */
 export default function ReportsManagerPage() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
 
-  const [tempDateRange, setTempDateRange] = useState({
-    start: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
-    end: format(endOfMonth(new Date()), 'yyyy-MM-dd')
-  });
+  const [isMounted, setIsMounted] = useState(false);
+  const [tempDateRange, setTempDateRange] = useState({ start: '', end: '' });
+  const [appliedDateRange, setAppliedDateRange] = useState({ start: '', end: '' });
 
-  const [appliedDateRange, setAppliedDateRange] = useState({ ...tempDateRange });
+  // Garantir que datas dependentes do fuso horário/momento da renderização só ocorram no cliente
+  useEffect(() => {
+    const start = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+    const end = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+    setTempDateRange({ start, end });
+    setAppliedDateRange({ start, end });
+    setIsMounted(true);
+  }, []);
 
   const handleApplyFilter = useCallback(() => {
     setAppliedDateRange({ ...tempDateRange });
@@ -63,7 +70,7 @@ export default function ReportsManagerPage() {
   });
 
   const financialData = useMemo(() => {
-    if (!orders || !expenses) return null;
+    if (!orders || !expenses || !appliedDateRange.start) return null;
 
     const intervalStart = startOfDay(parseISO(appliedDateRange.start));
     const intervalEnd = endOfDay(parseISO(appliedDateRange.end));
@@ -182,7 +189,7 @@ export default function ReportsManagerPage() {
     });
   }, [firestore]);
 
-  if (loadingOrders || loadingExpenses) {
+  if (!isMounted || loadingOrders || loadingExpenses) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
