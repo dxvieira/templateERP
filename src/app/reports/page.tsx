@@ -109,20 +109,19 @@ export default function ReportsManagerPage() {
         ops.abertos++;
       }
 
-      // Detalhamento de contas (Baseado no histórico de parcelas se disponível, ou fallback)
-      // Aqui simplificamos para o total pago, mas idealmente seria por transação.
-      const method = o.paymentMethod || '';
-      const acc = o.destinationAccount || '';
-      const mach = o.machine || '';
-
-      if (pago > 0) {
-        if (method === 'Dinheiro') accounts.caixa += pago;
-        else if (method === 'PIX' || method === 'Boleto') {
-          if (acc === 'Serra Negra') accounts.sicoobSerraNegra += pago;
-          else accounts.sicoobLindoia += pago;
-        } else if (mach === 'PAGBANK') accounts.pagbank += pago;
-        else if (mach === 'SIPAG/SICOOB') accounts.sipag += pago;
-      }
+      // Detalhamento de contas baseado nas parcelas pagas
+      const installments = Array.isArray(o.installments) ? o.installments : [];
+      installments.forEach(inst => {
+        if (inst.status === 'paid' && inst.paymentMethod) {
+          const method = inst.paymentMethod;
+          const val = Number(inst.amount) || 0;
+          if (method.includes('Dinheiro')) accounts.caixa += val;
+          else if (method.includes('Lindóia')) accounts.sicoobLindoia += val;
+          else if (method.includes('Serra Negra')) accounts.sicoobSerraNegra += val;
+          else if (method.includes('PAGBANK')) accounts.pagbank += val;
+          else if (method.includes('SIPAG')) accounts.sipag += val;
+        }
+      });
     });
 
     const outcome = filteredExpenses.reduce((acc, e) => acc + (Number(e.value) || 0), 0);
@@ -206,7 +205,15 @@ export default function ReportsManagerPage() {
     );
   }
 
-  const kpis = financialData || { income: 0, outcome: 0, net: 0, aReceber: 0 };
+  // Fallback robusto para evitar erros de undefined antes do carregamento completo
+  const kpis = financialData || { 
+    income: 0, 
+    outcome: 0, 
+    net: 0, 
+    aReceber: 0,
+    accounts: { caixa: 0, sicoobLindoia: 0, sicoobSerraNegra: 0, pagbank: 0, sipag: 0 },
+    filteredExpenses: []
+  };
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden selection:bg-primary selection:text-black">
@@ -257,7 +264,6 @@ export default function ReportsManagerPage() {
           <KPICard title="Saídas" value={kpis.outcome} icon={ArrowDownRight} color="text-red-500" />
           <KPICard title="Lucro Líquido" value={kpis.net} icon={DollarSign} color="text-primary" />
           
-          {/* --- CARD: A RECEBER --- */}
           <div className="bg-[#09090b] border border-zinc-800 rounded-2xl p-5 flex flex-col justify-between group hover:border-primary/40 transition-colors relative overflow-hidden">
             <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary opacity-5 blur-[60px] rounded-full" />
             <div className="relative z-10 flex justify-between items-start mb-4">
@@ -289,7 +295,6 @@ export default function ReportsManagerPage() {
           <TabsContent value="operacional" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
-              {/* TERMÔMETRO DE PRODUÇÃO (Gargalos) */}
               <Card className="lg:col-span-2 bg-zinc-900/30 border-zinc-800 p-6">
                 <div className="flex justify-between items-center mb-8">
                   <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">
@@ -336,7 +341,6 @@ export default function ReportsManagerPage() {
                 </div>
               </Card>
 
-              {/* PANORAMA FINANCEIRO */}
               <Card className="bg-zinc-900/30 border-zinc-800 p-6 flex flex-col">
                 <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em] mb-8">
                   Panorama Financeiro
@@ -431,10 +435,10 @@ export default function ReportsManagerPage() {
                   <tr><th className="p-4">Data</th><th className="p-4">Descrição</th><th className="p-4">Categoria</th><th className="p-4 text-right">Valor</th><th className="p-4 text-right">Ações</th></tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {kpis.filteredExpenses.length === 0 ? (
+                  {kpis.filteredExpenses?.length === 0 ? (
                     <tr><td colSpan={5} className="p-8 text-center text-zinc-600 uppercase font-bold">Nenhuma despesa no período</td></tr>
                   ) : (
-                    kpis.filteredExpenses.map(e => (
+                    kpis.filteredExpenses?.map(e => (
                       <tr key={e.id} className="hover:bg-white/5 transition-colors">
                         <td className="p-4 text-zinc-400 font-mono">{format(parseISO(e.date), 'dd/MM/yy')}</td>
                         <td className="p-4 text-white font-bold uppercase">{e.description}</td>
