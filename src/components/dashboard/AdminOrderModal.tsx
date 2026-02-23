@@ -8,7 +8,8 @@ import {
   User, CreditCard, DollarSign, 
   Calculator, Loader2,
   History, Calendar as CalendarIcon, Wallet, Receipt,
-  CheckCircle2, AlertTriangle, RefreshCw, FileText
+  CheckCircle2, AlertTriangle, RefreshCw, FileText,
+  ArrowDownLeft, ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
@@ -18,11 +19,11 @@ import { cn } from '@/lib/utils';
 import { addMonths, format, parseISO } from 'date-fns';
 
 const PAYMENT_METHODS = [
-  "Dinheiro (Caixa Interno)",
+  "Caixa Interno",
   "SICOOB - Lindóia",
   "SICOOB - Serra Negra",
   "Máquina PAGBANK",
-  "Máquina SIPAG/SICOOB"
+  "Máquina SIPAG"
 ];
 
 const INSTALLMENT_TYPES = ["Boleto", "Cartão", "Dinheiro/Pix"];
@@ -57,8 +58,8 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     startDate: new Date().toISOString().split('T')[0]
   });
 
-  // BAIVA POPUP STATE
-  const [baixaInstallmentId, setBaixaInstallmentId] = useState<string | null>(null);
+  // BAIVA INLINE STATE
+  const [baixaInstallmentUid, setBaixaInstallmentUid] = useState<string | null>(null);
   const [baixaData, setBaixaData] = useState({ method: PAYMENT_METHODS[0], date: new Date().toISOString().split('T')[0] });
 
   useEffect(() => {
@@ -70,8 +71,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       setDeliveryDate(order.deliveryDate || '');
       setObservations(order.observations || '');
       setItems(order.items?.map((item: any) => ({ ...item })) || [{ productCode: '', desc: '', quantity: 1, unitValue: 0 }]);
-      
-      // Proteção contra dados inconsistentes no Firestore
       setInstallments(Array.isArray(order.installments) ? order.installments : []);
     } else {
       resetForm();
@@ -133,25 +132,33 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
   const handleToggleBaixa = (uid: string) => {
     const inst = installments.find(i => i.uid === uid);
-    if (inst?.status === 'paid') {
+    if (!inst) return;
+
+    if (inst.status === 'paid') {
       // Reverter Baixa
-      setInstallments(installments.map(i => i.uid === uid ? { ...i, status: 'pending', paymentMethod: '', paidDate: '' } : i));
+      setInstallments(installments.map(i => i.uid === uid ? { ...i, status: parseISO(i.dueDate) < new Date() ? 'overdue' : 'pending', paymentMethod: '', paidDate: '' } : i));
+      toast({ title: "Pagamento Estornado", description: "A parcela voltou ao estado pendente." });
     } else {
-      // Abrir Modal de Baixa
-      setBaixaInstallmentId(uid);
+      // Inteligência de UI: Pré-selecionar conta baseada no tipo
+      let suggestedMethod = PAYMENT_METHODS[0]; // Caixa Interno
+      if (inst.type === 'Cartão') suggestedMethod = "Máquina PAGBANK";
+      else if (inst.type === 'Boleto') suggestedMethod = "SICOOB - Lindóia";
+
+      setBaixaData({ method: suggestedMethod, date: new Date().toISOString().split('T')[0] });
+      setBaixaInstallmentUid(uid);
     }
   };
 
   const confirmBaixa = () => {
-    if (!baixaInstallmentId) return;
-    setInstallments(installments.map(i => i.uid === baixaInstallmentId ? { 
+    if (!baixaInstallmentUid) return;
+    setInstallments(installments.map(i => i.uid === baixaInstallmentUid ? { 
       ...i, 
       status: 'paid', 
       paymentMethod: baixaData.method, 
       paidDate: baixaData.date 
     } : i));
-    setBaixaInstallmentId(null);
-    toast({ title: "Pagamento Confirmado", description: "Lembre-se de salvar a OS para efetivar no banco." });
+    setBaixaInstallmentUid(null);
+    toast({ title: "Recebimento Registrado", description: "Lembre-se de salvar a OS para efetivar no sistema." });
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -169,7 +176,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
     setDoc(docRef, payload, { merge: true })
       .then(() => {
-        toast({ title: "Protocolo Financeiro Atualizado" });
+        toast({ title: "Protocolo Atualizado" });
         onClose();
       })
       .catch((err) => {
@@ -323,46 +330,100 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                         installments.map((inst) => {
                           const isOverdue = inst.status === 'overdue';
                           const isPaid = inst.status === 'paid';
+                          const isConfirming = baixaInstallmentUid === inst.uid;
 
                           return (
                             <div key={inst.uid} className={cn(
-                              "group flex items-center justify-between p-4 rounded-2xl border transition-all",
+                              "flex flex-col rounded-2xl border transition-all overflow-hidden",
                               isPaid ? "bg-emerald-500/5 border-emerald-500/20" : 
-                              isOverdue ? "bg-red-500/5 border-red-500/20" : "bg-zinc-900/40 border-zinc-800 hover:border-zinc-700"
+                              isOverdue ? "bg-red-500/5 border-red-500/20" : "bg-zinc-900/40 border-zinc-800 hover:border-zinc-700",
+                              isConfirming && "border-primary/50 ring-1 ring-primary/20"
                             )}>
-                               <div className="flex items-center gap-4">
-                                  <button 
-                                    type="button" 
-                                    onClick={() => handleToggleBaixa(inst.uid)}
-                                    className={cn(
-                                      "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all",
-                                      isPaid ? "bg-emerald-500 border-emerald-500 text-black" : "border-zinc-700 hover:border-primary"
-                                    )}
-                                  >
-                                    {isPaid && <CheckCircle2 size={14} strokeWidth={3} />}
-                                  </button>
-                                  <div>
-                                     <div className="flex items-center gap-2">
-                                        <span className="text-xs font-black text-white">{inst.id}</span>
-                                        <span className={cn(
-                                          "text-[8px] font-black uppercase px-1.5 py-0.5 rounded border",
-                                          isPaid ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
-                                          isOverdue ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-zinc-800 text-zinc-500 border-zinc-700'
-                                        )}>
-                                          {isPaid ? 'Liquidado' : isOverdue ? 'Atrasado' : 'Pendente'}
-                                        </span>
+                               <div className="flex items-center justify-between p-4">
+                                  <div className="flex items-center gap-4">
+                                     <button 
+                                       type="button" 
+                                       onClick={() => handleToggleBaixa(inst.uid)}
+                                       className={cn(
+                                         "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all",
+                                         isPaid ? "bg-emerald-500 border-emerald-500 text-black" : "border-zinc-700 hover:border-primary"
+                                       )}
+                                     >
+                                       {isPaid && <CheckCircle2 size={14} strokeWidth={3} />}
+                                     </button>
+                                     <div>
+                                        <div className="flex items-center gap-2">
+                                           <span className="text-xs font-black text-white">{inst.id}</span>
+                                           <span className={cn(
+                                             "text-[8px] font-black uppercase px-1.5 py-0.5 rounded border",
+                                             isPaid ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
+                                             isOverdue ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-zinc-800 text-zinc-500 border-zinc-700'
+                                           )}>
+                                             {isPaid ? 'Liquidado' : isOverdue ? 'Atrasado' : 'Pendente'}
+                                           </span>
+                                        </div>
+                                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-0.5">{inst.type} • Vencimento: {format(parseISO(inst.dueDate), 'dd/MM/yy')}</p>
                                      </div>
-                                     <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-0.5">{inst.type} • Vencimento: {format(parseISO(inst.dueDate), 'dd/MM/yy')}</p>
+                                  </div>
+
+                                  <div className="flex items-center gap-6">
+                                     <div className="text-right">
+                                        <p className="text-sm font-black text-white font-mono">{inst.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                                        {isPaid && <p className="text-[8px] text-emerald-500 uppercase font-black">{inst.paymentMethod}</p>}
+                                     </div>
+                                     <button type="button" onClick={() => setInstallments(installments.filter(i => i.uid !== inst.uid))} className="p-2 text-zinc-700 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
                                   </div>
                                </div>
 
-                               <div className="flex items-center gap-6">
-                                  <div className="text-right">
-                                     <p className="text-sm font-black text-white font-mono">{inst.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                                     {isPaid && <p className="text-[8px] text-emerald-500 uppercase font-black">{inst.paymentMethod}</p>}
-                                  </div>
-                                  <button type="button" onClick={() => setInstallments(installments.filter(i => i.uid !== inst.uid))} className="p-2 text-zinc-700 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>
-                               </div>
+                               {/* ÁREA DE CONFIRMAÇÃO DE BAIXA INLINE */}
+                               <AnimatePresence>
+                                 {isConfirming && (
+                                   <motion.div 
+                                     initial={{ height: 0, opacity: 0 }} 
+                                     animate={{ height: 'auto', opacity: 1 }} 
+                                     exit={{ height: 0, opacity: 0 }}
+                                     className="bg-zinc-900 border-t border-primary/20 p-4"
+                                   >
+                                      <div className="flex flex-col md:flex-row gap-4 items-end">
+                                         <div className="flex-1 w-full">
+                                            <label className={labelClass}>Conta de Destino</label>
+                                            <select 
+                                              value={baixaData.method} 
+                                              onChange={e => setBaixaData({...baixaData, method: e.target.value})} 
+                                              className={inputClass}
+                                            >
+                                               {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+                                            </select>
+                                         </div>
+                                         <div className="w-full md:w-48">
+                                            <label className={labelClass}>Data do Recebimento</label>
+                                            <input 
+                                              type="date" 
+                                              value={baixaData.date} 
+                                              onChange={e => setBaixaData({...baixaData, date: e.target.value})} 
+                                              className={inputClass} 
+                                            />
+                                         </div>
+                                         <div className="flex gap-2 w-full md:w-auto">
+                                            <button 
+                                              type="button" 
+                                              onClick={() => setBaixaInstallmentUid(null)} 
+                                              className="flex-1 md:px-4 py-3 rounded-xl border border-zinc-700 text-zinc-400 hover:bg-zinc-800 text-[10px] font-black uppercase tracking-widest transition-colors"
+                                            >
+                                              Cancelar
+                                            </button>
+                                            <button 
+                                              type="button" 
+                                              onClick={confirmBaixa} 
+                                              className="flex-1 md:px-6 py-3 rounded-xl bg-primary text-black text-[10px] font-black uppercase tracking-widest shadow-[0_0_15px_rgba(255,95,31,0.3)] hover:bg-white transition-all flex items-center justify-center gap-2"
+                                            >
+                                              <ArrowDownLeft size={14} /> Confirmar Baixa
+                                            </button>
+                                         </div>
+                                      </div>
+                                   </motion.div>
+                                 )}
+                               </AnimatePresence>
                             </div>
                           );
                         })
@@ -374,36 +435,11 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </form>
         </div>
 
-        <div className="p-5 border-t border-zinc-800 bg-zinc-900/50 flex justify-end gap-3 relative">
+        <div className="p-5 border-t border-zinc-800 bg-zinc-900/50 flex justify-end gap-3">
            <button onClick={onClose} className="px-6 py-3 rounded-xl border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800">Cancelar</button>
            <button form="adminOrderForm" type="submit" disabled={loading} className="px-10 py-3 rounded-xl bg-primary text-black text-[10px] font-black uppercase tracking-widest shadow-[0_0_25px_-5px_rgba(255,95,31,0.5)] disabled:opacity-50 flex items-center gap-2">
              {loading ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> Efetivar Registro</>}
            </button>
-
-           {/* MINI POPUP DE BAIXA */}
-           <AnimatePresence>
-             {baixaInstallmentId && (
-               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute bottom-full right-5 mb-4 w-80 bg-zinc-900 border border-primary/30 rounded-2xl shadow-2xl p-5 z-[210]">
-                  <div className="flex justify-between items-center mb-4">
-                     <h4 className="text-[10px] font-black text-primary uppercase tracking-widest">Confirmar Recebimento</h4>
-                     <button onClick={() => setBaixaInstallmentId(null)}><X size={14} className="text-zinc-500"/></button>
-                  </div>
-                  <div className="space-y-4">
-                     <div>
-                        <label className={labelClass}>Conta de Destino</label>
-                        <select value={baixaData.method} onChange={e => setBaixaData({...baixaData, method: e.target.value})} className={inputClass}>
-                           {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
-                        </select>
-                     </div>
-                     <div>
-                        <label className={labelClass}>Data da Entrada</label>
-                        <input type="date" value={baixaData.date} onChange={e => setBaixaData({...baixaData, date: e.target.value})} className={inputClass} />
-                     </div>
-                     <button type="button" onClick={confirmBaixa} className="w-full py-3 bg-emerald-500 text-black font-black uppercase text-[10px] rounded-xl">Dar Baixa Agora</button>
-                  </div>
-               </motion.div>
-             )}
-           </AnimatePresence>
         </div>
       </motion.div>
     </div>
