@@ -22,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 
 /**
  * REPORTS MANAGER: O Cérebro Financeiro (NEXUS/FLUX)
- * Refatorado para Sincronização de Hidratação e Inteligência de Saldo Devedor.
+ * Refatorado para Radar de Operações Tático e Gestão de Urgências.
  */
 export default function ReportsManagerPage() {
   const firestore = useFirestore();
@@ -98,10 +98,10 @@ export default function ReportsManagerPage() {
     filteredOrders.forEach(o => {
       const total = Number(o.totalValue) || 0;
       const pago = Number(o.amountPaid) || 0;
-      const devido = Number(o.balanceDue) || 0;
+      const devido = total - pago;
 
       income += pago;
-      aReceber += devido;
+      if (devido > 0) aReceber += devido;
 
       if (['Concluído', 'Entregue'].includes(o.status)) {
         ops.finalizados++;
@@ -109,7 +109,6 @@ export default function ReportsManagerPage() {
         ops.abertos++;
       }
 
-      // Detalhamento de contas baseado nas parcelas pagas
       const installments = Array.isArray(o.installments) ? o.installments : [];
       installments.forEach(inst => {
         if (inst.status === 'paid' && inst.paymentMethod) {
@@ -132,19 +131,21 @@ export default function ReportsManagerPage() {
     };
   }, [orders, expenses, appliedDateRange]);
 
+  // Lógica do Radar de Operações (Foco em Volume e Urgência)
   const stagesSummary = useMemo(() => {
     if (!financialData?.filteredOrders) return [];
 
     const summary: Record<string, any> = {
-      'Arte': { label: 'ARTE FINAL', count: 0, value: 0, color: '#d946ef' },
-      'Impressão': { label: 'IMPRESSÃO', count: 0, value: 0, color: '#3B82F6' },
-      'Serralheria': { label: 'SERRALHERIA', count: 0, value: 0, color: '#EAB308' },
-      'Acabamento': { label: 'ACABAMENTO', count: 0, value: 0, color: '#FF5F1F' },
-      'Instalação': { label: 'INSTALAÇÃO', count: 0, value: 0, color: '#8B5CF6' },
-      'Finalizado': { label: 'FINALIZADO', count: 0, value: 0, color: '#4ade80' } 
+      'Arte': { label: 'ARTE FINAL', count: 0, critical: 0, color: '#d946ef' },
+      'Impressão': { label: 'IMPRESSÃO', count: 0, critical: 0, color: '#3B82F6' },
+      'Serralheria': { label: 'SERRALHERIA', count: 0, critical: 0, color: '#EAB308' },
+      'Acabamento': { label: 'ACABAMENTO', count: 0, critical: 0, color: '#FF5F1F' },
+      'Instalação': { label: 'INSTALAÇÃO', count: 0, critical: 0, color: '#8B5CF6' },
+      'Finalizado': { label: 'FINALIZADO', count: 0, critical: 0, color: '#4ade80' } 
     };
 
-    let maxCount = 0;
+    let totalActiveOrders = 0;
+    const today = new Date().toISOString().split('T')[0];
 
     financialData.filteredOrders.forEach(order => {
       const statusKey = (order.status === 'Concluído' || order.status === 'Entregue') 
@@ -153,17 +154,31 @@ export default function ReportsManagerPage() {
 
       if (summary[statusKey]) {
         summary[statusKey].count += 1;
-        summary[statusKey].value += Number(order.totalValue) || 0;
-        if (summary[statusKey].count > maxCount) {
-          maxCount = summary[statusKey].count;
+        
+        if (statusKey !== 'Finalizado') {
+          totalActiveOrders += 1;
+        }
+
+        // Verifica se o pedido está crítico (Prazo é hoje ou já passou)
+        if (statusKey !== 'Finalizado' && order.deliveryDate && order.deliveryDate <= today) {
+           summary[statusKey].critical += 1;
         }
       }
     });
 
-    return Object.values(summary).map(stage => ({
-      ...stage,
-      percentage: maxCount === 0 ? 0 : (stage.count / maxCount) * 100 
-    }));
+    return Object.values(summary).map(stage => {
+      let percentage = 0;
+      if (stage.label === 'FINALIZADO') {
+         percentage = stage.count > 0 ? 100 : 0;
+      } else {
+         percentage = totalActiveOrders === 0 ? 0 : (stage.count / totalActiveOrders) * 100;
+      }
+
+      return {
+        ...stage,
+        percentage
+      };
+    });
   }, [financialData?.filteredOrders]);
 
   const handleSaveExpense = useCallback(async (e: React.FormEvent) => {
@@ -205,12 +220,8 @@ export default function ReportsManagerPage() {
     );
   }
 
-  // Fallback robusto para evitar erros de undefined antes do carregamento completo
   const kpis = financialData || { 
-    income: 0, 
-    outcome: 0, 
-    net: 0, 
-    aReceber: 0,
+    income: 0, outcome: 0, net: 0, aReceber: 0,
     accounts: { caixa: 0, sicoobLindoia: 0, sicoobSerraNegra: 0, pagbank: 0, sipag: 0 },
     filteredExpenses: []
   };
@@ -295,51 +306,71 @@ export default function ReportsManagerPage() {
           <TabsContent value="operacional" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
-              <Card className="lg:col-span-2 bg-zinc-900/30 border-zinc-800 p-6">
+              {/* RADAR DE OPERAÇÕES (Gargalos) */}
+              <div className="bg-[#09090b] border border-zinc-800 rounded-3xl p-6 lg:col-span-2 flex flex-col transition-all hover:border-primary/20">
                 <div className="flex justify-between items-center mb-8">
                   <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">
-                    Termômetro de Produção (Gargalos)
+                    Radar de Operações (Gargalos)
                   </h3>
                   <span className="text-[8px] bg-zinc-900 text-zinc-500 px-3 py-1 rounded-full border border-zinc-800 font-black uppercase tracking-widest">
-                    Volume por Etapa
+                    Volume & Urgência
                   </span>
                 </div>
                 
-                <div className="space-y-6">
-                  {stagesSummary.map((stage) => (
-                    <div key={stage.label} className="relative group">
-                      <div className="flex justify-between items-end mb-2">
-                        <div className="flex items-center gap-3">
-                          <div 
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-black shadow-lg"
-                            style={{ backgroundColor: stage.color, boxShadow: `0 0 15px ${stage.color}40` }}
-                          >
-                            {stage.count}
-                          </div>
-                          <div>
-                            <span className="text-white text-xs font-black uppercase tracking-wider block">
-                              {stage.label}
-                            </span>
-                            <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">
-                              Valor: {stage.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            </span>
+                <div className="space-y-6 flex-1 flex flex-col justify-between">
+                  {stagesSummary.map((stage) => {
+                    const hasAlert = stage.critical > 0;
+
+                    return (
+                      <div key={stage.label} className="relative group">
+                        <div className="flex justify-between items-center mb-2">
+                          <div className="flex items-center gap-4">
+                            <div 
+                              className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-black text-black shadow-lg transition-transform group-hover:scale-105"
+                              style={{ backgroundColor: stage.color, boxShadow: `0 0 15px ${stage.color}40` }}
+                            >
+                              {stage.count}
+                            </div>
+                            
+                            <div className="flex flex-col">
+                              <span className="text-white text-sm font-black uppercase tracking-wider block">
+                                {stage.label}
+                              </span>
+                              
+                              {stage.label === 'FINALIZADO' ? (
+                                <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-bold">
+                                  Prontos para Retirada / Entregues
+                                </span>
+                              ) : hasAlert ? (
+                                <span className="text-[9px] text-red-400 uppercase tracking-widest font-black flex items-center gap-1 animate-pulse">
+                                  ⚠️ {stage.critical} {stage.critical === 1 ? 'Pedido Crítico' : 'Pedidos Críticos'} (Atrasado/Hoje)
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">
+                                  {Math.round(stage.percentage)}% da carga de trabalho
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
+                        
+                        <div className="h-1.5 w-full bg-zinc-900/80 rounded-full overflow-hidden border border-zinc-800/30">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${stage.percentage}%` }}
+                            transition={{ duration: 1, ease: "easeOut" }}
+                            className="h-full rounded-full opacity-80 group-hover:opacity-100 transition-all"
+                            style={{ 
+                              backgroundColor: stage.color,
+                              boxShadow: `0 0 10px ${stage.color}` 
+                            }}
+                          />
+                        </div>
                       </div>
-                      
-                      <div className="h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-zinc-800/50">
-                        <motion.div 
-                          initial={{ width: 0 }}
-                          animate={{ width: `${stage.percentage}%` }}
-                          transition={{ duration: 1, ease: "easeOut" }}
-                          className="h-full rounded-full opacity-80 group-hover:opacity-100 transition-opacity"
-                          style={{ backgroundColor: stage.color }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-              </Card>
+              </div>
 
               <Card className="bg-zinc-900/30 border-zinc-800 p-6 flex flex-col">
                 <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em] mb-8">
