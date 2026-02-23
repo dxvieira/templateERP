@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
@@ -74,7 +73,7 @@ export default function ReportsManagerPage() {
     const intervalEnd = endOfDay(parseISO(appliedDateRange.end));
 
     const filteredOrders = orders.filter(o => {
-      const dateStr = o.emissionDate || (o.createdAt?.seconds ? format(new Date(o.createdAt.seconds * 1000), 'yyyy-MM-dd') : null);
+      const dateStr = o.emission_date || o.emissionDate || (o.createdAt?.seconds ? format(new Date(o.createdAt.seconds * 1000), 'yyyy-MM-dd') : null);
       if (!dateStr) return false;
       try {
         const orderDate = parseISO(dateStr);
@@ -94,8 +93,8 @@ export default function ReportsManagerPage() {
     let aReceber = 0;
 
     filteredOrders.forEach(o => {
-      const total = Number(o.totalValue) || 0;
-      const pago = Number(o.amountPaid) || 0;
+      const total = Number(o.total_value || o.totalValue) || 0;
+      const pago = Number(o.amount_paid || o.amountPaid) || 0;
       const devido = total - pago;
 
       income += pago;
@@ -138,7 +137,8 @@ export default function ReportsManagerPage() {
           totalActiveOrders += 1;
         }
 
-        if (statusKey !== 'Finalizado' && order.deliveryDate && order.deliveryDate <= today) {
+        const dDate = order.delivery_date || order.deliveryDate;
+        if (statusKey !== 'Finalizado' && dDate && dDate <= today) {
            summary[statusKey].critical += 1;
         }
       }
@@ -159,39 +159,51 @@ export default function ReportsManagerPage() {
     });
   }, [financialData?.filteredOrders]);
 
-  // Lógica de Distribuição do Fluxo de Caixa (Liquidez)
+  // Lógica de Distribuição do Fluxo de Caixa (À Prova de Balas)
   const accountsSummary = useMemo(() => {
     const accounts: Record<string, any> = {
-      'Caixa Interno': { label: 'CAIXA INTERNO', value: 0, color: '#10b981', type: 'Dinheiro', icon: '💵' },
-      'SICOOB - Lindóia': { label: 'SICOOB LINDÓIA', value: 0, color: '#0ea5e9', type: 'Banco', icon: '🏦' },
-      'SICOOB - Serra Negra': { label: 'SICOOB SERRA NEGRA', value: 0, color: '#3b82f6', type: 'Banco', icon: '🏦' },
-      'Máquina PAGBANK': { label: 'PAGBANK', value: 0, color: '#eab308', type: 'Máquina', icon: '💳' },
-      'Máquina SIPAG': { label: 'SIPAG / SICOOB', value: 0, color: '#f97316', type: 'Máquina', icon: '💳' },
+      'CAIXA INTERNO': { label: 'CAIXA INTERNO', value: 0, color: '#10b981', type: 'Dinheiro', icon: '💵' },
+      'SICOOB LINDOIA': { label: 'SICOOB LINDÓIA', value: 0, color: '#0ea5e9', type: 'Banco', icon: '🏦' },
+      'SICOOB SERRA NEGRA': { label: 'SICOOB SERRA NEGRA', value: 0, color: '#3b82f6', type: 'Banco', icon: '🏦' },
+      'PAGBANK': { label: 'PAGBANK', value: 0, color: '#eab308', type: 'Máquina', icon: '💳' },
+      'SIPAG': { label: 'SIPAG / SICOOB', value: 0, color: '#f97316', type: 'Máquina', icon: '💳' },
     };
 
     let totalEmCaixa = 0;
-    const orders = financialData?.filteredOrders || [];
+    const ordersData = financialData?.filteredOrders || [];
 
-    orders.forEach(order => {
-      const installments = Array.isArray(order.installments) ? order.installments : [];
-      installments.forEach(inst => {
-        if (inst.status === 'paid' && inst.paymentMethod) {
-          const method = inst.paymentMethod;
-          const val = Number(inst.amount) || 0;
-          
-          let targetKey = '';
-          if (method.includes('Dinheiro')) targetKey = 'Caixa Interno';
-          else if (method.includes('Lindóia')) targetKey = 'SICOOB - Lindóia';
-          else if (method.includes('Serra Negra')) targetKey = 'SICOOB - Serra Negra';
-          else if (method.includes('PAGBANK')) targetKey = 'Máquina PAGBANK';
-          else if (method.includes('SIPAG')) targetKey = 'Máquina SIPAG';
+    ordersData.forEach(order => {
+      // 1. Verifica se o pedido tem o sistema de parcelas
+      if (order.installments && Array.isArray(order.installments)) {
+        order.installments.forEach(inst => {
+          if (inst.status === 'paid') {
+            const amount = Number(inst.amount) || 0;
+            // Normaliza para maiúsculas e remove acentos comuns para busca
+            const method = String(inst.payment_method || inst.paymentMethod || '').toUpperCase();
 
-          if (targetKey && accounts[targetKey]) {
-            accounts[targetKey].value += val;
-            totalEmCaixa += val;
+            if (method.includes('PAGBANK')) accounts['PAGBANK'].value += amount;
+            else if (method.includes('SIPAG')) accounts['SIPAG'].value += amount;
+            else if (method.includes('LINDÓIA') || method.includes('LINDOIA')) accounts['SICOOB LINDOIA'].value += amount;
+            else if (method.includes('SERRA NEGRA')) accounts['SICOOB SERRA NEGRA'].value += amount;
+            else accounts['CAIXA INTERNO'].value += amount;
+
+            totalEmCaixa += amount;
           }
-        }
-      });
+        });
+      } 
+      // 2. Fallback para pedidos legados (campo amount_paid direto)
+      else if (order.amount_paid || order.amountPaid) {
+        const amount = Number(order.amount_paid || order.amountPaid) || 0;
+        const method = String(order.payment_method || order.paymentMethod || '').toUpperCase();
+
+        if (method.includes('PAGBANK')) accounts['PAGBANK'].value += amount;
+        else if (method.includes('SIPAG')) accounts['SIPAG'].value += amount;
+        else if (method.includes('LINDÓIA') || method.includes('LINDOIA')) accounts['SICOOB LINDOIA'].value += amount;
+        else if (method.includes('SERRA NEGRA')) accounts['SICOOB SERRA NEGRA'].value += amount;
+        else accounts['CAIXA INTERNO'].value += amount;
+
+        totalEmCaixa += amount;
+      }
     });
 
     const items = Object.values(accounts)
@@ -551,7 +563,7 @@ export default function ReportsManagerPage() {
                   ) : (
                     kpis.filteredExpenses?.map(e => (
                       <tr key={e.id} className="hover:bg-white/5 transition-colors">
-                        <td className="p-4 text-zinc-400 font-mono">{format(parseISO(e.date), 'dd/MM/yy')}</td>
+                        <td className="p-4 text-zinc-400 font-mono">{e.date ? format(parseISO(e.date), 'dd/MM/yy') : '--/--/--'}</td>
                         <td className="p-4 text-white font-bold uppercase">{e.description}</td>
                         <td className="p-4"><span className="px-2 py-1 bg-zinc-800 rounded text-zinc-500 uppercase font-black">{e.category}</span></td>
                         <td className="p-4 text-right text-red-400 font-mono font-bold">{(Number(e.value) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
