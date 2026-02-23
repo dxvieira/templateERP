@@ -55,7 +55,8 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     total: 0,
     count: 1,
     type: "Boleto",
-    startDate: new Date().toISOString().split('T')[0]
+    startDate: new Date().toISOString().split('T')[0],
+    machine: "Máquina PAGBANK"
   });
 
   // BAIXA INLINE STATE
@@ -121,7 +122,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
         due_date: dueDate,
         status: parseISO(dueDate) < new Date() ? 'overdue' : 'pending',
         type: genConfig.type,
-        payment_method: '',
+        payment_method: genConfig.type === 'Cartão' ? genConfig.machine : '',
         paid_date: ''
       });
     }
@@ -156,7 +157,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     } else {
       // INTERCEPTAÇÃO: Abrir seletor de conta
       let suggestedMethod = PAYMENT_METHODS[0]; // Caixa Interno
-      if (inst.type === 'Cartão') suggestedMethod = "Máquina PAGBANK";
+      if (inst.type === 'Cartão') suggestedMethod = inst.payment_method || "Máquina PAGBANK";
       else if (inst.type === 'Boleto') suggestedMethod = "SICOOB - Lindóia";
 
       setBaixaData({ method: suggestedMethod, date: new Date().toISOString().split('T')[0] });
@@ -183,7 +184,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
     const docRef = order ? doc(firestore, 'orders', order.id) : doc(collection(firestore, 'orders'));
     
-    // USANDO SNAKE_CASE PARA SINCRONIA COM RELATÓRIOS
     const payload = {
       client, 
       seller, 
@@ -323,7 +323,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                       </div>
                    </div>
                    
-                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                   <div className={cn("grid gap-4 items-end", genConfig.type === 'Cartão' ? "grid-cols-1 md:grid-cols-5" : "grid-cols-1 md:grid-cols-4")}>
                       <div>
                          <label className={labelClass}>Valor Total</label>
                          <input type="number" step="0.01" value={genConfig.total} onChange={e => setInstallmentGenConfig({...genConfig, total: Number(e.target.value)})} className={inputClass} />
@@ -334,6 +334,22 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                             {INSTALLMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                          </select>
                       </div>
+                      
+                      {/* CAMPO CONDICIONAL DE MÁQUINA */}
+                      {genConfig.type === 'Cartão' && (
+                        <div>
+                           <label className={labelClass}>Máquina</label>
+                           <select 
+                             value={genConfig.machine} 
+                             onChange={e => setInstallmentGenConfig({...genConfig, machine: e.target.value})} 
+                             className={inputClass}
+                           >
+                              <option value="Máquina PAGBANK">Máquina PAGBANK</option>
+                              <option value="Máquina SIPAG">Máquina SIPAG</option>
+                           </select>
+                        </div>
+                      )}
+
                       <div>
                          <label className={labelClass}>Nº Parcelas</label>
                          <input type="number" value={genConfig.count} onChange={e => setInstallmentGenConfig({...genConfig, count: Number(e.target.value)})} className={inputClass} min={1} />
@@ -398,13 +414,12 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                                   <div className="flex items-center gap-6">
                                      <div className="text-right">
                                         <p className="text-sm font-black text-white font-mono">{inst.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                                        {isPaid && <p className="text-[8px] text-emerald-500 uppercase font-black">{inst.payment_method}</p>}
+                                        {(isPaid || inst.payment_method) && <p className="text-[8px] text-emerald-500 uppercase font-black">{inst.payment_method}</p>}
                                      </div>
                                      <button type="button" onClick={() => setInstallments(installments.filter(i => i.uid !== inst.uid))} className="p-2 text-zinc-700 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
                                   </div>
                                </div>
 
-                               {/* ÁREA DE CONFIRMAÇÃO DE BAIXA INLINE */}
                                <AnimatePresence>
                                  {isConfirming && (
                                    <motion.div 
