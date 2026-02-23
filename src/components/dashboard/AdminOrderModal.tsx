@@ -136,12 +136,22 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
     if (inst.status === 'paid') {
       // REVERSÃO (ESTORNO)
-      setInstallments(installments.map(i => i.uid === uid ? { 
-        ...i, 
-        status: parseISO(i.due_date) < new Date() ? 'overdue' : 'pending', 
-        payment_method: '', 
-        paid_date: '' 
-      } : i));
+      setInstallments(installments.map(i => {
+        if (i.uid !== uid) return i;
+        const dDate = i.due_date || i.dueDate;
+        let newStatus = 'pending';
+        if (dDate) {
+          try {
+            newStatus = parseISO(dDate) < new Date() ? 'overdue' : 'pending';
+          } catch (e) {}
+        }
+        return { 
+          ...i, 
+          status: newStatus, 
+          payment_method: '', 
+          paid_date: '' 
+        };
+      }));
       toast({ title: "Pagamento Estornado", description: "A parcela voltou ao estado pendente." });
     } else {
       // INTERCEPTAÇÃO: Abrir seletor de conta
@@ -347,6 +357,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                           const isOverdue = inst.status === 'overdue';
                           const isPaid = inst.status === 'paid';
                           const isConfirming = baixaInstallmentUid === inst.uid;
+                          const dueDateStr = inst.due_date || inst.dueDate;
 
                           return (
                             <div key={inst.uid} className={cn(
@@ -378,7 +389,9 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                                              {isPaid ? 'Liquidado' : isOverdue ? 'Atrasado' : 'Pendente'}
                                            </span>
                                         </div>
-                                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-0.5">{inst.type} • Vencimento: {format(parseISO(inst.due_date), 'dd/MM/yy')}</p>
+                                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-0.5">
+                                          {inst.type} • Vencimento: {dueDateStr ? format(parseISO(dueDateStr), 'dd/MM/yy') : '--/--/--'}
+                                        </p>
                                      </div>
                                   </div>
 
