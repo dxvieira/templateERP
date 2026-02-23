@@ -6,10 +6,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   BarChart3, Calendar, ArrowUpRight, ArrowDownRight, Wallet, CreditCard, 
   Banknote, TrendingUp, FileText, Plus, Trash2, Loader2, DollarSign, 
-  Briefcase, AlertCircle, X, RefreshCw, Filter
+  Briefcase, AlertCircle, X, RefreshCw, Filter, Clock
 } from 'lucide-react';
 import { startOfMonth, endOfMonth, format, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { collection, query, orderBy, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
@@ -23,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 
 /**
  * REPORTS MANAGER: O Cérebro Financeiro (NEXUS/FLUX)
- * Refatorado para Sincronização de Hidratação e Performance Máxima.
+ * Refatorado para Sincronização de Hidratação e Inteligência de Saldo Devedor.
  */
 export default function ReportsManagerPage() {
   const firestore = useFirestore();
@@ -34,7 +33,6 @@ export default function ReportsManagerPage() {
   const [tempDateRange, setTempDateRange] = useState({ start: '', end: '' });
   const [appliedDateRange, setAppliedDateRange] = useState({ start: '', end: '' });
 
-  // Garantir que datas dependentes do fuso horário/momento da renderização só ocorram no cliente
   useEffect(() => {
     const start = format(startOfMonth(new Date()), 'yyyy-MM-dd');
     const end = format(endOfMonth(new Date()), 'yyyy-MM-dd');
@@ -46,8 +44,8 @@ export default function ReportsManagerPage() {
   const handleApplyFilter = useCallback(() => {
     setAppliedDateRange({ ...tempDateRange });
     toast({ 
-      title: "Filtro Aplicado", 
-      description: `Período sincronizado com o servidor.` 
+      title: "Cérebro Sincronizado", 
+      description: `Relatórios atualizados com sucesso.` 
     });
   }, [tempDateRange, toast]);
 
@@ -93,33 +91,44 @@ export default function ReportsManagerPage() {
     });
 
     const accounts = { caixa: 0, sicoobLindoia: 0, sicoobSerraNegra: 0, pagbank: 0, sipag: 0 };
-    const ops = { abertos: 0, finalizados: 0, totalValue: 0 };
+    const ops = { abertos: 0, finalizados: 0 };
+    let income = 0;
+    let aReceber = 0;
 
     filteredOrders.forEach(o => {
-      const val = Number(o.totalValue) || 0;
+      const total = Number(o.totalValue) || 0;
+      const pago = Number(o.amountPaid) || 0;
+      const devido = Number(o.balanceDue) || 0;
+
+      income += pago;
+      aReceber += devido;
+
+      if (['Concluído', 'Entregue'].includes(o.status)) {
+        ops.finalizados++;
+      } else {
+        ops.abertos++;
+      }
+
+      // Detalhamento de contas (Baseado no histórico de parcelas se disponível, ou fallback)
+      // Aqui simplificamos para o total pago, mas idealmente seria por transação.
       const method = o.paymentMethod || '';
       const acc = o.destinationAccount || '';
       const mach = o.machine || '';
 
-      if (['Concluído', 'Entregue'].includes(o.status)) {
-        ops.finalizados++;
-        if (method === 'Dinheiro') accounts.caixa += val;
+      if (pago > 0) {
+        if (method === 'Dinheiro') accounts.caixa += pago;
         else if (method === 'PIX' || method === 'Boleto') {
-          if (acc === 'Serra Negra') accounts.sicoobSerraNegra += val;
-          else accounts.sicoobLindoia += val;
-        } else if (mach === 'PAGBANK') accounts.pagbank += val;
-        else if (mach === 'SIPAG/SICOOB') accounts.sipag += val;
-      } else {
-        ops.abertos++;
-        ops.totalValue += val;
+          if (acc === 'Serra Negra') accounts.sicoobSerraNegra += pago;
+          else accounts.sicoobLindoia += pago;
+        } else if (mach === 'PAGBANK') accounts.pagbank += pago;
+        else if (mach === 'SIPAG/SICOOB') accounts.sipag += pago;
       }
     });
 
-    const income = Object.values(accounts).reduce((a, b) => a + b, 0);
     const outcome = filteredExpenses.reduce((acc, e) => acc + (Number(e.value) || 0), 0);
 
     return { 
-      ops, accounts, income, outcome, net: income - outcome, 
+      ops, accounts, income, outcome, net: income - outcome, aReceber,
       filteredOrders, filteredExpenses 
     };
   }, [orders, expenses, appliedDateRange]);
@@ -197,10 +206,7 @@ export default function ReportsManagerPage() {
     );
   }
 
-  const statusData = [
-    { name: 'Abertos', value: financialData?.ops.abertos || 0, color: '#FF5F1F' },
-    { name: 'Finalizados', value: financialData?.ops.finalizados || 0, color: '#4ade80' }
-  ];
+  const kpis = financialData || { income: 0, outcome: 0, net: 0, aReceber: 0 };
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden selection:bg-primary selection:text-black">
@@ -247,10 +253,30 @@ export default function ReportsManagerPage() {
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <KPICard title="Entradas" value={financialData?.income || 0} icon={ArrowUpRight} color="text-green-500" />
-          <KPICard title="Saídas" value={financialData?.outcome || 0} icon={ArrowDownRight} color="text-red-500" />
-          <KPICard title="Lucro Líquido" value={financialData?.net || 0} icon={DollarSign} color="text-primary" />
-          <KPICard title="Em Produção" value={financialData?.ops.totalValue || 0} icon={Briefcase} color="text-blue-400" />
+          <KPICard title="Entradas" value={kpis.income} icon={ArrowUpRight} color="text-green-500" />
+          <KPICard title="Saídas" value={kpis.outcome} icon={ArrowDownRight} color="text-red-500" />
+          <KPICard title="Lucro Líquido" value={kpis.net} icon={DollarSign} color="text-primary" />
+          
+          {/* --- CARD: A RECEBER --- */}
+          <div className="bg-[#09090b] border border-zinc-800 rounded-2xl p-5 flex flex-col justify-between group hover:border-primary/40 transition-colors relative overflow-hidden">
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary opacity-5 blur-[60px] rounded-full" />
+            <div className="relative z-10 flex justify-between items-start mb-4">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <Clock className="text-primary w-5 h-5" /> 
+              </div>
+              <span className="text-[9px] text-zinc-600 uppercase font-black tracking-widest mt-1">
+                A Receber
+              </span>
+            </div>
+            <div className="relative z-10">
+              <h3 className="text-2xl font-black text-white font-mono">
+                {kpis.aReceber.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </h3>
+              <p className="text-[10px] text-primary mt-1 font-bold uppercase tracking-widest">
+                Saldo devedor pendente
+              </p>
+            </div>
+          </div>
         </div>
 
         <Tabs defaultValue="operacional" className="w-full">
@@ -262,61 +288,109 @@ export default function ReportsManagerPage() {
 
           <TabsContent value="operacional" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card className="lg:col-span-2 bg-zinc-900/30 border-zinc-800">
-                <CardHeader><CardTitle className="text-xs font-black uppercase tracking-widest text-zinc-500">Distribuição por Etapa (No Período)</CardTitle></CardHeader>
-                <CardContent className="space-y-5">
+              
+              {/* TERMÔMETRO DE PRODUÇÃO (Gargalos) */}
+              <Card className="lg:col-span-2 bg-zinc-900/30 border-zinc-800 p-6">
+                <div className="flex justify-between items-center mb-8">
+                  <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">
+                    Termômetro de Produção (Gargalos)
+                  </h3>
+                  <span className="text-[8px] bg-zinc-900 text-zinc-500 px-3 py-1 rounded-full border border-zinc-800 font-black uppercase tracking-widest">
+                    Volume por Etapa
+                  </span>
+                </div>
+                
+                <div className="space-y-6">
                   {stagesSummary.map((stage) => (
-                    <div key={stage.label} className="space-y-2">
-                      <div className="flex justify-between items-end">
-                        <span className="text-[10px] font-black text-zinc-400 uppercase">
-                          {stage.label} <span className="text-zinc-600">({stage.count})</span>
-                        </span>
-                        <span className="text-xs font-mono font-bold text-white">
-                          {stage.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </span>
+                    <div key={stage.label} className="relative group">
+                      <div className="flex justify-between items-end mb-2">
+                        <div className="flex items-center gap-3">
+                          <div 
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-black shadow-lg"
+                            style={{ backgroundColor: stage.color, boxShadow: `0 0 15px ${stage.color}40` }}
+                          >
+                            {stage.count}
+                          </div>
+                          <div>
+                            <span className="text-white text-xs font-black uppercase tracking-wider block">
+                              {stage.label}
+                            </span>
+                            <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">
+                              Valor: {stage.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+                      
+                      <div className="h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-zinc-800/50">
                         <motion.div 
-                          initial={{ width: 0 }} 
-                          animate={{ width: `${stage.percentage}%` }} 
-                          transition={{ duration: 0.8, ease: "easeOut" }}
-                          className="h-full" 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${stage.percentage}%` }}
+                          transition={{ duration: 1, ease: "easeOut" }}
+                          className="h-full rounded-full opacity-80 group-hover:opacity-100 transition-opacity"
                           style={{ backgroundColor: stage.color }}
                         />
                       </div>
                     </div>
                   ))}
-                </CardContent>
+                </div>
               </Card>
-              <Card className="bg-zinc-900/30 border-zinc-800 h-fit">
-                <CardHeader><CardTitle className="text-xs font-black uppercase tracking-widest text-zinc-500">Mix de Produção</CardTitle></CardHeader>
-                <CardContent className="flex flex-col items-center">
-                  <div className="h-48 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie 
-                          data={statusData} 
-                          innerRadius={50} 
-                          outerRadius={70} 
-                          paddingAngle={5} 
-                          dataKey="value"
-                          animationDuration={1000}
-                        >
-                          {statusData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                        </Pie>
-                        <Tooltip contentStyle={{ backgroundColor: '#09090b', border: '1px solid #27272a', borderRadius: '12px' }} />
-                      </PieChart>
-                    </ResponsiveContainer>
+
+              {/* PANORAMA FINANCEIRO */}
+              <Card className="bg-zinc-900/30 border-zinc-800 p-6 flex flex-col">
+                <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em] mb-8">
+                  Panorama Financeiro
+                </h3>
+                
+                <div className="flex-1 flex flex-col items-center justify-center relative">
+                  <div className="relative w-40 h-40 flex items-center justify-center mb-6">
+                    <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="40" stroke="#FF5F1F15" strokeWidth="10" fill="none" />
+                      <motion.circle 
+                        cx="50" cy="50" r="40" 
+                        stroke="#4ade80" 
+                        strokeWidth="10" 
+                        fill="none" 
+                        strokeLinecap="round"
+                        strokeDasharray="251"
+                        initial={{ strokeDashoffset: 251 }}
+                        animate={{ strokeDashoffset: 251 - ( (kpis.income / (kpis.income + kpis.aReceber || 1)) * 251 ) }}
+                        transition={{ duration: 1.5, ease: "circOut" }}
+                      />
+                    </svg>
+                    
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-3xl font-black text-white font-mono">
+                        {Math.round((kpis.income / (kpis.income + kpis.aReceber || 1)) * 100)}%
+                      </span>
+                      <span className="text-[8px] text-zinc-500 uppercase font-black tracking-widest mt-1">
+                        Recebido
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex gap-4 mt-2">
-                    {statusData.map(s => (
-                      <div key={s.name} className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-                        <span className="text-[9px] font-black text-zinc-500 uppercase">{s.name}</span>
+
+                  <div className="w-full space-y-2">
+                    <div className="flex justify-between items-center p-3 rounded-xl bg-black/40 border border-zinc-800/50">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-[#4ade80]" />
+                        <span className="text-[9px] text-zinc-400 font-black uppercase tracking-widest">Recebido</span>
                       </div>
-                    ))}
+                      <span className="text-[10px] text-white font-mono font-bold">
+                        {kpis.income.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center p-3 rounded-xl bg-black/40 border border-zinc-800/50">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full border border-primary" />
+                        <span className="text-[9px] text-zinc-400 font-black uppercase tracking-widest">A Receber</span>
+                      </div>
+                      <span className="text-[10px] text-white font-mono font-bold">
+                        {kpis.aReceber.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </span>
+                    </div>
                   </div>
-                </CardContent>
+                </div>
               </Card>
             </div>
           </TabsContent>
@@ -326,21 +400,21 @@ export default function ReportsManagerPage() {
               <Card className="bg-zinc-900/30 border-zinc-800">
                 <CardHeader><CardTitle className="text-xs font-black uppercase tracking-widest text-zinc-500">Concentração por Conta</CardTitle></CardHeader>
                 <CardContent className="p-0">
-                  <AccountRow label="Caixa Interno" value={financialData?.accounts.caixa || 0} icon={Wallet} />
-                  <AccountRow label="SICOOB - Lindóia" value={financialData?.accounts.sicoobLindoia || 0} icon={Banknote} />
-                  <AccountRow label="SICOOB - Serra Negra" value={financialData?.accounts.sicoobSerraNegra || 0} icon={Banknote} />
-                  <AccountRow label="Máquina PAGBANK" value={financialData?.accounts.pagbank || 0} icon={CreditCard} />
-                  <AccountRow label="Máquina SIPAG" value={financialData?.accounts.sipag || 0} icon={CreditCard} />
+                  <AccountRow label="Caixa Interno" value={kpis.accounts.caixa} icon={Wallet} />
+                  <AccountRow label="SICOOB - Lindóia" value={kpis.accounts.sicoobLindoia} icon={Banknote} />
+                  <AccountRow label="SICOOB - Serra Negra" value={kpis.accounts.sicoobSerraNegra} icon={Banknote} />
+                  <AccountRow label="Máquina PAGBANK" value={kpis.accounts.pagbank} icon={CreditCard} />
+                  <AccountRow label="Máquina SIPAG" value={kpis.accounts.sipag} icon={CreditCard} />
                 </CardContent>
               </Card>
               <Card className="bg-zinc-900/30 border-zinc-800 p-6 flex flex-col justify-center gap-4">
                 <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 flex gap-4">
                   <AlertCircle className="text-primary shrink-0" size={20} />
-                  <p className="text-[10px] text-zinc-400 uppercase leading-relaxed font-bold">O potencial de faturamento é baseado apenas em pedidos com valor total preenchido. Lembre-se de dar baixa total nos pedidos finalizados.</p>
+                  <p className="text-[10px] text-zinc-400 uppercase leading-relaxed font-bold">Os valores refletem apenas os recebimentos baixados individualmente em cada pedido.</p>
                 </div>
                 <div className="text-center py-4">
-                  <span className="text-[9px] text-zinc-600 uppercase font-black tracking-widest">Receitas em Cartão</span>
-                  <h3 className="text-3xl font-black text-white mt-1">{( (financialData?.accounts.pagbank || 0) + (financialData?.accounts.sipag || 0) ).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</h3>
+                  <span className="text-[9px] text-zinc-600 uppercase font-black tracking-widest">Total Líquido em Caixa</span>
+                  <h3 className="text-3xl font-black text-white mt-1">{kpis.net.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</h3>
                 </div>
               </Card>
             </div>
@@ -357,10 +431,10 @@ export default function ReportsManagerPage() {
                   <tr><th className="p-4">Data</th><th className="p-4">Descrição</th><th className="p-4">Categoria</th><th className="p-4 text-right">Valor</th><th className="p-4 text-right">Ações</th></tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {financialData?.filteredExpenses.length === 0 ? (
+                  {kpis.filteredExpenses.length === 0 ? (
                     <tr><td colSpan={5} className="p-8 text-center text-zinc-600 uppercase font-bold">Nenhuma despesa no período</td></tr>
                   ) : (
-                    financialData?.filteredExpenses.map(e => (
+                    kpis.filteredExpenses.map(e => (
                       <tr key={e.id} className="hover:bg-white/5 transition-colors">
                         <td className="p-4 text-zinc-400 font-mono">{format(parseISO(e.date), 'dd/MM/yy')}</td>
                         <td className="p-4 text-white font-bold uppercase">{e.description}</td>
@@ -396,7 +470,7 @@ export default function ReportsManagerPage() {
                   <select value={expenseForm.category} onChange={e => setExpenseForm(p => ({ ...p, category: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none">
                     {['Material', 'Mão de Obra', 'Aluguel', 'Energia/Água', 'Impostos', 'Marketing', 'Outros'].map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
-                  <Button type="submit" className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_5px_25px_-5px_rgba(255,95,31,0.4)] mt-4">Confirmar Lançamento</Button>
+                  <Button type="submit" className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_25px_rgba(255,95,31,0.4)] mt-4">Confirmar Lançamento</Button>
                 </form>
               </motion.div>
             </div>
