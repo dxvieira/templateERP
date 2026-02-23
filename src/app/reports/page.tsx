@@ -22,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 
 /**
  * REPORTS MANAGER: O Cérebro Financeiro (NEXUS/FLUX)
- * Refatorado para Radar de Operações Tático e Gestão de Urgências.
+ * Refatorado para Centro de Liquidez e Radar de Operações.
  */
 export default function ReportsManagerPage() {
   const firestore = useFirestore();
@@ -90,8 +90,6 @@ export default function ReportsManagerPage() {
       } catch (e) { return false; }
     });
 
-    const accounts = { caixa: 0, sicoobLindoia: 0, sicoobSerraNegra: 0, pagbank: 0, sipag: 0 };
-    const ops = { abertos: 0, finalizados: 0 };
     let income = 0;
     let aReceber = 0;
 
@@ -102,31 +100,12 @@ export default function ReportsManagerPage() {
 
       income += pago;
       if (devido > 0) aReceber += devido;
-
-      if (['Concluído', 'Entregue'].includes(o.status)) {
-        ops.finalizados++;
-      } else {
-        ops.abertos++;
-      }
-
-      const installments = Array.isArray(o.installments) ? o.installments : [];
-      installments.forEach(inst => {
-        if (inst.status === 'paid' && inst.paymentMethod) {
-          const method = inst.paymentMethod;
-          const val = Number(inst.amount) || 0;
-          if (method.includes('Dinheiro')) accounts.caixa += val;
-          else if (method.includes('Lindóia')) accounts.sicoobLindoia += val;
-          else if (method.includes('Serra Negra')) accounts.sicoobSerraNegra += val;
-          else if (method.includes('PAGBANK')) accounts.pagbank += val;
-          else if (method.includes('SIPAG')) accounts.sipag += val;
-        }
-      });
     });
 
     const outcome = filteredExpenses.reduce((acc, e) => acc + (Number(e.value) || 0), 0);
 
     return { 
-      ops, accounts, income, outcome, net: income - outcome, aReceber,
+      income, outcome, net: income - outcome, aReceber,
       filteredOrders, filteredExpenses 
     };
   }, [orders, expenses, appliedDateRange]);
@@ -159,7 +138,6 @@ export default function ReportsManagerPage() {
           totalActiveOrders += 1;
         }
 
-        // Verifica se o pedido está crítico (Prazo é hoje ou já passou)
         if (statusKey !== 'Finalizado' && order.deliveryDate && order.deliveryDate <= today) {
            summary[statusKey].critical += 1;
         }
@@ -179,6 +157,51 @@ export default function ReportsManagerPage() {
         percentage
       };
     });
+  }, [financialData?.filteredOrders]);
+
+  // Lógica de Distribuição do Fluxo de Caixa (Liquidez)
+  const accountsSummary = useMemo(() => {
+    const accounts: Record<string, any> = {
+      'Caixa Interno': { label: 'CAIXA INTERNO', value: 0, color: '#10b981', type: 'Dinheiro', icon: '💵' },
+      'SICOOB - Lindóia': { label: 'SICOOB LINDÓIA', value: 0, color: '#0ea5e9', type: 'Banco', icon: '🏦' },
+      'SICOOB - Serra Negra': { label: 'SICOOB SERRA NEGRA', value: 0, color: '#3b82f6', type: 'Banco', icon: '🏦' },
+      'Máquina PAGBANK': { label: 'PAGBANK', value: 0, color: '#eab308', type: 'Máquina', icon: '💳' },
+      'Máquina SIPAG': { label: 'SIPAG / SICOOB', value: 0, color: '#f97316', type: 'Máquina', icon: '💳' },
+    };
+
+    let totalEmCaixa = 0;
+    const orders = financialData?.filteredOrders || [];
+
+    orders.forEach(order => {
+      const installments = Array.isArray(order.installments) ? order.installments : [];
+      installments.forEach(inst => {
+        if (inst.status === 'paid' && inst.paymentMethod) {
+          const method = inst.paymentMethod;
+          const val = Number(inst.amount) || 0;
+          
+          let targetKey = '';
+          if (method.includes('Dinheiro')) targetKey = 'Caixa Interno';
+          else if (method.includes('Lindóia')) targetKey = 'SICOOB - Lindóia';
+          else if (method.includes('Serra Negra')) targetKey = 'SICOOB - Serra Negra';
+          else if (method.includes('PAGBANK')) targetKey = 'Máquina PAGBANK';
+          else if (method.includes('SIPAG')) targetKey = 'Máquina SIPAG';
+
+          if (targetKey && accounts[targetKey]) {
+            accounts[targetKey].value += val;
+            totalEmCaixa += val;
+          }
+        }
+      });
+    });
+
+    const items = Object.values(accounts)
+      .map(acc => ({
+        ...acc,
+        percentage: totalEmCaixa === 0 ? 0 : (acc.value / totalEmCaixa) * 100
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    return { items, total: totalEmCaixa };
   }, [financialData?.filteredOrders]);
 
   const handleSaveExpense = useCallback(async (e: React.FormEvent) => {
@@ -222,7 +245,6 @@ export default function ReportsManagerPage() {
 
   const kpis = financialData || { 
     income: 0, outcome: 0, net: 0, aReceber: 0,
-    accounts: { caixa: 0, sicoobLindoia: 0, sicoobSerraNegra: 0, pagbank: 0, sipag: 0 },
     filteredExpenses: []
   };
 
@@ -305,8 +327,6 @@ export default function ReportsManagerPage() {
 
           <TabsContent value="operacional" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* RADAR DE OPERAÇÕES (Gargalos) */}
               <div className="bg-[#09090b] border border-zinc-800 rounded-3xl p-6 lg:col-span-2 flex flex-col transition-all hover:border-primary/20">
                 <div className="flex justify-between items-center mb-8">
                   <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">
@@ -431,27 +451,87 @@ export default function ReportsManagerPage() {
           </TabsContent>
 
           <TabsContent value="financeiro" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="bg-zinc-900/30 border-zinc-800">
-                <CardHeader><CardTitle className="text-xs font-black uppercase tracking-widest text-zinc-500">Concentração por Conta</CardTitle></CardHeader>
-                <CardContent className="p-0">
-                  <AccountRow label="Caixa Interno" value={kpis.accounts.caixa} icon={Wallet} />
-                  <AccountRow label="SICOOB - Lindóia" value={kpis.accounts.sicoobLindoia} icon={Banknote} />
-                  <AccountRow label="SICOOB - Serra Negra" value={kpis.accounts.sicoobSerraNegra} icon={Banknote} />
-                  <AccountRow label="Máquina PAGBANK" value={kpis.accounts.pagbank} icon={CreditCard} />
-                  <AccountRow label="Máquina SIPAG" value={kpis.accounts.sipag} icon={CreditCard} />
-                </CardContent>
-              </Card>
-              <Card className="bg-zinc-900/30 border-zinc-800 p-6 flex flex-col justify-center gap-4">
-                <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 flex gap-4">
-                  <AlertCircle className="text-primary shrink-0" size={20} />
-                  <p className="text-[10px] text-zinc-400 uppercase leading-relaxed font-bold">Os valores refletem apenas os recebimentos baixados individualmente em cada pedido.</p>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {/* COLUNA ESQUERDA: Mapa de Concentração de Capital */}
+              <div className="bg-[#09090b] border border-zinc-800 rounded-3xl p-6 lg:col-span-2">
+                <div className="flex justify-between items-center mb-8">
+                  <h3 className="text-xs font-black text-zinc-500 uppercase tracking-widest">
+                    Concentração de Capital
+                  </h3>
+                  <span className="text-[10px] bg-zinc-900 text-zinc-400 px-3 py-1 rounded-full border border-zinc-800 font-black uppercase tracking-widest">
+                    Distribuição de Ativos
+                  </span>
                 </div>
-                <div className="text-center py-4">
-                  <span className="text-[9px] text-zinc-600 uppercase font-black tracking-widest">Total Líquido em Caixa</span>
-                  <h3 className="text-3xl font-black text-white mt-1">{kpis.net.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</h3>
+
+                <div className="space-y-6">
+                  {accountsSummary.items.map((acc) => (
+                    <div key={acc.label} className="relative group">
+                      <div className="flex justify-between items-end mb-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-lg shadow-sm">
+                            {acc.icon}
+                          </div>
+                          <div>
+                            <span className="text-white text-sm font-black uppercase tracking-wider block group-hover:text-primary transition-colors">
+                              {acc.label}
+                            </span>
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono">
+                              {acc.type} • {Math.round(acc.percentage)}% do Capital
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-white font-mono font-black tracking-tight">
+                            {acc.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden border border-zinc-800/50">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${acc.percentage}%` }}
+                          transition={{ duration: 1, ease: "easeOut" }}
+                          className="h-full rounded-full opacity-90 group-hover:opacity-100 transition-opacity"
+                          style={{ 
+                            backgroundColor: acc.color,
+                            boxShadow: `0 0 10px ${acc.color}80` 
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </Card>
+              </div>
+
+              {/* COLUNA DIREITA: Total e Alertas */}
+              <div className="flex flex-col gap-6">
+                <div className="bg-gradient-to-br from-[#09090b] to-zinc-900 border border-zinc-800 rounded-3xl p-8 flex flex-col items-center justify-center relative overflow-hidden group hover:border-primary/50 transition-all duration-500 shadow-2xl">
+                   <div className="absolute inset-0 bg-primary opacity-0 group-hover:opacity-5 transition-opacity duration-500" />
+                   
+                   <span className="text-[10px] text-zinc-400 uppercase font-black tracking-[0.3em] mb-4 text-center">
+                     Total Líquido em Caixa
+                   </span>
+                   
+                   <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter mb-2">
+                     {accountsSummary.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                   </h2>
+                   
+                   <div className="w-12 h-1 bg-primary rounded-full mt-4 group-hover:w-24 transition-all duration-500" />
+                </div>
+
+                <div className="bg-primary/10 border border-primary/20 rounded-2xl p-5 flex gap-4 items-start">
+                   <div className="mt-1 text-primary animate-pulse">
+                     ⚠️
+                   </div>
+                   <div>
+                     <h4 className="text-primary text-xs font-black uppercase tracking-widest mb-1">Aviso de Conciliação</h4>
+                     <p className="text-zinc-400 text-[10px] leading-relaxed uppercase tracking-wide font-bold">
+                       Os valores refletem estritamente as baixas manuais realizadas nos pedidos. Não incluem taxas de cartão descontadas na fonte ou despesas não lançadas.
+                     </p>
+                   </div>
+                </div>
+              </div>
             </div>
           </TabsContent>
 
@@ -525,17 +605,5 @@ function KPICard({ title, value, icon: Icon, color }: any) {
       </div>
       <h3 className="text-2xl font-black text-white font-mono">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</h3>
     </Card>
-  );
-}
-
-function AccountRow({ label, value, icon: Icon }: any) {
-  return (
-    <div className="flex items-center justify-between p-4 border-b border-white/5 hover:bg-white/5 transition-colors group">
-      <div className="flex items-center gap-3">
-        <Icon size={16} className="text-zinc-600 group-hover:text-primary transition-colors" />
-        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">{label}</span>
-      </div>
-      <span className="text-sm font-black text-white font-mono">{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-    </div>
   );
 }
