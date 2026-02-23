@@ -8,9 +8,13 @@ export interface Order {
   id: string;
   client: string;
   status: string;
-  deliveryDate: string;
+  delivery_date?: string;
+  deliveryDate?: string;
+  total_value?: number;
   totalValue?: number;
+  amount_paid?: number;
   amountPaid?: number;
+  balance_due?: number;
   balanceDue?: number;
   installments?: any[];
   updatedAt?: any;
@@ -25,9 +29,10 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
   const isDone = useMemo(() => ['Concluído', 'Entregue'].includes(order.status), [order.status]);
   
   const dateInfo = useMemo(() => {
-    if (!order.deliveryDate) return { formatted: '--/--', isLate: false };
+    const rawDate = order.delivery_date || order.deliveryDate;
+    if (!rawDate) return { formatted: '--/--', isLate: false };
     
-    const [year, month, day] = order.deliveryDate.split('-').map(Number);
+    const [year, month, day] = rawDate.split('-').map(Number);
     const deadline = new Date(year, month - 1, day, 23, 59, 59);
     const now = new Date();
     
@@ -35,7 +40,7 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
       formatted: `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}`,
       isLate: now > deadline && !isDone
     };
-  }, [order.deliveryDate, isDone]);
+  }, [order.delivery_date, order.deliveryDate, isDone]);
 
   const statusConfig = useMemo(() => {
     switch(order.status) {
@@ -51,10 +56,9 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
   }, [order.status]);
 
   const financialStats = useMemo(() => {
-    const total = Number(order.totalValue) || 0;
-    const paid = Number(order.amountPaid) || 0;
+    const total = Number(order.total_value || order.totalValue) || 0;
+    const paid = Number(order.amount_paid || order.amountPaid) || 0;
     
-    // Proteção contra dados que não são arrays no Firestore
     const installments = Array.isArray(order.installments) ? order.installments : [];
     
     const instCount = installments.length;
@@ -62,9 +66,10 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
     const hasOverdue = installments.some(i => i.status === 'overdue');
     
     const progress = total === 0 ? 0 : Math.min(100, Math.round((paid / total) * 100));
+    const balanceDue = order.balance_due !== undefined ? order.balance_due : (order.balanceDue !== undefined ? order.balanceDue : (total - paid));
     
-    return { progress, isFullyPaid: progress === 100 && total > 0, instCount, paidCount, hasOverdue };
-  }, [order.totalValue, order.amountPaid, order.installments]);
+    return { progress, isFullyPaid: progress === 100 && total > 0, instCount, paidCount, hasOverdue, balanceDue };
+  }, [order.total_value, order.totalValue, order.amount_paid, order.amountPaid, order.balance_due, order.balanceDue, order.installments]);
 
   return (
     <div 
@@ -139,7 +144,7 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
                      "text-[8px] font-black uppercase tracking-widest",
                      financialStats.isFullyPaid ? "text-emerald-500" : financialStats.hasOverdue ? "text-red-500" : "text-zinc-500"
                    )}>
-                     {financialStats.isFullyPaid ? "Protocolo Pago" : financialStats.hasOverdue ? "Cobrança Vencida" : `Saldo: R$ ${(order.balanceDue || 0).toLocaleString('pt-BR')}`}
+                     {financialStats.isFullyPaid ? "Protocolo Pago" : financialStats.hasOverdue ? "Cobrança Vencida" : `Saldo: R$ ${financialStats.balanceDue.toLocaleString('pt-BR')}`}
                    </span>
                  </div>
                  {financialStats.instCount > 0 && (
@@ -168,9 +173,9 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
 }, (prev, next) => {
   return prev.order.id === next.order.id && 
          prev.order.status === next.order.status && 
-         prev.order.deliveryDate === next.order.deliveryDate &&
-         prev.order.amountPaid === next.order.amountPaid &&
-         prev.order.totalValue === next.order.totalValue &&
+         (prev.order.delivery_date === next.order.delivery_date || prev.order.deliveryDate === next.order.deliveryDate) &&
+         (prev.order.amount_paid === next.order.amount_paid || prev.order.amountPaid === next.order.amountPaid) &&
+         (prev.order.total_value === next.order.total_value || prev.order.totalValue === next.order.totalValue) &&
          prev.order.client === next.order.client &&
          JSON.stringify(prev.order.installments) === JSON.stringify(next.order.installments);
 });

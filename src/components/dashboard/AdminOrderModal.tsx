@@ -58,7 +58,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     startDate: new Date().toISOString().split('T')[0]
   });
 
-  // BAIVA INLINE STATE
+  // BAIXA INLINE STATE
   const [baixaInstallmentUid, setBaixaInstallmentUid] = useState<string | null>(null);
   const [baixaData, setBaixaData] = useState({ method: PAYMENT_METHODS[0], date: new Date().toISOString().split('T')[0] });
 
@@ -67,8 +67,8 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       setClient(order.client || '');
       setSeller(order.seller || '');
       setStatus(order.status || 'Arte');
-      setEmissionDate(order.emissionDate || new Date().toISOString().split('T')[0]);
-      setDeliveryDate(order.deliveryDate || '');
+      setEmissionDate(order.emission_date || order.emissionDate || new Date().toISOString().split('T')[0]);
+      setDeliveryDate(order.delivery_date || order.deliveryDate || '');
       setObservations(order.observations || '');
       setItems(order.items?.map((item: any) => ({ ...item })) || [{ productCode: '', desc: '', quantity: 1, unitValue: 0 }]);
       setInstallments(Array.isArray(order.installments) ? order.installments : []);
@@ -118,11 +118,11 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
         id: `${i + 1}/${genConfig.count}`,
         uid: crypto.randomUUID(),
         amount: i === genConfig.count - 1 ? (genConfig.total - (valuePerInstallment * (genConfig.count - 1))) : valuePerInstallment,
-        dueDate,
+        due_date: dueDate,
         status: parseISO(dueDate) < new Date() ? 'overdue' : 'pending',
         type: genConfig.type,
-        paymentMethod: '',
-        paidDate: ''
+        payment_method: '',
+        paid_date: ''
       });
     }
 
@@ -135,11 +135,16 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     if (!inst) return;
 
     if (inst.status === 'paid') {
-      // Reverter Baixa
-      setInstallments(installments.map(i => i.uid === uid ? { ...i, status: parseISO(i.dueDate) < new Date() ? 'overdue' : 'pending', paymentMethod: '', paidDate: '' } : i));
+      // REVERSÃO (ESTORNO)
+      setInstallments(installments.map(i => i.uid === uid ? { 
+        ...i, 
+        status: parseISO(i.due_date) < new Date() ? 'overdue' : 'pending', 
+        payment_method: '', 
+        paid_date: '' 
+      } : i));
       toast({ title: "Pagamento Estornado", description: "A parcela voltou ao estado pendente." });
     } else {
-      // Inteligência de UI: Pré-selecionar conta baseada no tipo
+      // INTERCEPTAÇÃO: Abrir seletor de conta
       let suggestedMethod = PAYMENT_METHODS[0]; // Caixa Interno
       if (inst.type === 'Cartão') suggestedMethod = "Máquina PAGBANK";
       else if (inst.type === 'Boleto') suggestedMethod = "SICOOB - Lindóia";
@@ -154,8 +159,8 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     setInstallments(installments.map(i => i.uid === baixaInstallmentUid ? { 
       ...i, 
       status: 'paid', 
-      paymentMethod: baixaData.method, 
-      paidDate: baixaData.date 
+      payment_method: baixaData.method, 
+      paid_date: baixaData.date 
     } : i));
     setBaixaInstallmentUid(null);
     toast({ title: "Recebimento Registrado", description: "Lembre-se de salvar a OS para efetivar no sistema." });
@@ -167,9 +172,20 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     setLoading(true);
 
     const docRef = order ? doc(firestore, 'orders', order.id) : doc(collection(firestore, 'orders'));
+    
+    // USANDO SNAKE_CASE PARA SINCRONIA COM RELATÓRIOS
     const payload = {
-      client, seller, status, emissionDate, deliveryDate, observations, items, totalValue,
-      amountPaid, balanceDue, installments,
+      client, 
+      seller, 
+      status, 
+      emission_date: emissionDate, 
+      delivery_date: deliveryDate, 
+      observations, 
+      items, 
+      total_value: totalValue,
+      amount_paid: amountPaid, 
+      balance_due: balanceDue, 
+      installments,
       updatedAt: serverTimestamp(),
       ...(order ? {} : { createdAt: serverTimestamp(), id: docRef.id })
     };
@@ -362,14 +378,14 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                                              {isPaid ? 'Liquidado' : isOverdue ? 'Atrasado' : 'Pendente'}
                                            </span>
                                         </div>
-                                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-0.5">{inst.type} • Vencimento: {format(parseISO(inst.dueDate), 'dd/MM/yy')}</p>
+                                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-0.5">{inst.type} • Vencimento: {format(parseISO(inst.due_date), 'dd/MM/yy')}</p>
                                      </div>
                                   </div>
 
                                   <div className="flex items-center gap-6">
                                      <div className="text-right">
                                         <p className="text-sm font-black text-white font-mono">{inst.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                                        {isPaid && <p className="text-[8px] text-emerald-500 uppercase font-black">{inst.paymentMethod}</p>}
+                                        {isPaid && <p className="text-[8px] text-emerald-500 uppercase font-black">{inst.payment_method}</p>}
                                      </div>
                                      <button type="button" onClick={() => setInstallments(installments.filter(i => i.uid !== inst.uid))} className="p-2 text-zinc-700 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
                                   </div>

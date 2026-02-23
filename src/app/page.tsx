@@ -26,6 +26,7 @@ import { OrderFormModal } from '@/components/dashboard/OrderFormModal';
 /**
  * DASHBOARD SUPREMO: NEXUS/FLUX
  * Refatorado para Latência Zero e Estabilidade de Compilação.
+ * Sincronizado com chaves snake_case para integridade total.
  */
 export default function DashboardPage() {
   const router = useRouter();
@@ -42,7 +43,7 @@ export default function DashboardPage() {
   }, []);
 
   const handleCloseModal = useCallback(() => {
-    setIsModalOpen(false); // Corrigido typo setIsModalOrder -> setIsModalOpen
+    setIsModalOpen(false);
     setEditingOrder(null);
   }, []);
 
@@ -62,7 +63,7 @@ export default function DashboardPage() {
 
     orders.forEach(order => {
       const isDone = ['Concluído', 'Entregue'].includes(order.status);
-      const delivery = order.deliveryDate || '';
+      const delivery = order.delivery_date || order.deliveryDate || '';
 
       // Cálculo de Meta Semanal
       if (!isDone && delivery) {
@@ -83,8 +84,8 @@ export default function DashboardPage() {
     });
 
     // Ordenação atômica (Só ocorre se a lista mudar)
-    result.warRoom.sort((a, b) => (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
-    result.productionQueue.sort((a, b) => (a.deliveryDate || '9999').localeCompare(b.deliveryDate || '9999'));
+    result.warRoom.sort((a, b) => (a.delivery_date || a.deliveryDate || '').localeCompare(b.delivery_date || b.deliveryDate || ''));
+    result.productionQueue.sort((a, b) => (a.delivery_date || a.deliveryDate || '9999').localeCompare(b.delivery_date || b.deliveryDate || '9999'));
     result.recentHistory.sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
 
     return result;

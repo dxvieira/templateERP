@@ -1,4 +1,3 @@
-
 'use client';
 
 import { query, collection, orderBy, onSnapshot, doc, serverTimestamp, runTransaction, updateDoc, deleteDoc } from 'firebase/firestore';
@@ -10,6 +9,7 @@ import { FirestorePermissionError } from '@/firebase/errors';
 /**
  * Hook centralizador de Ordens de Serviço com Performance Optimizada.
  * Utiliza memoização profunda para evitar re-renders em cascata.
+ * Sincronizado com chaves snake_case para relatórios financeiros.
  */
 export function useOrders() {
   const firestore = useFirestore();
@@ -60,7 +60,20 @@ export function useOrders() {
         }
         const formattedId = nextCount.toString().padStart(6, '0');
         const orderRef = doc(firestore, 'orders', formattedId);
-        const payload = { ...data, id: formattedId, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+        
+        // Garantindo chaves snake_case na criação
+        const payload = { 
+          ...data, 
+          id: formattedId,
+          total_value: data.total_value || data.totalValue || 0,
+          amount_paid: data.amount_paid || data.amountPaid || 0,
+          balance_due: data.balance_due || data.balanceDue || (data.total_value || data.totalValue || 0),
+          delivery_date: data.delivery_date || data.deliveryDate || '',
+          emission_date: data.emission_date || data.emissionDate || format(new Date(), 'yyyy-MM-dd'),
+          createdAt: serverTimestamp(), 
+          updatedAt: serverTimestamp() 
+        };
+        
         transaction.set(orderRef, payload);
         transaction.set(counterRef, { count: nextCount }, { merge: true });
         return payload;
@@ -73,7 +86,20 @@ export function useOrders() {
   const updateOrder = useCallback(async (orderId: string, data: any) => {
     if (!firestore) return;
     const orderRef = doc(firestore, 'orders', orderId);
-    const payload = { ...data, updatedAt: serverTimestamp() };
+    
+    // Convertendo chaves para snake_case se vierem em camelCase
+    const payload = { 
+      ...data, 
+      total_value: data.total_value !== undefined ? data.total_value : data.totalValue,
+      amount_paid: data.amount_paid !== undefined ? data.amount_paid : data.amountPaid,
+      balance_due: data.balance_due !== undefined ? data.balance_due : data.balanceDue,
+      delivery_date: data.delivery_date !== undefined ? data.delivery_date : data.deliveryDate,
+      updatedAt: serverTimestamp() 
+    };
+
+    // Remove chaves undefined para não corromper o Firebase
+    Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+
     try {
       await updateDoc(orderRef, payload);
     } catch (err) {
@@ -92,7 +118,6 @@ export function useOrders() {
   }, [firestore]);
 
   // --- STATS ENGINE (CRÍTICO PARA PERFORMANCE) ---
-  // Memoização profunda para evitar que o ProductionHub re-renderize se os números não mudarem.
   const stats = useMemo(() => {
     const s = { total: orders.length, arte: 0, impressao: 0, serralheria: 0, acabamento: 0, instalacao: 0, concluido: 0 };
     orders.forEach(o => {
