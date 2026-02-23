@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { memo, useMemo } from 'react';
@@ -54,9 +53,13 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
   const financialStats = useMemo(() => {
     const total = Number(order.totalValue) || 0;
     const paid = Number(order.amountPaid) || 0;
-    const instCount = order.installments?.length || 0;
-    const paidCount = order.installments?.filter(i => i.status === 'paid').length || 0;
-    const hasOverdue = order.installments?.some(i => i.status === 'overdue');
+    
+    // Proteção contra dados que não são arrays no Firestore
+    const installments = Array.isArray(order.installments) ? order.installments : [];
+    
+    const instCount = installments.length;
+    const paidCount = installments.filter(i => i.status === 'paid').length;
+    const hasOverdue = installments.some(i => i.status === 'overdue');
     
     const progress = total === 0 ? 0 : Math.min(100, Math.round((paid / total) * 100));
     

@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -71,7 +70,9 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       setDeliveryDate(order.deliveryDate || '');
       setObservations(order.observations || '');
       setItems(order.items?.map((item: any) => ({ ...item })) || [{ productCode: '', desc: '', quantity: 1, unitValue: 0 }]);
-      setInstallments(order.installments || []);
+      
+      // Proteção contra dados inconsistentes no Firestore
+      setInstallments(Array.isArray(order.installments) ? order.installments : []);
     } else {
       resetForm();
     }
@@ -345,8 +346,8 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                                         <span className="text-xs font-black text-white">{inst.id}</span>
                                         <span className={cn(
                                           "text-[8px] font-black uppercase px-1.5 py-0.5 rounded border",
-                                          isPaid ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : 
-                                          isOverdue ? "bg-red-500/10 text-red-500 border-red-500/20" : "bg-zinc-800 text-zinc-500 border-zinc-700"
+                                          isPaid ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
+                                          isOverdue ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-zinc-800 text-zinc-500 border-zinc-700'
                                         )}>
                                           {isPaid ? 'Liquidado' : isOverdue ? 'Atrasado' : 'Pendente'}
                                         </span>
