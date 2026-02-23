@@ -1,9 +1,8 @@
-
 {
   "entities": {
     "Order": {
       "title": "Order",
-      "description": "Represents a customer order within the VisComm Command Center application.",
+      "description": "Represents a customer order with integrated financial tracking.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -19,23 +18,35 @@
         },
         "paymentMethod": { "type": "string" },
         "machine": { "type": "string" },
-        "installments": { "type": "string" },
-        "destinationAccount": { "type": "string", "description": "Lindóia or Serra Negra" },
-        "weekly_priority": { "type": "boolean" },
+        "installments": { "type": "number" },
+        "destinationAccount": { "type": "string" },
         "items": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
               "desc": { "type": "string" },
-              "size": { "type": "string" },
               "quantity": { "type": "number" },
               "unitValue": { "type": "number" },
-              "observation": { "type": "string" }
+              "productCode": { "type": "string" }
             }
           }
         },
         "totalValue": { "type": "number" },
+        "amountPaid": { "type": "number", "description": "Total sum of all recorded payments." },
+        "balanceDue": { "type": "number", "description": "Remaining amount to be paid." },
+        "paymentHistory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "amount": { "type": "number" },
+              "date": { "type": "string", "format": "date" },
+              "method": { "type": "string" }
+            }
+          }
+        },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
