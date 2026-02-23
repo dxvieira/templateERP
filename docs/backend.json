@@ -1,8 +1,9 @@
+
 {
   "entities": {
     "Order": {
       "title": "Order",
-      "description": "Represents a customer order with integrated financial tracking.",
+      "description": "Represents a customer order with integrated financial tracking and installments.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -16,10 +17,9 @@
           "type": "string",
           "enum": ["Arte", "Impressão", "Serralheria", "Acabamento", "Instalação", "Entregue"]
         },
-        "paymentMethod": { "type": "string" },
-        "machine": { "type": "string" },
-        "installments": { "type": "number" },
-        "destinationAccount": { "type": "string" },
+        "totalValue": { "type": "number" },
+        "amountPaid": { "type": "number" },
+        "balanceDue": { "type": "number" },
         "items": {
           "type": "array",
           "items": {
@@ -32,18 +32,18 @@
             }
           }
         },
-        "totalValue": { "type": "number" },
-        "amountPaid": { "type": "number", "description": "Total sum of all recorded payments." },
-        "balanceDue": { "type": "number", "description": "Remaining amount to be paid." },
-        "paymentHistory": {
+        "installments": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
+              "id": { "type": "string", "description": "Ex: 1/4, 2/4" },
               "amount": { "type": "number" },
-              "date": { "type": "string", "format": "date" },
-              "method": { "type": "string" }
+              "dueDate": { "type": "string", "format": "date" },
+              "status": { "type": "string", "enum": ["pending", "paid", "overdue"] },
+              "type": { "type": "string", "enum": ["Boleto", "Cartão", "Dinheiro/Pix"] },
+              "paymentMethod": { "type": "string" },
+              "paidDate": { "type": "string", "format": "date" }
             }
           }
         },

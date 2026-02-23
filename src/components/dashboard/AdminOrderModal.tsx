@@ -1,19 +1,22 @@
+
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { doc, setDoc, serverTimestamp, collection } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { 
   X, Save, Plus, Trash2, Box, 
   User, CreditCard, DollarSign, 
   Calculator, Loader2,
-  History, Calendar as CalendarIcon, Wallet, Receipt
+  History, Calendar as CalendarIcon, Wallet, Receipt,
+  CheckCircle2, AlertTriangle, RefreshCw, FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { cn } from '@/lib/utils';
+import { addMonths, format, parseISO } from 'date-fns';
 
 const PAYMENT_METHODS = [
   "Dinheiro (Caixa Interno)",
@@ -22,6 +25,8 @@ const PAYMENT_METHODS = [
   "Máquina PAGBANK",
   "Máquina SIPAG/SICOOB"
 ];
+
+const INSTALLMENT_TYPES = ["Boleto", "Cartão", "Dinheiro/Pix"];
 
 interface AdminOrderModalProps {
   order?: any | null;
@@ -44,9 +49,18 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   const [observations, setObservations] = useState('');
   const [items, setItems] = useState<any[]>([]);
   
-  // FINANCIAL STATES
-  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
-  const [newPayment, setNewPayment] = useState({ amount: '', date: new Date().toISOString().split('T')[0], method: PAYMENT_METHODS[0] });
+  // FINANCIAL STATES (INSTALLMENTS)
+  const [installments, setInstallments] = useState<any[]>([]);
+  const [genConfig, setInstallmentGenConfig] = useState({
+    total: 0,
+    count: 1,
+    type: "Boleto",
+    startDate: new Date().toISOString().split('T')[0]
+  });
+
+  // BAIVA POPUP STATE
+  const [baixaInstallmentId, setBaixaInstallmentId] = useState<string | null>(null);
+  const [baixaData, setBaixaData] = useState({ method: PAYMENT_METHODS[0], date: new Date().toISOString().split('T')[0] });
 
   useEffect(() => {
     if (order) {
@@ -57,61 +71,86 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       setDeliveryDate(order.deliveryDate || '');
       setObservations(order.observations || '');
       setItems(order.items?.map((item: any) => ({ ...item })) || [{ productCode: '', desc: '', quantity: 1, unitValue: 0 }]);
-      setPaymentHistory(order.paymentHistory || []);
+      setInstallments(order.installments || []);
     } else {
-      setClient('');
-      setSeller('');
-      setStatus('Arte');
-      setEmissionDate(new Date().toISOString().split('T')[0]);
-      setDeliveryDate('');
-      setObservations('');
-      setItems([{ productCode: '', desc: '', quantity: 1, unitValue: 0 }]);
-      setPaymentHistory([]);
+      resetForm();
     }
     setActiveTab('operacional');
   }, [order, isOpen]);
+
+  const resetForm = () => {
+    setClient('');
+    setSeller('');
+    setStatus('Arte');
+    setEmissionDate(new Date().toISOString().split('T')[0]);
+    setDeliveryDate('');
+    setObservations('');
+    setItems([{ productCode: '', desc: '', quantity: 1, unitValue: 0 }]);
+    setInstallments([]);
+  };
 
   const totalValue = useMemo(() => {
     return items.reduce((acc, item) => acc + (Number(item.quantity || 0) * Number(item.unitValue || 0)), 0);
   }, [items]);
 
+  useEffect(() => {
+    setInstallmentGenConfig(prev => ({ ...prev, total: totalValue }));
+  }, [totalValue]);
+
   const amountPaid = useMemo(() => {
-    return paymentHistory.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
-  }, [paymentHistory]);
+    return installments
+      .filter(i => i.status === 'paid')
+      .reduce((acc, i) => acc + (Number(i.amount) || 0), 0);
+  }, [installments]);
 
   const balanceDue = totalValue - amountPaid;
 
-  const handleAddPayment = () => {
-    if (!newPayment.amount || Number(newPayment.amount) <= 0) return;
+  const handleGenerateInstallments = () => {
+    if (genConfig.count <= 0) return;
     
-    const payment = {
-      id: crypto.randomUUID(),
-      amount: Number(newPayment.amount),
-      date: newPayment.date,
-      method: newPayment.method
-    };
+    const valuePerInstallment = Number((genConfig.total / genConfig.count).toFixed(2));
+    const newInstallments = [];
+    const start = parseISO(genConfig.startDate);
 
-    setPaymentHistory([...paymentHistory, payment]);
-    setNewPayment({ ...newPayment, amount: '' });
-    toast({ title: "Pagamento Registrado", description: "Lembre-se de salvar a OS para efetivar." });
+    for (let i = 0; i < genConfig.count; i++) {
+      const dueDate = format(addMonths(start, i), 'yyyy-MM-dd');
+      newInstallments.push({
+        id: `${i + 1}/${genConfig.count}`,
+        uid: crypto.randomUUID(),
+        amount: i === genConfig.count - 1 ? (genConfig.total - (valuePerInstallment * (genConfig.count - 1))) : valuePerInstallment,
+        dueDate,
+        status: parseISO(dueDate) < new Date() ? 'overdue' : 'pending',
+        type: genConfig.type,
+        paymentMethod: '',
+        paidDate: ''
+      });
+    }
+
+    setInstallments(newInstallments);
+    toast({ title: "Faturas Geradas", description: "O cronograma de pagamentos foi atualizado." });
   };
 
-  const handleRemovePayment = (id: string) => {
-    setPaymentHistory(paymentHistory.filter(p => p.id !== id));
+  const handleToggleBaixa = (uid: string) => {
+    const inst = installments.find(i => i.uid === uid);
+    if (inst?.status === 'paid') {
+      // Reverter Baixa
+      setInstallments(installments.map(i => i.uid === uid ? { ...i, status: 'pending', paymentMethod: '', paidDate: '' } : i));
+    } else {
+      // Abrir Modal de Baixa
+      setBaixaInstallmentId(uid);
+    }
   };
 
-  const handleAddItem = () => {
-    setItems([...items, { productCode: '', desc: '', quantity: 1, unitValue: 0 }]);
-  };
-
-  const handleRemoveItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
-  };
-
-  const handleItemChange = (index: number, field: string, value: any) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
-    setItems(newItems);
+  const confirmBaixa = () => {
+    if (!baixaInstallmentId) return;
+    setInstallments(installments.map(i => i.uid === baixaInstallmentId ? { 
+      ...i, 
+      status: 'paid', 
+      paymentMethod: baixaData.method, 
+      paidDate: baixaData.date 
+    } : i));
+    setBaixaInstallmentId(null);
+    toast({ title: "Pagamento Confirmado", description: "Lembre-se de salvar a OS para efetivar no banco." });
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -122,14 +161,14 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     const docRef = order ? doc(firestore, 'orders', order.id) : doc(collection(firestore, 'orders'));
     const payload = {
       client, seller, status, emissionDate, deliveryDate, observations, items, totalValue,
-      amountPaid, balanceDue, paymentHistory,
+      amountPaid, balanceDue, installments,
       updatedAt: serverTimestamp(),
       ...(order ? {} : { createdAt: serverTimestamp(), id: docRef.id })
     };
 
     setDoc(docRef, payload, { merge: true })
       .then(() => {
-        toast({ title: "Protocolo Administrativo Atualizado" });
+        toast({ title: "Protocolo Financeiro Atualizado" });
         onClose();
       })
       .catch((err) => {
@@ -177,11 +216,11 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
         <div className="flex bg-zinc-900/30 border-b border-zinc-800">
            <button onClick={() => setActiveTab('operacional')} className={cn("flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all border-b-2", activeTab === 'operacional' ? "border-primary text-primary bg-primary/5" : "border-transparent text-zinc-500 hover:text-zinc-300")}>Operacional</button>
-           <button onClick={() => setActiveTab('financeiro')} className={cn("flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all border-b-2", activeTab === 'financeiro' ? "border-primary text-primary bg-primary/5" : "border-transparent text-zinc-500 hover:text-zinc-300")}>Financeiro e Pagamentos</button>
+           <button onClick={() => setActiveTab('financeiro')} className={cn("flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all border-b-2", activeTab === 'financeiro' ? "border-primary text-primary bg-primary/5" : "border-transparent text-zinc-500 hover:text-zinc-300")}>Financeiro e Cobrança</button>
         </div>
 
-        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-[#050505] space-y-8">
-          <form id="adminOrderForm" onSubmit={handleSave}>
+        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-[#050505]">
+          <form id="adminOrderForm" onSubmit={handleSave} className="space-y-8">
             {activeTab === 'operacional' ? (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <section className="space-y-4">
@@ -217,80 +256,115 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                 <section className="space-y-4">
                    <div className="flex justify-between items-center border-b border-white/5 pb-2">
                       <h3 className="text-[10px] text-primary font-black uppercase tracking-[0.2em] flex items-center gap-2"><Box size={14}/> Itens e Orçamento</h3>
-                      <button type="button" onClick={handleAddItem} className="bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg px-3 py-1.5 text-[9px] font-black uppercase transition-all flex items-center gap-1"><Plus size={12}/> Adicionar Item</button>
+                      <button type="button" onClick={() => setItems([...items, { productCode: '', desc: '', quantity: 1, unitValue: 0 }])} className="bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg px-3 py-1.5 text-[9px] font-black uppercase transition-all flex items-center gap-1"><Plus size={12}/> Adicionar Item</button>
                    </div>
                    <div className="space-y-2">
                       {items.map((item, index) => (
                         <div key={index} className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-12 items-center gap-3">
-                           <input placeholder="CÓD" value={item.productCode || ''} onChange={e => handleItemChange(index, 'productCode', e.target.value)} className={`${inputClass} md:col-span-1 p-2 text-center text-xs font-mono`} />
-                           <input placeholder="Descrição..." value={item.desc || ''} onChange={e => handleItemChange(index, 'desc', e.target.value)} className={`${inputClass} md:col-span-5 p-2 text-xs`} />
-                           <input type="number" value={item.quantity || 0} onChange={e => handleItemChange(index, 'quantity', Number(e.target.value))} className={`${inputClass} md:col-span-1 p-2 text-center text-xs`} />
+                           <input placeholder="CÓD" value={item.productCode || ''} onChange={e => { const n = [...items]; n[index].productCode = e.target.value; setItems(n); }} className={`${inputClass} md:col-span-1 p-2 text-center text-xs font-mono`} />
+                           <input placeholder="Descrição..." value={item.desc || ''} onChange={e => { const n = [...items]; n[index].desc = e.target.value; setItems(n); }} className={`${inputClass} md:col-span-5 p-2 text-xs`} />
+                           <input type="number" value={item.quantity || 0} onChange={e => { const n = [...items]; n[index].quantity = Number(e.target.value); setItems(n); }} className={`${inputClass} md:col-span-1 p-2 text-center text-xs`} />
                            <div className="md:col-span-2 relative">
                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-600 text-[10px]">R$</span>
-                             <input type="number" step="0.01" value={item.unitValue || 0} onChange={e => handleItemChange(index, 'unitValue', Number(e.target.value))} className={`${inputClass} pl-7 p-2 text-right text-xs`} />
+                             <input type="number" step="0.01" value={item.unitValue || 0} onChange={e => { const n = [...items]; n[index].unitValue = Number(e.target.value); setItems(n); }} className={`${inputClass} pl-7 p-2 text-right text-xs`} />
                            </div>
                            <div className="md:col-span-2 text-right font-mono text-xs font-black text-zinc-400 bg-black/20 p-2 rounded-lg border border-zinc-800">
                              {((item.quantity || 0) * (item.unitValue || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                            </div>
-                           <button type="button" onClick={() => handleRemoveItem(index)} className="md:col-span-1 p-2 text-zinc-700 hover:text-red-500 ml-auto"><Trash2 size={14}/></button>
+                           <button type="button" onClick={() => setItems(items.filter((_, i) => i !== index))} className="md:col-span-1 p-2 text-zinc-700 hover:text-red-500 ml-auto"><Trash2 size={14}/></button>
                         </div>
                       ))}
                    </div>
                 </section>
               </div>
             ) : (
-              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                   <div className="lg:col-span-1 space-y-6">
-                      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 space-y-4">
-                         <h3 className="text-[10px] text-primary font-black uppercase tracking-[0.2em] border-b border-white/5 pb-2 flex items-center gap-2"><Wallet size={14}/> Lançar Recebimento</h3>
-                         <div className="space-y-4">
-                            <div>
-                               <label className={labelClass}>Valor Recebido</label>
-                               <input type="number" step="0.01" value={newPayment.amount} onChange={e => setNewPayment({...newPayment, amount: e.target.value})} className={inputClass} placeholder="0,00" />
-                            </div>
-                            <div>
-                               <label className={labelClass}>Data do Pagamento</label>
-                               <input type="date" value={newPayment.date} onChange={e => setNewPayment({...newPayment, date: e.target.value})} className={inputClass} />
-                            </div>
-                            <div>
-                               <label className={labelClass}>Método / Conta</label>
-                               <select value={newPayment.method} onChange={e => setNewPayment({...newPayment, method: e.target.value})} className={inputClass}>
-                                  {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
-                               </select>
-                            </div>
-                            <button type="button" onClick={handleAddPayment} className="w-full py-3 bg-primary text-black font-black uppercase text-[10px] rounded-xl shadow-lg hover:bg-white transition-all flex items-center justify-center gap-2">
-                               <Plus size={14}/> Registrar Parcela
-                            </button>
-                         </div>
+              <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                {/* GERADOR DE PARCELAS */}
+                <section className="bg-zinc-900/30 border border-zinc-800 rounded-3xl p-6">
+                   <div className="flex items-center gap-3 mb-6">
+                      <div className="p-2 bg-primary/10 rounded-xl"><RefreshCw size={18} className="text-primary"/></div>
+                      <div>
+                         <h3 className="text-sm font-black text-white uppercase tracking-tight">Gerador de Cobranças</h3>
+                         <p className="text-[9px] text-zinc-500 uppercase tracking-widest">Crie o cronograma de pagamentos automaticamente</p>
                       </div>
                    </div>
+                   
+                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                      <div>
+                         <label className={labelClass}>Valor Total</label>
+                         <input type="number" step="0.01" value={genConfig.total} onChange={e => setInstallmentGenConfig({...genConfig, total: Number(e.target.value)})} className={inputClass} />
+                      </div>
+                      <div>
+                         <label className={labelClass}>Tipo de Fatura</label>
+                         <select value={genConfig.type} onChange={e => setInstallmentGenConfig({...genConfig, type: e.target.value})} className={inputClass}>
+                            {INSTALLMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                         </select>
+                      </div>
+                      <div>
+                         <label className={labelClass}>Nº Parcelas</label>
+                         <input type="number" value={genConfig.count} onChange={e => setInstallmentGenConfig({...genConfig, count: Number(e.target.value)})} className={inputClass} min={1} />
+                      </div>
+                      <button type="button" onClick={handleGenerateInstallments} className="bg-white text-black h-12 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-primary transition-all shadow-lg active:scale-95">Gerar Parcelas</button>
+                   </div>
+                </section>
 
-                   <div className="lg:col-span-2 space-y-4">
-                      <h3 className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] border-b border-white/5 pb-2 flex items-center gap-2"><History size={14}/> Extrato de Quitação</h3>
-                      {paymentHistory.length === 0 ? (
-                        <div className="py-12 border-2 border-dashed border-zinc-800 rounded-2xl text-center">
-                           <Receipt className="mx-auto mb-3 text-zinc-700 opacity-20" size={32} />
-                           <p className="text-[10px] text-zinc-600 font-black uppercase tracking-widest">Nenhum pagamento registrado</p>
+                {/* LISTA DE PARCELAS */}
+                <section className="space-y-4">
+                   <h3 className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] border-b border-white/5 pb-2 flex items-center gap-2"><History size={14}/> Cronograma de Recebíveis</h3>
+                   
+                   <div className="grid grid-cols-1 gap-2">
+                      {installments.length === 0 ? (
+                        <div className="py-12 border-2 border-dashed border-zinc-800 rounded-3xl text-center">
+                           <Receipt className="mx-auto mb-3 text-zinc-700 opacity-20" size={40} />
+                           <p className="text-[10px] text-zinc-600 font-black uppercase tracking-widest">Nenhuma parcela gerada para este projeto</p>
                         </div>
                       ) : (
-                        <div className="space-y-2">
-                           {paymentHistory.map((p) => (
-                             <div key={p.id} className="bg-zinc-900/30 border border-zinc-800 rounded-xl p-4 flex items-center justify-between group hover:border-zinc-700 transition-all">
-                                <div className="flex items-center gap-4">
-                                   <div className="p-2 bg-zinc-800 rounded-lg"><CalendarIcon size={14} className="text-zinc-500"/></div>
-                                   <div>
-                                      <p className="text-xs font-bold text-white uppercase">{p.method}</p>
-                                      <p className="text-[9px] text-zinc-500 font-mono">{new Date(p.date).toLocaleDateString('pt-BR')}</p>
-                                   </div>
-                                </div>
-                                <div className="flex items-center gap-6">
-                                   <p className="text-sm font-black text-green-500 font-mono">{p.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                                   <button type="button" onClick={() => handleRemovePayment(p.id)} className="p-2 text-zinc-700 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>
-                                </div>
-                             </div>
-                           ))}
-                        </div>
+                        installments.map((inst) => {
+                          const isOverdue = inst.status === 'overdue';
+                          const isPaid = inst.status === 'paid';
+
+                          return (
+                            <div key={inst.uid} className={cn(
+                              "group flex items-center justify-between p-4 rounded-2xl border transition-all",
+                              isPaid ? "bg-emerald-500/5 border-emerald-500/20" : 
+                              isOverdue ? "bg-red-500/5 border-red-500/20" : "bg-zinc-900/40 border-zinc-800 hover:border-zinc-700"
+                            )}>
+                               <div className="flex items-center gap-4">
+                                  <button 
+                                    type="button" 
+                                    onClick={() => handleToggleBaixa(inst.uid)}
+                                    className={cn(
+                                      "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all",
+                                      isPaid ? "bg-emerald-500 border-emerald-500 text-black" : "border-zinc-700 hover:border-primary"
+                                    )}
+                                  >
+                                    {isPaid && <CheckCircle2 size={14} strokeWidth={3} />}
+                                  </button>
+                                  <div>
+                                     <div className="flex items-center gap-2">
+                                        <span className="text-xs font-black text-white">{inst.id}</span>
+                                        <span className={cn(
+                                          "text-[8px] font-black uppercase px-1.5 py-0.5 rounded border",
+                                          isPaid ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : 
+                                          isOverdue ? "bg-red-500/10 text-red-500 border-red-500/20" : "bg-zinc-800 text-zinc-500 border-zinc-700"
+                                        )}>
+                                          {isPaid ? 'Liquidado' : isOverdue ? 'Atrasado' : 'Pendente'}
+                                        </span>
+                                     </div>
+                                     <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-0.5">{inst.type} • Vencimento: {format(parseISO(inst.dueDate), 'dd/MM/yy')}</p>
+                                  </div>
+                               </div>
+
+                               <div className="flex items-center gap-6">
+                                  <div className="text-right">
+                                     <p className="text-sm font-black text-white font-mono">{inst.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                                     {isPaid && <p className="text-[8px] text-emerald-500 uppercase font-black">{inst.paymentMethod}</p>}
+                                  </div>
+                                  <button type="button" onClick={() => setInstallments(installments.filter(i => i.uid !== inst.uid))} className="p-2 text-zinc-700 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>
+                               </div>
+                            </div>
+                          );
+                        })
                       )}
                    </div>
                 </section>
@@ -299,11 +373,36 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </form>
         </div>
 
-        <div className="p-5 border-t border-zinc-800 bg-zinc-900/50 flex justify-end gap-3">
+        <div className="p-5 border-t border-zinc-800 bg-zinc-900/50 flex justify-end gap-3 relative">
            <button onClick={onClose} className="px-6 py-3 rounded-xl border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800">Cancelar</button>
            <button form="adminOrderForm" type="submit" disabled={loading} className="px-10 py-3 rounded-xl bg-primary text-black text-[10px] font-black uppercase tracking-widest shadow-[0_0_25px_-5px_rgba(255,95,31,0.5)] disabled:opacity-50 flex items-center gap-2">
              {loading ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> Efetivar Registro</>}
            </button>
+
+           {/* MINI POPUP DE BAIXA */}
+           <AnimatePresence>
+             {baixaInstallmentId && (
+               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute bottom-full right-5 mb-4 w-80 bg-zinc-900 border border-primary/30 rounded-2xl shadow-2xl p-5 z-[210]">
+                  <div className="flex justify-between items-center mb-4">
+                     <h4 className="text-[10px] font-black text-primary uppercase tracking-widest">Confirmar Recebimento</h4>
+                     <button onClick={() => setBaixaInstallmentId(null)}><X size={14} className="text-zinc-500"/></button>
+                  </div>
+                  <div className="space-y-4">
+                     <div>
+                        <label className={labelClass}>Conta de Destino</label>
+                        <select value={baixaData.method} onChange={e => setBaixaData({...baixaData, method: e.target.value})} className={inputClass}>
+                           {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                     </div>
+                     <div>
+                        <label className={labelClass}>Data da Entrada</label>
+                        <input type="date" value={baixaData.date} onChange={e => setBaixaData({...baixaData, date: e.target.value})} className={inputClass} />
+                     </div>
+                     <button type="button" onClick={confirmBaixa} className="w-full py-3 bg-emerald-500 text-black font-black uppercase text-[10px] rounded-xl">Dar Baixa Agora</button>
+                  </div>
+               </motion.div>
+             )}
+           </AnimatePresence>
         </div>
       </motion.div>
     </div>

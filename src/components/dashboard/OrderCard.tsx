@@ -1,25 +1,19 @@
+
 'use client';
 
 import React, { memo, useMemo } from 'react';
-import { Calendar, ChevronRight, Package, CheckCircle2, AlertTriangle, DollarSign } from 'lucide-react';
+import { Calendar, ChevronRight, CheckCircle2, AlertTriangle, DollarSign, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-export interface OrderItem {
-  desc?: string;
-  quantity?: number;
-  observation?: string;
-}
 
 export interface Order {
   id: string;
   client: string;
   status: string;
   deliveryDate: string;
-  description?: string;
-  items?: OrderItem[];
   totalValue?: number;
   amountPaid?: number;
   balanceDue?: number;
+  installments?: any[];
   updatedAt?: any;
 }
 
@@ -57,14 +51,17 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
     }
   }, [order.status]);
 
-  const financialProgress = useMemo(() => {
+  const financialStats = useMemo(() => {
     const total = Number(order.totalValue) || 0;
     const paid = Number(order.amountPaid) || 0;
-    if (total === 0) return 0;
-    return Math.min(100, Math.round((paid / total) * 100));
-  }, [order.totalValue, order.amountPaid]);
-
-  const isFullyPaid = financialProgress === 100 && (order.totalValue || 0) > 0;
+    const instCount = order.installments?.length || 0;
+    const paidCount = order.installments?.filter(i => i.status === 'paid').length || 0;
+    const hasOverdue = order.installments?.some(i => i.status === 'overdue');
+    
+    const progress = total === 0 ? 0 : Math.min(100, Math.round((paid / total) * 100));
+    
+    return { progress, isFullyPaid: progress === 100 && total > 0, instCount, paidCount, hasOverdue };
+  }, [order.totalValue, order.amountPaid, order.installments]);
 
   return (
     <div 
@@ -121,7 +118,7 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
                   "flex items-center gap-1 font-mono font-bold text-xs",
                   dateInfo.isLate ? "text-red-500 animate-pulse" : "text-white"
                 )}>
-                  {dateInfo.isLate ? <AlertTriangle size={10} /> : (isDone ? <CheckCircle2 size={10} className="text-green-500" /> : <Calendar size={10} className="text-zinc-500" />)}
+                  {dateInfo.isLate ? <AlertTriangle size={10} /> : (isDone ? <CheckCircle2 size={10} className="text-emerald-500" /> : <Calendar size={10} className="text-zinc-500" />)}
                   {dateInfo.formatted}
                 </div>
               </div>
@@ -129,24 +126,35 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
             </div>
           </div>
 
-          {/* FINANCE BAR INTEGRATION */}
+          {/* ADVANCED FINANCE BAR */}
           <div className="pt-2 border-t border-white/5 space-y-1.5">
             <div className="flex justify-between items-end">
-              <div className="flex items-center gap-1.5">
-                <DollarSign size={10} className={cn(isFullyPaid ? "text-green-500" : "text-zinc-500")} />
-                <span className={cn(
-                  "text-[8px] font-black uppercase tracking-widest",
-                  isFullyPaid ? "text-green-500" : "text-zinc-500"
-                )}>
-                  {isFullyPaid ? "Protocolo Pago" : `Saldo: R$ ${(order.balanceDue || 0).toLocaleString('pt-BR')}`}
-                </span>
+              <div className="flex flex-col gap-0.5">
+                 <div className="flex items-center gap-1.5">
+                   {financialStats.hasOverdue ? <AlertTriangle size={10} className="text-red-500 animate-bounce" /> : <DollarSign size={10} className={cn(financialStats.isFullyPaid ? "text-emerald-500" : "text-zinc-500")} />}
+                   <span className={cn(
+                     "text-[8px] font-black uppercase tracking-widest",
+                     financialStats.isFullyPaid ? "text-emerald-500" : financialStats.hasOverdue ? "text-red-500" : "text-zinc-500"
+                   )}>
+                     {financialStats.isFullyPaid ? "Protocolo Pago" : financialStats.hasOverdue ? "Cobrança Vencida" : `Saldo: R$ ${(order.balanceDue || 0).toLocaleString('pt-BR')}`}
+                   </span>
+                 </div>
+                 {financialStats.instCount > 0 && (
+                   <div className="flex items-center gap-1 text-[7px] font-bold text-zinc-600 uppercase tracking-widest ml-4">
+                      <Layers size={8} /> <span>{financialStats.paidCount} de {financialStats.instCount} faturas pagas</span>
+                   </div>
+                 )}
               </div>
-              <span className="text-[8px] font-mono text-zinc-600 font-bold">{financialProgress}%</span>
+              <span className="text-[8px] font-mono text-zinc-600 font-bold">{financialStats.progress}%</span>
             </div>
             <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
               <div 
-                className={cn("h-full transition-all duration-700", isFullyPaid ? "bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-primary")}
-                style={{ width: `${financialProgress}%` }}
+                className={cn(
+                  "h-full transition-all duration-700", 
+                  financialStats.isFullyPaid ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" : 
+                  financialStats.hasOverdue ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" : "bg-primary"
+                )}
+                style={{ width: `${financialStats.progress}%` }}
               />
             </div>
           </div>
@@ -160,7 +168,8 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
          prev.order.deliveryDate === next.order.deliveryDate &&
          prev.order.amountPaid === next.order.amountPaid &&
          prev.order.totalValue === next.order.totalValue &&
-         prev.order.client === next.order.client;
+         prev.order.client === next.order.client &&
+         JSON.stringify(prev.order.installments) === JSON.stringify(next.order.installments);
 });
 
 OrderCard.displayName = 'OrderCard';
