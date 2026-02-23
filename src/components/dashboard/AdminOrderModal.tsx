@@ -1,18 +1,19 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { doc, setDoc, serverTimestamp, collection } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { 
-  X, Save, Plus, Trash2, Box, FileText, 
+  X, Save, Plus, Trash2, Box, 
   User, CreditCard, DollarSign, 
-  Calculator, Briefcase, Percent, Loader2,
+  Calculator, Loader2,
   History, Calendar as CalendarIcon, Wallet, Receipt
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { cn } from '@/lib/utils';
 
 const PAYMENT_METHODS = [
   "Dinheiro (Caixa Interno)",
@@ -40,9 +41,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   const [status, setStatus] = useState('Arte');
   const [emissionDate, setEmissionDate] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('');
-  const [installments, setInstallments] = useState(1);
-  const [machine, setMachine] = useState('');
   const [observations, setObservations] = useState('');
   const [items, setItems] = useState<any[]>([]);
   
@@ -57,9 +55,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       setStatus(order.status || 'Arte');
       setEmissionDate(order.emissionDate || new Date().toISOString().split('T')[0]);
       setDeliveryDate(order.deliveryDate || '');
-      setPaymentMethod(order.paymentMethod || PAYMENT_METHODS[0]);
-      setInstallments(order.installments || 1);
-      setMachine(order.machine || '');
       setObservations(order.observations || '');
       setItems(order.items?.map((item: any) => ({ ...item })) || [{ productCode: '', desc: '', quantity: 1, unitValue: 0 }]);
       setPaymentHistory(order.paymentHistory || []);
@@ -69,9 +64,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       setStatus('Arte');
       setEmissionDate(new Date().toISOString().split('T')[0]);
       setDeliveryDate('');
-      setPaymentMethod(PAYMENT_METHODS[0]);
-      setInstallments(1);
-      setMachine('');
       setObservations('');
       setItems([{ productCode: '', desc: '', quantity: 1, unitValue: 0 }]);
       setPaymentHistory([]);
@@ -129,8 +121,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
     const docRef = order ? doc(firestore, 'orders', order.id) : doc(collection(firestore, 'orders'));
     const payload = {
-      client, seller, status, emissionDate, deliveryDate, paymentMethod,
-      installments, machine, observations, items, totalValue,
+      client, seller, status, emissionDate, deliveryDate, observations, items, totalValue,
       amountPaid, balanceDue, paymentHistory,
       updatedAt: serverTimestamp(),
       ...(order ? {} : { createdAt: serverTimestamp(), id: docRef.id })
