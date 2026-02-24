@@ -399,20 +399,20 @@ export default function ReportsManagerPage() {
 
                           <div className="grid grid-cols-3 gap-4 pt-5 border-t border-white/5">
                             <div className="flex flex-col">
-                              <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest opacity-80 mb-1">Total OS</p>
-                              <p className="text-xl md:text-2xl font-black text-white tracking-tight leading-none">
+                              <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest opacity-60 mb-1">Total OS</p>
+                              <p className="text-base md:text-lg font-bold text-white tracking-tight">
                                 {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                               </p>
                             </div>
                             <div className="flex flex-col">
-                              <p className="text-[10px] text-emerald-500 uppercase font-bold tracking-widest opacity-80 mb-1">Liquidado</p>
-                              <p className="text-xl md:text-2xl font-black text-emerald-500 tracking-tight leading-none">
+                              <p className="text-[10px] text-emerald-500 uppercase font-bold tracking-widest opacity-60 mb-1">Liquidado</p>
+                              <p className="text-base md:text-lg font-bold text-emerald-500 tracking-tight">
                                 {paid.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                               </p>
                             </div>
                             <div className="flex flex-col">
-                              <p className="text-[10px] text-primary uppercase font-bold tracking-widest opacity-80 mb-1">A Receber</p>
-                              <p className={cn("text-xl md:text-2xl font-black tracking-tight leading-none", balance > 0 ? "text-primary" : "text-zinc-700")}>
+                              <p className="text-[10px] text-primary uppercase font-bold tracking-widest opacity-60 mb-1">A Receber</p>
+                              <p className={cn("text-base md:text-lg font-bold tracking-tight", balance > 0 ? "text-primary" : "text-zinc-700")}>
                                 {balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                               </p>
                             </div>
@@ -443,7 +443,7 @@ export default function ReportsManagerPage() {
                         strokeDasharray="251"
                         initial={{ strokeDashoffset: 251 }}
                         animate={{ strokeDashoffset: 251 - ( (kpis.income / (kpis.income + kpis.aReceber || 1)) * 251 ) }}
-                        transition={{ duration: 1.5, ease: "circOut" }}
+                        transition={{ duration: 1.5, depth: 1, ease: "circOut" }}
                       />
                     </svg>
                     
