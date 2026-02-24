@@ -9,7 +9,7 @@ import {
   Banknote, TrendingUp, FileText, Plus, Trash2, Loader2, DollarSign, 
   Briefcase, AlertCircle, X, RefreshCw, Filter, Clock, CheckCircle2,
   Package, ChevronRight, AlertTriangle, Download, ArrowLeft, ArrowRight,
-  Receipt, ShoppingCart, Tag
+  Receipt, ShoppingCart, Tag, Save
 } from 'lucide-react';
 import { startOfMonth, endOfMonth, format, isWithinInterval, parseISO, startOfDay, endOfDay, addMonths, subMonths, isBefore } from 'date-fns';
 
@@ -32,9 +32,20 @@ export default function ReportsManagerPage() {
 
   const [isMounted, setIsMounted] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
+  
+  // --- ESTADOS DE LANÇAMENTO ---
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [entryForm, setEntryForm] = useState({
     description: '', amount: '', type: 'income' as 'income' | 'expense', date: format(new Date(), 'yyyy-MM-dd'), account: 'Caixa Interno', method: 'Dinheiro/Pix'
+  });
+
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [expenseForm, setExpenseForm] = useState({
+    date: format(new Date(), 'yyyy-MM-dd'),
+    description: '',
+    amount: '',
+    paymentMethod: 'Dinheiro',
+    category: 'Outros'
   });
 
   useEffect(() => {
@@ -73,9 +84,7 @@ export default function ReportsManagerPage() {
   // --- MOTOR OPERACIONAL (ORDENAÇÃO PRIORITÁRIA) ---
   const sortedOrders = useMemo(() => {
     if (!orders) return [];
-    const today = new Date();
     
-    // Filtra pedidos do mês (pela data de entrega ou criação)
     const filtered = orders.filter(order => {
       const dDate = order.delivery_date || order.deliveryDate;
       if (!dDate) return false;
@@ -94,18 +103,16 @@ export default function ReportsManagerPage() {
       const hasDebtA = balA > 0;
       const hasDebtB = balB > 0;
 
-      // 1. PRIORIDADE: Saldo Devedor
       if (hasDebtA && !hasDebtB) return -1;
       if (!hasDebtA && hasDebtB) return 1;
 
-      // 2. CRITICIDADE: Prazos mais próximos ou atrasados
       const dateA = a.delivery_date || a.deliveryDate || '9999-99-99';
       const dateB = b.delivery_date || b.deliveryDate || '9999-99-99';
       
       if (hasDebtA) {
         return dateA.localeCompare(dateB);
       } else {
-        return dateB.localeCompare(dateA); // Concluídos recentes aparecem primeiro
+        return dateB.localeCompare(dateA);
       }
     });
   }, [orders, dateRange]);
@@ -115,7 +122,6 @@ export default function ReportsManagerPage() {
     if (!orders || !manualEntries) return [];
     const result: any[] = [];
 
-    // 1. Entradas Automáticas (Parcelas Pagas)
     orders.forEach(order => {
       const installments = Array.isArray(order.installments) ? order.installments : [];
       installments.forEach(inst => {
@@ -137,7 +143,6 @@ export default function ReportsManagerPage() {
       });
     });
 
-    // 2. Entradas/Saídas Manuais
     manualEntries.forEach(entry => {
       if (entry.date) {
         const entryDate = parseISO(entry.date);
@@ -234,6 +239,37 @@ export default function ReportsManagerPage() {
       });
   };
 
+  const handleSaveExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!firestore || !user) return;
+
+    const payload = {
+      ...expenseForm,
+      amount: Number(expenseForm.amount),
+      value: Number(expenseForm.amount),
+      createdAt: serverTimestamp()
+    };
+
+    const docRef = doc(collection(firestore, 'expenses'));
+    setDoc(docRef, { ...payload, id: docRef.id })
+      .then(() => {
+        toast({ title: "Custo Registrado" });
+        setIsExpenseModalOpen(false);
+        setExpenseForm({
+          date: format(new Date(), 'yyyy-MM-dd'),
+          description: '',
+          amount: '',
+          paymentMethod: 'Dinheiro',
+          category: 'Outros'
+        });
+      })
+      .catch(err => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: 'expenses', operation: 'create', requestResourceData: payload
+        }));
+      });
+  };
+
   const handleMonthNav = (direction: 'prev' | 'next') => {
     const current = parseISO(`${selectedMonth}-01`);
     const next = direction === 'next' ? addMonths(current, 1) : subMonths(current, 1);
@@ -247,6 +283,9 @@ export default function ReportsManagerPage() {
       </div>
     );
   }
+
+  const labelClass = "text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-1.5 ml-1 block";
+  const inputClass = "w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none transition-all";
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden selection:bg-primary selection:text-black">
@@ -289,7 +328,6 @@ export default function ReportsManagerPage() {
             <TabsTrigger value="despesas" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-8 h-10">Custos e Despesas</TabsTrigger>
           </TabsList>
 
-          {/* --- ABA OPERACIONAL: MONITOR DE ENTREGAS --- */}
           <TabsContent value="operacional" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 h-[calc(100vh-320px)] overflow-y-auto custom-scrollbar pr-2">
               {sortedOrders.length === 0 ? (
@@ -349,7 +387,6 @@ export default function ReportsManagerPage() {
             </div>
           </TabsContent>
 
-          {/* --- ABA FLUXO DE CAIXA: LIVRO-CAIXA --- */}
           <TabsContent value="financeiro" className="space-y-8 animate-in fade-in duration-500">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="bg-[#09090b] border border-zinc-800 rounded-3xl p-6 lg:col-span-2">
@@ -446,21 +483,18 @@ export default function ReportsManagerPage() {
             </section>
           </TabsContent>
 
-          {/* --- ABA DESPESAS: CUSTOS TÁTICOS --- */}
           <TabsContent value="despesas" className="space-y-6 animate-in fade-in duration-500">
              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                {/* Widgets de Sumário de Despesas */}
                 <Card className="bg-[#09090b] border-zinc-800 p-6 flex flex-col justify-center">
                    <span className="text-[10px] text-zinc-500 font-black uppercase tracking-widest mb-2">Total Operacional</span>
-                   <h3 className="text-2xl font-black text-white">R$ {(expenses?.reduce((acc, e) => acc + (Number(e.value) || 0), 0) || 0).toLocaleString('pt-BR')}</h3>
+                   <h3 className="text-2xl font-black text-white">R$ {(expenses?.reduce((acc, e) => acc + (Number(e.value || e.amount) || 0), 0) || 0).toLocaleString('pt-BR')}</h3>
                 </Card>
-                {/* Outros widgets poderiam vir aqui */}
              </div>
 
              <div className="bg-[#09090b] border border-zinc-800 rounded-3xl overflow-hidden">
                 <div className="p-6 border-b border-white/5 flex items-center justify-between">
                    <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2"><Receipt size={14} className="text-primary" /> Histórico de Despesas</h3>
-                   <Button size="sm" className="h-8 bg-zinc-800 text-[10px] font-black uppercase">+ Registrar Custo</Button>
+                   <Button onClick={() => setIsExpenseModalOpen(true)} size="sm" className="h-10 bg-primary text-black font-black uppercase text-[10px] tracking-widest shadow-[0_0_15px_rgba(255,95,31,0.3)] hover:bg-white">+ Registrar Custo</Button>
                 </div>
                 <div className="overflow-x-auto custom-scrollbar">
                    <table className="w-full text-left">
@@ -483,7 +517,7 @@ export default function ReportsManagerPage() {
                                <td className="p-4">
                                   <span className="text-[9px] bg-zinc-900 border border-white/5 px-2 py-1 rounded-full text-zinc-400 font-black uppercase">{exp.category || 'Geral'}</span>
                                </td>
-                               <td className="p-4 pr-6 text-right font-mono font-black text-[#FF5F1F]">- {Number(exp.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                               <td className="p-4 pr-6 text-right font-mono font-black text-[#FF5F1F]">- {Number(exp.value || exp.amount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                              </tr>
                            ))
                          )}
@@ -497,7 +531,7 @@ export default function ReportsManagerPage() {
         {/* MODAL DE LANÇAMENTO MANUAL (FLUXO DE CAIXA) */}
         <AnimatePresence>
           {isEntryModalOpen && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" onClick={() => setIsEntryModalOpen(false)}>
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm" onClick={() => setIsEntryModalOpen(false)}>
               <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#09090b] w-full max-w-md border border-zinc-800 rounded-3xl p-8 shadow-2xl">
                 <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">Novo Lançamento Manual</h2>
                 <form onSubmit={handleSaveEntry} className="space-y-4">
@@ -506,23 +540,84 @@ export default function ReportsManagerPage() {
                      <button type="button" onClick={() => setEntryForm({...entryForm, type: 'expense'})} className={cn("py-2 rounded-lg text-[10px] font-black uppercase transition-all", entryForm.type === 'expense' ? "bg-red-500 text-white shadow-lg" : "text-zinc-500")}>Saída</button>
                   </div>
                   
-                  <input required placeholder="Descrição (Ex: Retirada Sócios, Venda Balcão...)" value={entryForm.description} onChange={e => setEntryForm({...entryForm, description: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none" />
+                  <input required placeholder="Descrição (Ex: Retirada Sócios, Venda Balcão...)" value={entryForm.description} onChange={e => setEntryForm({...entryForm, description: e.target.value})} className={inputClass} />
                   
                   <div className="grid grid-cols-2 gap-4">
-                    <input required type="number" step="0.01" placeholder="Valor R$" value={entryForm.amount} onChange={e => setEntryForm({...entryForm, amount: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none" />
-                    <input required type="date" value={entryForm.date} onChange={e => setEntryForm({...entryForm, date: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none" />
+                    <input required type="number" step="0.01" placeholder="Valor R$" value={entryForm.amount} onChange={e => setEntryForm({...entryForm, amount: e.target.value})} className={inputClass} />
+                    <input required type="date" value={entryForm.date} onChange={e => setEntryForm({...entryForm, date: e.target.value})} className={inputClass} />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <select value={entryForm.method} onChange={e => setEntryForm({...entryForm, method: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none">
+                    <select value={entryForm.method} onChange={e => setEntryForm({...entryForm, method: e.target.value})} className={inputClass}>
                       {['Dinheiro/Pix', 'Cartão', 'Boleto', 'Outros'].map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
-                    <select value={entryForm.account} onChange={e => setEntryForm({...entryForm, account: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none">
+                    <select value={entryForm.account} onChange={e => setEntryForm({...entryForm, account: e.target.value})} className={inputClass}>
                       {['Caixa Interno', 'SICOOB - Lindóia', 'SICOOB - Serra Negra', 'Máquina PAGBANK', 'Máquina SIPAG'].map(a => <option key={a} value={a}>{a}</option>)}
                     </select>
                   </div>
 
                   <Button type="submit" className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_25px_rgba(255,95,31,0.4)] mt-4">Confirmar Lançamento</Button>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* MODAL DE REGISTRO DE DESPESA (CUSTOS OPERACIONAIS) */}
+        <AnimatePresence>
+          {isExpenseModalOpen && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setIsExpenseModalOpen(false)}>
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#0c0c0e] w-full max-w-md border border-zinc-800 rounded-3xl p-8 shadow-2xl">
+                <div className="flex justify-between items-center mb-8">
+                  <h2 className="text-xl font-black text-white uppercase tracking-tighter">Registrar Custo</h2>
+                  <button onClick={() => setIsExpenseModalOpen(false)} className="p-2 text-zinc-500 hover:text-white bg-white/5 rounded-full"><X size={20}/></button>
+                </div>
+
+                <form onSubmit={handleSaveExpense} className="space-y-5">
+                  <div className="space-y-4">
+                    <div>
+                      <label className={labelClass}>Data da Despesa</label>
+                      <input required type="date" value={expenseForm.date} onChange={e => setExpenseForm({...expenseForm, date: e.target.value})} className={inputClass} />
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Descrição do Custo</label>
+                      <input required placeholder="Ex: Compra de Lona, Almoço Equipe..." value={expenseForm.description} onChange={e => setExpenseForm({...expenseForm, description: e.target.value})} className={inputClass} />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className={labelClass}>Valor (R$)</label>
+                        <input required type="number" step="0.01" value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: e.target.value})} className={inputClass} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Pagamento</label>
+                        <select value={expenseForm.paymentMethod} onChange={e => setExpenseForm({...expenseForm, paymentMethod: e.target.value})} className={inputClass}>
+                          <option value="Dinheiro">Dinheiro/Pix</option>
+                          <option value="Cartão">Cartão</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Categoria</label>
+                      <select value={expenseForm.category} onChange={e => setExpenseForm({...expenseForm, category: e.target.value})} className={inputClass}>
+                        <option value="Material">Material de Produção</option>
+                        <option value="Alimentação">Alimentação</option>
+                        <option value="Impostos/Taxas">Impostos / Taxas</option>
+                        <option value="Manutenção">Manutenção</option>
+                        <option value="Logística">Logística / Frete</option>
+                        <option value="Outros">Outros</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <button type="button" onClick={() => setIsExpenseModalOpen(false)} className="flex-1 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors">Cancelar</button>
+                    <Button type="submit" className="flex-[2] h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.4)] flex items-center justify-center gap-2">
+                      <Save size={18} /> Salvar Despesa
+                    </Button>
+                  </div>
                 </form>
               </motion.div>
             </div>
