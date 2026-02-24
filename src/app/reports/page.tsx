@@ -268,6 +268,24 @@ export default function ReportsManagerPage() {
       });
   };
 
+  // EXCLUSÃO DE LANÇAMENTO MANUAL (FLUXO DE CAIXA)
+  const handleDeleteTransaction = useCallback((id: string) => {
+    if (!firestore || !id) return;
+    if (!window.confirm("Deseja realmente excluir este lançamento manual?")) return;
+
+    const docRef = doc(firestore, 'cashflow_manual', id);
+    deleteDoc(docRef)
+      .then(() => {
+        toast({ title: "Lançamento Removido" });
+      })
+      .catch((err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: docRef.path,
+          operation: 'delete'
+        }));
+      });
+  }, [firestore, toast]);
+
   // --- LÓGICA DE CONTAS A PAGAR (GERADOR) ---
   const handleGenerateInstallments = () => {
     const total = parseFloat(payableForm.totalAmount);
@@ -370,19 +388,23 @@ export default function ReportsManagerPage() {
     }
   };
 
-  const handleDeletePayable = async (id: string) => {
+  // EXCLUSÃO DE CONTA A PAGAR (BOLETO)
+  const handleDeletePayable = useCallback((id: string) => {
     if (!firestore || !id) return;
-    
-    if (window.confirm("Remover este registro da pauta permanentemente?")) {
-      deleteDoc(doc(firestore, 'accounts_payable', id))
-        .then(() => toast({ title: "Registro Removido" }))
-        .catch((err) => {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: `accounts_payable/${id}`, operation: 'delete'
-          }));
-        });
-    }
-  };
+    if (!window.confirm("Deseja realmente excluir este registro de conta a pagar?")) return;
+
+    const docRef = doc(firestore, 'accounts_payable', id);
+    deleteDoc(docRef)
+      .then(() => {
+        toast({ title: "Registro Removido" });
+      })
+      .catch((err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: docRef.path,
+          operation: 'delete'
+        }));
+      });
+  }, [firestore, toast]);
 
   const handleMonthNav = (direction: 'prev' | 'next') => {
     const current = parseISO(`${selectedMonth}-01`);
@@ -625,8 +647,14 @@ export default function ReportsManagerPage() {
                             <td className={cn("p-4 text-center font-mono font-black text-sm", tx.type === 'income' ? 'text-[#4ade80]' : 'text-[#FF5F1F]')}>{tx.type === 'income' ? '+' : '-'} {tx.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                             <td className="p-4 pr-6 text-right">
                                <div className="flex justify-end gap-3">
-                                  <button onClick={() => { if(!tx.isAuto) { setEditingEntryId(tx.id); setEntryForm({...tx, amount: String(tx.amount)}); setIsEntryModalOpen(true); } else { toast({ title: "Proteção de Dados", description: "Estorne na OS correspondente." }); } }} className={cn("p-2 rounded-lg", tx.isAuto ? "opacity-20" : "text-zinc-500 hover:text-white")}><Edit size={16}/></button>
-                                  <button onClick={() => { if(!tx.isAuto) { if(window.confirm("Excluir lançamento?")) deleteDoc(doc(firestore, 'cashflow_manual', tx.id)); } else { toast({ title: "Proteção de Dados", description: "Estorne na OS correspondente." }); } }} className={cn("p-2 rounded-lg", tx.isAuto ? "opacity-20" : "text-zinc-500 hover:text-red-500")}><Trash2 size={16}/></button>
+                                  {!tx.isAuto ? (
+                                    <>
+                                      <button onClick={() => { setEditingEntryId(tx.id); setEntryForm({...tx, amount: String(tx.amount)}); setIsEntryModalOpen(true); }} className="p-2 rounded-lg text-zinc-500 hover:text-white transition-colors"><Edit size={16}/></button>
+                                      <button onClick={() => handleDeleteTransaction(tx.id)} className="p-2 rounded-lg text-zinc-500 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+                                    </>
+                                  ) : (
+                                    <button onClick={() => toast({ title: "Proteção de Dados", description: "Estorne na OS correspondente." })} className="p-2 rounded-lg opacity-20 text-zinc-500 cursor-not-allowed"><Trash2 size={16}/></button>
+                                  )}
                                </div>
                             </td>
                           </tr>
@@ -694,7 +722,7 @@ export default function ReportsManagerPage() {
                                   {!isPaid && (
                                     <button onClick={() => handlePayAccount(payable)} className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-500 hover:bg-emerald-500 hover:text-black transition-all" title="Dar Baixa"><CheckCircle2 size={16}/></button>
                                   )}
-                                  <button onClick={() => handleOpenEditPayable(payable)} className="p-2 rounded-lg text-zinc-500 hover:text-white" title="Editar Registro"><Edit size={16}/></button>
+                                  <button onClick={() => handleOpenEditPayable(payable)} className="p-2 rounded-lg text-zinc-500 hover:text-white transition-colors" title="Editar Registro"><Edit size={16}/></button>
                                   <button onClick={() => handleDeletePayable(payable.id)} className="p-2 rounded-lg text-zinc-500 hover:text-red-500 transition-colors" title="Excluir Registro"><Trash2 size={16}/></button>
                                </div>
                             </td>
@@ -738,7 +766,7 @@ export default function ReportsManagerPage() {
         {/* MODAL CONTAS A PAGAR (GERADOR DE PARCELAS) */}
         <AnimatePresence>
           {isPayableModalOpen && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm" onClick={() => { setIsPayableModalOpen(false); setEditingPayableId(null); }}>
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm" onClick={() => { setIsPayableModalOpen(false); setEditingPayableId(null); setGeneratedInstallments([]); }}>
               <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#09090b] w-full max-w-2xl border border-zinc-800 rounded-3xl p-8 shadow-2xl flex flex-col max-h-[90vh]">
                 <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">{editingPayableId ? 'Editar Boleto' : 'Gerador de Contas a Pagar'}</h2>
                 
