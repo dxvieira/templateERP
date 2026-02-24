@@ -218,7 +218,7 @@ export default function ReportsManagerPage() {
   const exportToCSV = useCallback(() => {
     const headers = ["DATA", "DESCRIÇÃO", "MODALIDADE", "CONTA", "TIPO", "VALOR"];
     const rows = transactions.map(tx => [
-      format(parseISO(tx.date), 'dd/MM/yyyy'),
+      tx.date ? format(parseISO(tx.date), 'dd/MM/yyyy') : '',
       tx.description,
       tx.method,
       tx.account,
@@ -371,16 +371,12 @@ export default function ReportsManagerPage() {
     }
   };
 
-  const handleDeletePayable = async (id: string, status: string) => {
+  const handleDeletePayable = async (id: string) => {
     if (!firestore) return;
     
-    const confirmMessage = status === 'paid'
-      ? "⚠️ Esta conta já foi marcada como PAGA. Excluí-la aqui não removerá automaticamente o desconto feito no Fluxo de Caixa. Deseja excluir o registro mesmo assim?"
-      : "Remover este boleto da pauta permanentemente?";
-
-    if (window.confirm(confirmMessage)) {
+    if (window.confirm("Remover este registro da pauta permanentemente?")) {
       deleteDoc(doc(firestore, 'accounts_payable', id))
-        .then(() => toast({ title: "Conta Removida" }))
+        .then(() => toast({ title: "Registro Removido" }))
         .catch(() => {
           errorEmitter.emit('permission-error', new FirestorePermissionError({
             path: `accounts_payable/${id}`, operation: 'delete'
@@ -531,9 +527,18 @@ export default function ReportsManagerPage() {
                         )}
                       </div>
                       <div className="grid grid-cols-3 gap-2 border-t border-white/5 pt-4">
-                        <div className="space-y-1"><span className={labelClass}>Total OS</span><span className="text-base md:text-lg font-bold tracking-tight text-white">{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
-                        <div className="space-y-1"><span className={cn(labelClass, "text-emerald-500")}>Liquidado</span><span className="text-base md:text-lg font-bold tracking-tight text-emerald-500">{paid.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
-                        <div className="space-y-1"><span className={cn(labelClass, "text-primary")}>A Receber</span><span className="text-base md:text-lg font-bold tracking-tight text-primary">{(total - paid).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+                        <div className="space-y-1">
+                          <span className="text-[10px] uppercase font-bold tracking-widest opacity-60 mb-1 block">Total OS</span>
+                          <span className="text-base md:text-lg font-bold tracking-tight text-white">{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-500 opacity-60 mb-1 block">Liquidado</span>
+                          <span className="text-base md:text-lg font-bold tracking-tight text-emerald-500">{paid.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[10px] uppercase font-bold tracking-widest text-primary opacity-60 mb-1 block">A Receber</span>
+                          <span className="text-base md:text-lg font-bold tracking-tight text-primary">{(total - paid).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        </div>
                       </div>
                     </motion.div>
                   );
@@ -602,7 +607,7 @@ export default function ReportsManagerPage() {
                       ) : (
                         transactions.map(tx => (
                           <tr key={tx.id} className="hover:bg-white/5 transition-colors group">
-                            <td className="p-4 pl-6 text-[10px] font-mono text-zinc-500">{format(parseISO(tx.date), 'dd/MM/yy')}</td>
+                            <td className="p-4 pl-6 text-[10px] font-mono text-zinc-500">{tx.date ? format(parseISO(tx.date), 'dd/MM/yy') : '--/--/--'}</td>
                             <td className="p-4">
                                <div className="flex flex-col">
                                   <span className="text-xs font-bold text-white uppercase group-hover:text-primary transition-colors">{tx.description}</span>
@@ -669,13 +674,13 @@ export default function ReportsManagerPage() {
                                </div>
                             </td>
                             <td className="p-4">
-                               <div className={cn("flex flex-col", isPaid && "opacity-50")}>
+                               <div className="flex flex-col">
                                   <span className="text-xs font-bold text-white uppercase group-hover:text-primary transition-colors">{payable.description}</span>
                                   {payable.supplier && <span className="text-[8px] text-zinc-500 uppercase font-black tracking-widest">{payable.supplier}</span>}
                                </div>
                             </td>
-                            <td className="p-4 text-center"><span className={cn("text-[9px] text-zinc-400 font-black uppercase bg-zinc-900 border border-white/5 px-2 py-0.5 rounded", isPaid && "opacity-50")}>{payable.category}</span></td>
-                            <td className={cn("p-4 text-center font-mono font-black text-sm text-white", isPaid && "opacity-50")}>{Number(payable.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                            <td className="p-4 text-center"><span className="text-[9px] text-zinc-400 font-black uppercase bg-zinc-900 border border-white/5 px-2 py-0.5 rounded">{payable.category}</span></td>
+                            <td className="p-4 text-center font-mono font-black text-sm text-white">{Number(payable.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                             <td className="p-4 text-center">
                                {isPaid ? (
                                  <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Pago</span>
@@ -690,8 +695,8 @@ export default function ReportsManagerPage() {
                                   {!isPaid && (
                                     <button onClick={() => handlePayAccount(payable)} className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-500 hover:bg-emerald-500 hover:text-black transition-all" title="Dar Baixa"><CheckCircle2 size={16}/></button>
                                   )}
-                                  <button onClick={() => handleOpenEditPayable(payable)} className={cn("p-2 rounded-lg text-zinc-500 hover:text-white", isPaid && "opacity-50")}><Edit size={16}/></button>
-                                  <button onClick={() => handleDeletePayable(payable.id, payable.status)} className="p-2 rounded-lg text-zinc-500 hover:text-red-500 transition-colors" title="Excluir Registro"><Trash2 size={16}/></button>
+                                  <button onClick={() => handleOpenEditPayable(payable)} className="p-2 rounded-lg text-zinc-500 hover:text-white" title="Editar Registro"><Edit size={16}/></button>
+                                  <button onClick={() => handleDeletePayable(payable.id)} className="p-2 rounded-lg text-zinc-500 hover:text-red-500 transition-colors" title="Excluir Registro"><Trash2 size={16}/></button>
                                </div>
                             </td>
                           </tr>
