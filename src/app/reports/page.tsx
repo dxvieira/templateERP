@@ -111,6 +111,40 @@ export default function ReportsManagerPage() {
     };
   }, [orders, expenses, appliedDateRange]);
 
+  // NOVO: Ordenação por Prioridade Financeira e Prazo
+  const sortedOrders = useMemo(() => {
+    if (!financialData?.filteredOrders) return [];
+    
+    return [...financialData.filteredOrders].sort((a, b) => {
+      const totalA = Number(a.total_value || a.totalValue) || 0;
+      const paidA = Number(a.amount_paid || a.amountPaid) || 0;
+      const balanceA = totalA - paidA;
+
+      const totalB = Number(b.total_value || b.totalValue) || 0;
+      const paidB = Number(b.amount_paid || b.amountPaid) || 0;
+      const balanceB = totalB - paidB;
+
+      const hasBalanceA = balanceA > 0;
+      const hasBalanceB = balanceB > 0;
+
+      // 1. Prioridade Máxima: Pedidos com Saldo Devedor
+      if (hasBalanceA && !hasBalanceB) return -1;
+      if (!hasBalanceA && hasBalanceB) return 1;
+
+      // Se ambos tiverem saldo ou ambos estiverem pagos, desempata pelo prazo/data
+      const dateA = a.delivery_date || a.deliveryDate || '9999-99-99';
+      const dateB = b.delivery_date || b.deliveryDate || '9999-99-99';
+
+      if (hasBalanceA && hasBalanceB) {
+        // Ambos devedores: prazo mais próximo (ou atrasado) primeiro
+        return dateA.localeCompare(dateB);
+      }
+
+      // Ambos pagos: exibe os mais recentes no topo da categoria de "finalizados"
+      return dateB.localeCompare(dateA);
+    });
+  }, [financialData?.filteredOrders]);
+
   const accountsSummary = useMemo(() => {
     const accounts: Record<string, any> = {
       'CAIXA INTERNO': { label: 'CAIXA INTERNO', value: 0, color: '#10b981', type: 'Dinheiro', icon: '💵' },
@@ -300,7 +334,7 @@ export default function ReportsManagerPage() {
 
           <TabsContent value="operacional" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* LISTAGEM DE PEDIDOS (COLUNA ESQUERDA) */}
+              {/* LISTAGEM DE PEDIDOS ORDENADOS (COLUNA ESQUERDA) */}
               <div className="lg:col-span-2 space-y-4">
                 <div className="flex justify-between items-center px-2">
                   <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">Monitor de Entregas e Liquidação</h3>
@@ -308,13 +342,13 @@ export default function ReportsManagerPage() {
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                  {kpis.filteredOrders.length === 0 ? (
+                  {sortedOrders.length === 0 ? (
                     <div className="py-20 text-center border-2 border-dashed border-zinc-800 rounded-3xl bg-zinc-900/10">
                        <Package size={40} className="mx-auto mb-4 text-zinc-800 opacity-20" />
                        <p className="text-[10px] text-zinc-600 font-black uppercase tracking-[0.4em]">Nenhuma atividade no período filtrado</p>
                     </div>
                   ) : (
-                    kpis.filteredOrders.map(order => {
+                    sortedOrders.map(order => {
                       const today = new Date().toISOString().split('T')[0];
                       const delivery = order.delivery_date || order.deliveryDate;
                       const isFinished = ['Concluído', 'Entregue'].includes(order.status);
@@ -325,7 +359,10 @@ export default function ReportsManagerPage() {
                       const balance = total - paid;
 
                       return (
-                        <div key={order.id} className="bg-[#09090b] border border-zinc-800 rounded-2xl p-4 group hover:border-primary/30 transition-all">
+                        <div key={order.id} className={cn(
+                          "bg-[#09090b] border border-zinc-800 rounded-2xl p-4 group hover:border-primary/30 transition-all",
+                          balance > 0 && "border-primary/10 shadow-[inset_0_0_20px_rgba(255,95,31,0.02)]"
+                        )}>
                           <div className="flex justify-between items-start mb-4">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
