@@ -113,48 +113,6 @@ export default function ReportsManagerPage() {
     };
   }, [orders, expenses, appliedDateRange]);
 
-  // Lógica do Radar de Operações (Volume e Urgência)
-  const stagesSummary = useMemo(() => {
-    if (!financialData?.filteredOrders) return [];
-
-    const summary = {
-      'Arte Final': { label: 'ARTE FINAL', count: 0, critical: 0, color: '#d946ef' },
-      'Impressão': { label: 'IMPRESSÃO', count: 0, critical: 0, color: '#3B82F6' },
-      'Serralheria': { label: 'SERRALHERIA', count: 0, critical: 0, color: '#EAB308' },
-      'Acabamento': { label: 'ACABAMENTO', count: 0, critical: 0, color: '#FF5F1F' },
-      'Instalação': { label: 'INSTALAÇÃO', count: 0, critical: 0, color: '#8B5CF6' },
-      'Finalizado': { label: 'FINALIZADO', count: 0, critical: 0, color: '#4ade80' } 
-    };
-
-    let totalActiveOrders = 0;
-    const today = new Date().toISOString().split('T')[0];
-
-    financialData.filteredOrders.forEach(order => {
-      const statusKey = (order.status === 'Concluído' || order.status === 'Entregue') ? 'Finalizado' : order.status;
-      const normalizedKey = statusKey === 'Arte' ? 'Arte Final' : statusKey;
-
-      if (summary[normalizedKey]) {
-        summary[normalizedKey].count += 1;
-        if (normalizedKey !== 'Finalizado') totalActiveOrders += 1;
-        
-        const delivery = order.delivery_date || order.deliveryDate;
-        if (normalizedKey !== 'Finalizado' && delivery && delivery <= today) {
-           summary[normalizedKey].critical += 1;
-        }
-      }
-    });
-
-    return Object.values(summary).map(stage => {
-      let percentage = 0;
-      if (stage.label === 'FINALIZADO') {
-         percentage = stage.count > 0 ? 100 : 0;
-      } else {
-         percentage = totalActiveOrders === 0 ? 0 : (stage.count / totalActiveOrders) * 100;
-      }
-      return { ...stage, percentage };
-    });
-  }, [financialData?.filteredOrders]);
-
   // NOVO: Ordenação por Prioridade Financeira e Prazo
   const sortedOrders = useMemo(() => {
     if (!financialData?.filteredOrders) return [];
@@ -171,16 +129,19 @@ export default function ReportsManagerPage() {
       const hasBalanceA = balanceA > 0;
       const hasBalanceB = balanceB > 0;
 
+      // 1º: Quem tem saldo devedor vai pro topo
       if (hasBalanceA && !hasBalanceB) return -1;
       if (!hasBalanceA && hasBalanceB) return 1;
 
       const dateA = a.delivery_date || a.deliveryDate || '9999-99-99';
       const dateB = b.delivery_date || b.deliveryDate || '9999-99-99';
 
+      // 2º: Entre devedores, os mais urgentes/atrasados primeiro
       if (hasBalanceA && hasBalanceB) {
         return dateA.localeCompare(dateB);
       }
 
+      // 3º: Os liquidados vão pro final, ordenados por data decrescente
       return dateB.localeCompare(dateA);
     });
   }, [financialData?.filteredOrders]);
@@ -403,29 +364,29 @@ export default function ReportsManagerPage() {
                           key={order.id} 
                           onClick={() => router.push(`/orders?edit=${order.id}`)}
                           className={cn(
-                            "bg-[#09090b] border border-zinc-800 rounded-2xl p-4 group hover:border-primary/30 transition-all cursor-pointer hover:scale-[1.01]",
+                            "bg-[#09090b] border border-zinc-800 rounded-2xl p-5 group hover:border-primary/30 transition-all cursor-pointer hover:scale-[1.01]",
                             balance > 0 && "border-primary/10 shadow-[inset_0_0_20px_rgba(255,95,31,0.02)]"
                           )}
                         >
-                          <div className="flex justify-between items-start mb-4">
+                          <div className="flex justify-between items-start mb-6">
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
+                              <div className="flex items-center gap-2 mb-1.5">
                                 <span className="text-[8px] font-mono font-bold text-zinc-600 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800 uppercase tracking-tighter">#{order.id.slice(-6)}</span>
                                 <div className="flex items-center gap-1">
                                   <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: getStatusColor(order.status) }} />
                                   <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: getStatusColor(order.status) }}>{order.status}</span>
                                 </div>
                               </div>
-                              <h4 className="text-sm font-black text-white uppercase truncate group-hover:text-primary transition-colors">{order.client}</h4>
+                              <h4 className="text-base font-black text-white uppercase truncate group-hover:text-primary transition-colors tracking-tight">{order.client}</h4>
                             </div>
 
                             <div className="text-right shrink-0">
                               {isFinished ? (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-[9px] font-black uppercase tracking-widest">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-[9px] font-black uppercase tracking-widest">
                                   <CheckCircle2 size={10} /> FINALIZADO
                                 </span>
                               ) : isLate ? (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/30 text-red-500 text-[9px] font-black uppercase tracking-widest animate-pulse">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-red-500/10 border border-red-500/30 text-red-500 text-[9px] font-black uppercase tracking-widest animate-pulse">
                                   <AlertTriangle size={10} /> ATRASADO
                                 </span>
                               ) : (
@@ -436,18 +397,22 @@ export default function ReportsManagerPage() {
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-3 gap-2 pt-3 border-t border-white/5">
-                            <div className="bg-black/20 p-2 rounded-xl border border-zinc-800/50">
-                              <p className="text-[7px] text-zinc-600 uppercase font-black mb-0.5">Total OS</p>
-                              <p className="text-[10px] text-zinc-400 font-mono font-bold">{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                          <div className="grid grid-cols-3 gap-4 pt-5 border-t border-white/5">
+                            <div className="flex flex-col">
+                              <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest opacity-80 mb-1">Total OS</p>
+                              <p className="text-xl md:text-2xl font-black text-white tracking-tight leading-none">
+                                {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </p>
                             </div>
-                            <div className="bg-emerald-500/5 p-2 rounded-xl border border-emerald-500/10">
-                              <p className="text-[7px] text-emerald-500/60 uppercase font-black mb-0.5">Liquidado</p>
-                              <p className="text-[10px] text-emerald-500 font-mono font-bold">{paid.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                            <div className="flex flex-col">
+                              <p className="text-[10px] text-emerald-500 uppercase font-bold tracking-widest opacity-80 mb-1">Liquidado</p>
+                              <p className="text-xl md:text-2xl font-black text-emerald-500 tracking-tight leading-none">
+                                {paid.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </p>
                             </div>
-                            <div className="bg-primary/5 p-2 rounded-xl border border-primary/10">
-                              <p className="text-[7px] text-primary/60 uppercase font-black mb-0.5">A Receber</p>
-                              <p className={cn("text-[10px] font-mono font-bold", balance > 0 ? "text-primary" : "text-zinc-600")}>
+                            <div className="flex flex-col">
+                              <p className="text-[10px] text-primary uppercase font-bold tracking-widest opacity-80 mb-1">A Receber</p>
+                              <p className={cn("text-xl md:text-2xl font-black tracking-tight leading-none", balance > 0 ? "text-primary" : "text-zinc-700")}>
                                 {balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                               </p>
                             </div>
