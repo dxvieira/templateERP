@@ -10,44 +10,36 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    /**
-     * isEmployee: Checks if the user is in the roles_employees collection.
-     * Note: In a prototype environment, you might need to create this document manually 
-     * for your UID in the /roles_employees collection to gain full access.
-     */
-    function isEmployee() {
-      return isSignedIn() && (
-        exists(/databases/$(database)/documents/roles_employees/$(request.auth.uid)) ||
-        // Fallback for initial setup: allows first user or specific admin UIDs if needed
-        request.auth.token.email_verified == true
-      );
-    }
-
     // --- COLLECTION RULES ---
 
+    // Permite leitura e escrita para usuários logados (MVP Prototyping)
     match /orders/{orderId} {
-      allow read, write: if isEmployee();
+      allow read, write: if isSignedIn();
     }
 
     match /expenses/{expenseId} {
-      allow read, write: if isEmployee();
+      allow read, write: if isSignedIn();
     }
 
     match /clients/{clientId} {
-      allow read, write: if isEmployee();
+      allow read, write: if isSignedIn();
     }
 
     match /suppliers/{supplierId} {
-      allow read, write: if isEmployee();
+      allow read, write: if isSignedIn();
     }
 
     match /counters/{counterId} {
-      allow read, write: if isEmployee();
+      allow read, write: if isSignedIn();
+    }
+
+    match /cashflow_manual/{entryId} {
+      allow read, write: if isSignedIn();
     }
 
     match /roles_employees/{uid} {
       allow read: if isSignedIn();
-      allow write: if false; // Only manageable via console
+      allow write: if false; 
     }
 
     // Global deny

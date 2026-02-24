@@ -2,7 +2,6 @@
 {
   "entities": {
     "Order": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Order",
       "type": "object",
       "description": "Represents a customer order within the Visual Communication ERP.",
@@ -32,25 +31,18 @@
         "createdAt": { "type": "string", "format": "date-time" }
       }
     },
-    "Client": {
-      "title": "Client",
+    "CashflowEntry": {
+      "title": "CashflowEntry",
       "type": "object",
+      "description": "Manual financial entries not linked directly to an Order.",
       "properties": {
         "id": { "type": "string" },
-        "name": { "type": "string" },
-        "company": { "type": "string" },
-        "mobile": { "type": "string" },
-        "email": { "type": "string" }
-      }
-    },
-    "Supplier": {
-      "title": "Supplier",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "category": { "type": "string" },
-        "mobile": { "type": "string" }
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["income", "expense"] },
+        "date": { "type": "string", "format": "date" },
+        "account": { "type": "string" },
+        "method": { "type": "string" }
       }
     }
   },
@@ -68,16 +60,8 @@
         "definition": { "entityName": "Expense", "description": "Business expenses." }
       },
       {
-        "path": "/clients/{clientId}",
-        "definition": { "entityName": "Client", "description": "Customer database." }
-      },
-      {
-        "path": "/suppliers/{supplierId}",
-        "definition": { "entityName": "Supplier", "description": "Supplier database." }
-      },
-      {
-        "path": "/counters/{counterId}",
-        "definition": { "entityName": "Counter", "description": "System counters for ID generation." }
+        "path": "/cashflow_manual/{entryId}",
+        "definition": { "entityName": "CashflowEntry", "description": "Manual cashflow entries." }
       }
     ]
   }
