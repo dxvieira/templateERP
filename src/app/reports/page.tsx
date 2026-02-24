@@ -8,9 +8,10 @@ import {
   BarChart3, Calendar, ArrowUpRight, ArrowDownRight, Wallet, CreditCard, 
   Banknote, TrendingUp, FileText, Plus, Trash2, Loader2, DollarSign, 
   Briefcase, AlertCircle, X, RefreshCw, Filter, Clock, CheckCircle2,
-  Package, ChevronRight, AlertTriangle, Download, ArrowLeft, ArrowRight
+  Package, ChevronRight, AlertTriangle, Download, ArrowLeft, ArrowRight,
+  Receipt, ShoppingCart, Tag
 } from 'lucide-react';
-import { startOfMonth, endOfMonth, format, isWithinInterval, parseISO, startOfDay, endOfDay, addMonths, subMonths } from 'date-fns';
+import { startOfMonth, endOfMonth, format, isWithinInterval, parseISO, startOfDay, endOfDay, addMonths, subMonths, isBefore } from 'date-fns';
 
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { collection, query, orderBy, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
@@ -40,6 +41,7 @@ export default function ReportsManagerPage() {
     setIsMounted(true);
   }, []);
 
+  // --- QUERIES ---
   const ordersQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
@@ -59,13 +61,59 @@ export default function ReportsManagerPage() {
   const { data: expenses, isLoading: loadingExpenses } = useCollection(expensesQuery);
   const { data: manualEntries, isLoading: loadingManual } = useCollection(manualCashflowQuery);
 
+  // --- LÓGICA DE DATAS ---
+  const dateRange = useMemo(() => {
+    const [year, month] = selectedMonth.split('-').map(Number);
+    return {
+      start: startOfMonth(new Date(year, month - 1)),
+      end: endOfMonth(new Date(year, month - 1))
+    };
+  }, [selectedMonth]);
+
+  // --- MOTOR OPERACIONAL (ORDENAÇÃO PRIORITÁRIA) ---
+  const sortedOrders = useMemo(() => {
+    if (!orders) return [];
+    const today = new Date();
+    
+    // Filtra pedidos do mês (pela data de entrega ou criação)
+    const filtered = orders.filter(order => {
+      const dDate = order.delivery_date || order.deliveryDate;
+      if (!dDate) return false;
+      return isWithinInterval(parseISO(dDate), { start: dateRange.start, end: dateRange.end });
+    });
+
+    return [...filtered].sort((a, b) => {
+      const totalA = Number(a.total_value || a.totalValue || 0);
+      const paidA = Number(a.amount_paid || a.amountPaid || 0);
+      const balA = totalA - paidA;
+      
+      const totalB = Number(b.total_value || b.totalValue || 0);
+      const paidB = Number(b.amount_paid || b.amountPaid || 0);
+      const balB = totalB - paidB;
+
+      const hasDebtA = balA > 0;
+      const hasDebtB = balB > 0;
+
+      // 1. PRIORIDADE: Saldo Devedor
+      if (hasDebtA && !hasDebtB) return -1;
+      if (!hasDebtA && hasDebtB) return 1;
+
+      // 2. CRITICIDADE: Prazos mais próximos ou atrasados
+      const dateA = a.delivery_date || a.deliveryDate || '9999-99-99';
+      const dateB = b.delivery_date || b.deliveryDate || '9999-99-99';
+      
+      if (hasDebtA) {
+        return dateA.localeCompare(dateB);
+      } else {
+        return dateB.localeCompare(dateA); // Concluídos recentes aparecem primeiro
+      }
+    });
+  }, [orders, dateRange]);
+
+  // --- LIVRO-CAIXA (TRANSAÇÕES UNIFICADAS) ---
   const transactions = useMemo(() => {
     if (!orders || !manualEntries) return [];
-
     const result: any[] = [];
-    const [year, month] = selectedMonth.split('-').map(Number);
-    const startDate = startOfMonth(new Date(year, month - 1));
-    const endDate = endOfMonth(new Date(year, month - 1));
 
     // 1. Entradas Automáticas (Parcelas Pagas)
     orders.forEach(order => {
@@ -73,7 +121,7 @@ export default function ReportsManagerPage() {
       installments.forEach(inst => {
         if (inst.status === 'paid' && inst.paid_date) {
           const paidDate = parseISO(inst.paid_date);
-          if (isWithinInterval(paidDate, { start: startDate, end: endDate })) {
+          if (isWithinInterval(paidDate, { start: dateRange.start, end: dateRange.end })) {
             result.push({
               id: inst.uid || `${order.id}-${inst.id}`,
               date: inst.paid_date,
@@ -93,18 +141,16 @@ export default function ReportsManagerPage() {
     manualEntries.forEach(entry => {
       if (entry.date) {
         const entryDate = parseISO(entry.date);
-        if (isWithinInterval(entryDate, { start: startDate, end: endDate })) {
-          result.push({
-            ...entry,
-            isAuto: false
-          });
+        if (isWithinInterval(entryDate, { start: dateRange.start, end: dateRange.end })) {
+          result.push({ ...entry, isAuto: false });
         }
       }
     });
 
     return result.sort((a, b) => b.date.localeCompare(a.date));
-  }, [orders, manualEntries, selectedMonth]);
+  }, [orders, manualEntries, dateRange]);
 
+  // --- CONCENTRAÇÃO DE CAPITAL ---
   const accountsSummary = useMemo(() => {
     const accounts: Record<string, any> = {
       'CAIXA INTERNO': { label: 'CAIXA INTERNO', value: 0, color: '#10b981', type: 'Dinheiro', icon: '💵' },
@@ -126,8 +172,10 @@ export default function ReportsManagerPage() {
         else if (method.includes('LINDÓIA') || method.includes('LINDOIA')) targetKey = 'SICOOB LINDOIA';
         else if (method.includes('SERRA NEGRA')) targetKey = 'SICOOB SERRA NEGRA';
 
-        accounts[targetKey].value += tx.amount;
-        totalEmCaixa += tx.amount;
+        if (accounts[targetKey]) {
+          accounts[targetKey].value += tx.amount;
+          totalEmCaixa += tx.amount;
+        }
       }
     });
 
@@ -137,6 +185,7 @@ export default function ReportsManagerPage() {
     };
   }, [transactions]);
 
+  // --- EXPORTAÇÃO ---
   const exportToCSV = useCallback(() => {
     const headers = ["DATA", "DESCRIÇÃO", "MODALIDADE", "CONTA", "TIPO", "VALOR"];
     const rows = transactions.map(tx => [
@@ -208,7 +257,7 @@ export default function ReportsManagerPage() {
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-primary">
               <BarChart3 size={16} />
-              <span className="text-[10px] font-black uppercase tracking-[0.3em]">Cérebro Financeiro VisComm</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.3em]">Terminal de Inteligência VisComm</span>
             </div>
             <h1 className="text-4xl font-black text-white uppercase tracking-tighter leading-none">
               REPORTS <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">FLUX</span>
@@ -233,14 +282,75 @@ export default function ReportsManagerPage() {
           </div>
         </header>
 
-        <Tabs defaultValue="financeiro" className="w-full">
-          <TabsList className="bg-zinc-900/50 border border-zinc-800 mb-6">
-            <TabsTrigger value="financeiro" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-6">Fluxo de Caixa</TabsTrigger>
-            <TabsTrigger value="operacional" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-6">Operacional</TabsTrigger>
-            <TabsTrigger value="despesas" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-6">Despesas</TabsTrigger>
+        <Tabs defaultValue="operacional" className="w-full">
+          <TabsList className="bg-zinc-900/50 border border-zinc-800 mb-8 p-1">
+            <TabsTrigger value="operacional" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-8 h-10">Monitor Operacional</TabsTrigger>
+            <TabsTrigger value="financeiro" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-8 h-10">Fluxo de Caixa</TabsTrigger>
+            <TabsTrigger value="despesas" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-8 h-10">Custos e Despesas</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="financeiro" className="space-y-8">
+          {/* --- ABA OPERACIONAL: MONITOR DE ENTREGAS --- */}
+          <TabsContent value="operacional" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 h-[calc(100vh-320px)] overflow-y-auto custom-scrollbar pr-2">
+              {sortedOrders.length === 0 ? (
+                <div className="col-span-full py-20 text-center border-2 border-dashed border-zinc-800 rounded-3xl opacity-20">
+                   <Package size={48} className="mx-auto mb-4" />
+                   <p className="text-[10px] uppercase font-black tracking-widest">Nenhuma OS para este período</p>
+                </div>
+              ) : (
+                sortedOrders.map((order) => {
+                  const total = Number(order.total_value || order.totalValue || 0);
+                  const paid = Number(order.amount_paid || order.amountPaid || 0);
+                  const balance = total - paid;
+                  const isDone = ['Concluído', 'Entregue'].includes(order.status);
+                  const today = new Date();
+                  const deadline = parseISO(order.delivery_date || order.deliveryDate || '9999-12-31');
+                  const isLate = isBefore(deadline, today) && !isDone;
+
+                  return (
+                    <motion.div 
+                      key={order.id}
+                      layout
+                      onClick={() => router.push(`/orders?edit=${order.id}`)}
+                      className="group bg-[#09090b] border border-zinc-800 rounded-2xl p-5 cursor-pointer hover:border-primary/40 hover:scale-[1.01] transition-all"
+                    >
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-black text-white uppercase truncate group-hover:text-primary transition-colors">{order.client}</h3>
+                          <p className="text-[9px] font-mono text-zinc-500 mt-0.5">#{order.id.slice(-6)}</p>
+                        </div>
+                        {isLate ? (
+                          <div className="bg-destructive/10 text-destructive border border-destructive/20 px-2 py-1 rounded text-[8px] font-black uppercase animate-pulse-neon">Atrasado</div>
+                        ) : isDone ? (
+                          <div className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2 py-1 rounded text-[8px] font-black uppercase">Finalizado</div>
+                        ) : (
+                          <div className="bg-zinc-800 text-zinc-400 px-2 py-1 rounded text-[8px] font-black uppercase">Prazo: {format(deadline, 'dd/MM')}</div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 border-t border-white/5 pt-4">
+                        <div className="space-y-1">
+                          <span className="text-[10px] uppercase font-bold tracking-widest opacity-60 block">Total OS</span>
+                          <span className="text-base md:text-lg font-bold tracking-tight text-white">{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[10px] uppercase font-bold tracking-widest opacity-60 block text-emerald-500">Liquidado</span>
+                          <span className="text-base md:text-lg font-bold tracking-tight text-emerald-500">{paid.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[10px] uppercase font-bold tracking-widest opacity-60 block text-primary">A Receber</span>
+                          <span className="text-base md:text-lg font-bold tracking-tight text-primary">{balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })
+              )}
+            </div>
+          </TabsContent>
+
+          {/* --- ABA FLUXO DE CAIXA: LIVRO-CAIXA --- */}
+          <TabsContent value="financeiro" className="space-y-8 animate-in fade-in duration-500">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="bg-[#09090b] border border-zinc-800 rounded-3xl p-6 lg:col-span-2">
                 <div className="flex justify-between items-center mb-8">
@@ -283,13 +393,13 @@ export default function ReportsManagerPage() {
                   <h3 className="text-xs font-black text-white uppercase tracking-widest">Livro-Caixa Consolidado</h3>
                   <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">{transactions.length} Movimentações</span>
                </div>
-               <div className="overflow-x-auto custom-scrollbar">
+               <div className="overflow-x-auto custom-scrollbar max-h-[500px]">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="bg-zinc-900/50 text-[10px] text-zinc-500 uppercase font-black border-b border-white/5">
+                      <tr className="bg-zinc-900/50 text-[10px] text-zinc-500 uppercase font-black border-b border-white/5 sticky top-0 z-10">
                         <th className="p-4 pl-6">Data</th>
-                        <th className="p-4">Descrição do Lançamento</th>
-                        <th className="p-4 text-center">Modalidade / Conta</th>
+                        <th className="p-4">Descrição</th>
+                        <th className="p-4 text-center">Conta / Destino</th>
                         <th className="p-4 text-center">Tipo</th>
                         <th className="p-4 pr-6 text-right">Valor</th>
                       </tr>
@@ -309,7 +419,7 @@ export default function ReportsManagerPage() {
                             </td>
                             <td className="p-4 text-center">
                                <div className="inline-flex items-center gap-2 px-2 py-1 rounded bg-zinc-900 border border-white/5">
-                                  <span className="text-[9px] text-zinc-400 font-black uppercase">{tx.method}</span>
+                                  <span className="text-[9px] text-zinc-400 font-black uppercase">{tx.method || 'Geral'}</span>
                                   <span className="text-[9px] text-primary font-black uppercase opacity-60">→ {tx.account}</span>
                                </div>
                             </td>
@@ -335,11 +445,56 @@ export default function ReportsManagerPage() {
                </div>
             </section>
           </TabsContent>
-          
-          {/* Outros conteúdos mantidos (Operacional e Despesas) */}
+
+          {/* --- ABA DESPESAS: CUSTOS TÁTICOS --- */}
+          <TabsContent value="despesas" className="space-y-6 animate-in fade-in duration-500">
+             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                {/* Widgets de Sumário de Despesas */}
+                <Card className="bg-[#09090b] border-zinc-800 p-6 flex flex-col justify-center">
+                   <span className="text-[10px] text-zinc-500 font-black uppercase tracking-widest mb-2">Total Operacional</span>
+                   <h3 className="text-2xl font-black text-white">R$ {(expenses?.reduce((acc, e) => acc + (Number(e.value) || 0), 0) || 0).toLocaleString('pt-BR')}</h3>
+                </Card>
+                {/* Outros widgets poderiam vir aqui */}
+             </div>
+
+             <div className="bg-[#09090b] border border-zinc-800 rounded-3xl overflow-hidden">
+                <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                   <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2"><Receipt size={14} className="text-primary" /> Histórico de Despesas</h3>
+                   <Button size="sm" className="h-8 bg-zinc-800 text-[10px] font-black uppercase">+ Registrar Custo</Button>
+                </div>
+                <div className="overflow-x-auto custom-scrollbar">
+                   <table className="w-full text-left">
+                      <thead>
+                        <tr className="bg-zinc-900/50 text-[10px] text-zinc-500 uppercase font-black border-b border-white/5">
+                           <th className="p-4 pl-6">Data</th>
+                           <th className="p-4">Descrição</th>
+                           <th className="p-4">Categoria</th>
+                           <th className="p-4 pr-6 text-right">Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                         {expenses?.length === 0 ? (
+                           <tr><td colSpan={4} className="p-12 text-center text-zinc-600 font-black uppercase text-[10px]">Nenhum registro de custo encontrado</td></tr>
+                         ) : (
+                           expenses?.map(exp => (
+                             <tr key={exp.id} className="hover:bg-white/5 transition-colors">
+                               <td className="p-4 pl-6 text-[10px] font-mono text-zinc-500">{exp.date ? format(parseISO(exp.date), 'dd/MM/yy') : '--/--/--'}</td>
+                               <td className="p-4 text-xs font-bold text-white uppercase">{exp.description}</td>
+                               <td className="p-4">
+                                  <span className="text-[9px] bg-zinc-900 border border-white/5 px-2 py-1 rounded-full text-zinc-400 font-black uppercase">{exp.category || 'Geral'}</span>
+                               </td>
+                               <td className="p-4 pr-6 text-right font-mono font-black text-[#FF5F1F]">- {Number(exp.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                             </tr>
+                           ))
+                         )}
+                      </tbody>
+                   </table>
+                </div>
+             </div>
+          </TabsContent>
         </Tabs>
 
-        {/* MODAL DE LANÇAMENTO MANUAL */}
+        {/* MODAL DE LANÇAMENTO MANUAL (FLUXO DE CAIXA) */}
         <AnimatePresence>
           {isEntryModalOpen && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" onClick={() => setIsEntryModalOpen(false)}>
@@ -351,7 +506,7 @@ export default function ReportsManagerPage() {
                      <button type="button" onClick={() => setEntryForm({...entryForm, type: 'expense'})} className={cn("py-2 rounded-lg text-[10px] font-black uppercase transition-all", entryForm.type === 'expense' ? "bg-red-500 text-white shadow-lg" : "text-zinc-500")}>Saída</button>
                   </div>
                   
-                  <input required placeholder="Descrição (Ex: Venda Balcão, Retirada Sócios...)" value={entryForm.description} onChange={e => setEntryForm({...entryForm, description: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none" />
+                  <input required placeholder="Descrição (Ex: Retirada Sócios, Venda Balcão...)" value={entryForm.description} onChange={e => setEntryForm({...entryForm, description: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none" />
                   
                   <div className="grid grid-cols-2 gap-4">
                     <input required type="number" step="0.01" placeholder="Valor R$" value={entryForm.amount} onChange={e => setEntryForm({...entryForm, amount: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none" />
