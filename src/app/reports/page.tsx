@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
@@ -372,12 +371,12 @@ export default function ReportsManagerPage() {
   };
 
   const handleDeletePayable = async (id: string) => {
-    if (!firestore) return;
+    if (!firestore || !id) return;
     
     if (window.confirm("Remover este registro da pauta permanentemente?")) {
       deleteDoc(doc(firestore, 'accounts_payable', id))
         .then(() => toast({ title: "Registro Removido" }))
-        .catch(() => {
+        .catch((err) => {
           errorEmitter.emit('permission-error', new FirestorePermissionError({
             path: `accounts_payable/${id}`, operation: 'delete'
           }));
