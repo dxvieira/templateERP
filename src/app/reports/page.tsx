@@ -4,9 +4,9 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  BarChart3, Wallet, TrendingUp, Plus, Trash2, Loader2, 
+  BarChart3, Wallet, TrendingUp, TrendingDown, Plus, Trash2, Loader2, 
   X, RefreshCw, Download, ArrowLeft, ArrowRight,
-  Package, Edit, Info
+  Package, Edit, Info, Clock
 } from 'lucide-react';
 import { startOfMonth, endOfMonth, format, isWithinInterval, parseISO, addMonths, subMonths, isBefore } from 'date-fns';
 
@@ -141,6 +141,24 @@ export default function ReportsManagerPage() {
 
     return result.sort((a, b) => b.date.localeCompare(a.date));
   }, [orders, manualEntries, dateRange]);
+
+  // --- CÁLCULO DOS KPIs ---
+  const kpiMetrics = useMemo(() => {
+    const income = transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const expense = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const pending = sortedOrders.reduce((acc, o) => {
+      const total = Number(o.total_value || o.totalValue || 0);
+      const paid = Number(o.amount_paid || o.amountPaid || 0);
+      return acc + Math.max(0, total - paid);
+    }, 0);
+
+    return {
+      income,
+      expense,
+      balance: income - expense,
+      pending
+    };
+  }, [transactions, sortedOrders]);
 
   // --- CONCENTRAÇÃO DE CAPITAL ---
   const accountsSummary = useMemo(() => {
@@ -328,6 +346,77 @@ export default function ReportsManagerPage() {
           </div>
         </header>
 
+        {/* --- KPI GRID --- */}
+        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+          {/* Entradas */}
+          <motion.div 
+            whileHover={{ y: -4 }}
+            className="group relative bg-[#09090b] border border-zinc-800 rounded-3xl p-6 transition-all duration-300 hover:border-[#4ade80]/40 hover:shadow-[0_0_20px_rgba(74,222,128,0.1)]"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-2.5 rounded-2xl bg-[#4ade80]/10 text-[#4ade80] border border-[#4ade80]/20">
+                <TrendingUp size={20} />
+              </div>
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Receitas do Mês</span>
+            </div>
+            <div>
+              <span className="text-3xl font-black text-white">{kpiMetrics.income.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+              <div className="h-1 w-12 bg-[#4ade80] rounded-full mt-3 opacity-40 group-hover:opacity-100 transition-opacity" />
+            </div>
+          </motion.div>
+
+          {/* Saídas */}
+          <motion.div 
+            whileHover={{ y: -4 }}
+            className="group relative bg-[#09090b] border border-zinc-800 rounded-3xl p-6 transition-all duration-300 hover:border-[#ef4444]/40 hover:shadow-[0_0_20px_rgba(239,68,68,0.1)]"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-2.5 rounded-2xl bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/20">
+                <TrendingDown size={20} />
+              </div>
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Despesas do Mês</span>
+            </div>
+            <div>
+              <span className="text-3xl font-black text-white">{kpiMetrics.expense.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+              <div className="h-1 w-12 bg-[#ef4444] rounded-full mt-3 opacity-40 group-hover:opacity-100 transition-opacity" />
+            </div>
+          </motion.div>
+
+          {/* Saldo Líquido */}
+          <motion.div 
+            whileHover={{ y: -4 }}
+            className="group relative bg-[#09090b] border border-zinc-800 rounded-3xl p-6 transition-all duration-300 hover:border-primary/40 hover:shadow-[0_0_20px_rgba(255,95,31,0.1)]"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-2.5 rounded-2xl bg-primary/10 text-primary border border-primary/20">
+                <Wallet size={20} />
+              </div>
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Saldo em Caixa</span>
+            </div>
+            <div>
+              <span className="text-3xl font-black text-white">{kpiMetrics.balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+              <div className="h-1 w-12 bg-primary rounded-full mt-3 opacity-40 group-hover:opacity-100 transition-opacity" />
+            </div>
+          </motion.div>
+
+          {/* A Receber */}
+          <motion.div 
+            whileHover={{ y: -4 }}
+            className="group relative bg-[#09090b] border border-zinc-800 rounded-3xl p-6 transition-all duration-300 hover:border-[#eab308]/40 hover:shadow-[0_0_20px_rgba(234,179,8,0.1)]"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-2.5 rounded-2xl bg-[#eab308]/10 text-[#eab308] border border-[#eab308]/20">
+                <Clock size={20} />
+              </div>
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Saldo a Receber</span>
+            </div>
+            <div>
+              <span className="text-3xl font-black text-white">{kpiMetrics.pending.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+              <div className="h-1 w-12 bg-[#eab308] rounded-full mt-3 opacity-40 group-hover:opacity-100 transition-opacity" />
+            </div>
+          </motion.div>
+        </section>
+
         <Tabs defaultValue="operacional" className="w-full">
           <TabsList className="bg-zinc-900/50 border border-zinc-800 mb-8 p-1">
             <TabsTrigger value="operacional" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-8 h-10">Monitor Operacional</TabsTrigger>
@@ -335,7 +424,7 @@ export default function ReportsManagerPage() {
           </TabsList>
 
           <TabsContent value="operacional" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 h-[calc(100vh-320px)] overflow-y-auto custom-scrollbar pr-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 h-[calc(100vh-450px)] overflow-y-auto custom-scrollbar pr-2">
               {sortedOrders.length === 0 ? (
                 <div className="col-span-full py-20 text-center border-2 border-dashed border-zinc-800 rounded-3xl opacity-20">
                    <Package size={48} className="mx-auto mb-4" />
