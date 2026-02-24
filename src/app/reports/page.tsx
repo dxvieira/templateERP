@@ -1,15 +1,14 @@
-
 'use client';
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  BarChart3, Calendar, ArrowUpRight, ArrowDownRight, Wallet, CreditCard, 
+  BarChart3, ArrowUpRight, ArrowDownRight, Wallet, CreditCard, 
   Banknote, TrendingUp, FileText, Plus, Trash2, Loader2, DollarSign, 
   Briefcase, AlertCircle, X, RefreshCw, Filter, Clock, CheckCircle2,
   Package, ChevronRight, AlertTriangle, Download, ArrowLeft, ArrowRight,
-  Receipt, ShoppingCart, Tag, Save
+  Receipt, ShoppingCart, Tag, Save, Edit, Info
 } from 'lucide-react';
 import { startOfMonth, endOfMonth, format, isWithinInterval, parseISO, startOfDay, endOfDay, addMonths, subMonths, isBefore } from 'date-fns';
 
@@ -35,8 +34,14 @@ export default function ReportsManagerPage() {
   
   // --- ESTADOS DE LANÇAMENTO ---
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [entryForm, setEntryForm] = useState({
-    description: '', amount: '', type: 'income' as 'income' | 'expense', date: format(new Date(), 'yyyy-MM-dd'), account: 'Caixa Interno', method: 'Dinheiro/Pix'
+    description: '', 
+    amount: '', 
+    type: 'income' as 'income' | 'expense', 
+    date: format(new Date(), 'yyyy-MM-dd'), 
+    account: 'Caixa Interno', 
+    method: 'Dinheiro/Pix'
   });
 
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -213,6 +218,52 @@ export default function ReportsManagerPage() {
     document.body.removeChild(link);
   }, [transactions, selectedMonth]);
 
+  // --- LÓGICA DE LANÇAMENTOS MANUAIS (CRUD) ---
+  const handleEditTransaction = (tx: any) => {
+    if (tx.isAuto) {
+      toast({ 
+        title: "Acesso Bloqueado", 
+        description: "Esta movimentação é vinculada a uma OS. Para alterar, estorne a baixa diretamente no pedido.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setEditingEntryId(tx.id);
+    setEntryForm({
+      description: tx.description || '',
+      amount: String(tx.amount || ''),
+      type: tx.type || 'income',
+      date: tx.date || format(new Date(), 'yyyy-MM-dd'),
+      account: tx.account || 'Caixa Interno',
+      method: tx.method || 'Dinheiro/Pix'
+    });
+    setIsEntryModalOpen(true);
+  };
+
+  const handleDeleteTransaction = async (tx: any) => {
+    if (tx.isAuto) {
+      toast({ 
+        title: "Exclusão Bloqueada", 
+        description: "Movimentações automáticas de pedidos não podem ser excluídas por aqui.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!firestore) return;
+    if (window.confirm("Remover este lançamento permanentemente do Livro-Caixa?")) {
+      deleteDoc(doc(firestore, 'cashflow_manual', tx.id))
+        .then(() => toast({ title: "Lançamento Removido" }))
+        .catch(() => {
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: `cashflow_manual/${tx.id}`,
+            operation: 'delete'
+          }));
+        });
+    }
+  };
+
   const handleSaveEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore || !user) return;
@@ -220,21 +271,26 @@ export default function ReportsManagerPage() {
     const payload = {
       ...entryForm,
       amount: Number(entryForm.amount),
-      createdAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
+      ...(editingEntryId ? {} : { createdAt: serverTimestamp() })
     };
 
-    const docRef = doc(collection(firestore, 'cashflow_manual'));
-    setDoc(docRef, { ...payload, id: docRef.id })
+    const docRef = editingEntryId 
+      ? doc(firestore, 'cashflow_manual', editingEntryId) 
+      : doc(collection(firestore, 'cashflow_manual'));
+
+    setDoc(docRef, { ...payload, id: docRef.id }, { merge: true })
       .then(() => {
-        toast({ title: "Lançamento Registrado" });
+        toast({ title: editingEntryId ? "Lançamento Atualizado" : "Lançamento Registrado" });
         setIsEntryModalOpen(false);
+        setEditingEntryId(null);
         setEntryForm({
           description: '', amount: '', type: 'income', date: format(new Date(), 'yyyy-MM-dd'), account: 'Caixa Interno', method: 'Dinheiro/Pix'
         });
       })
       .catch(err => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: 'cashflow_manual', operation: 'create', requestResourceData: payload
+          path: 'cashflow_manual', operation: editingEntryId ? 'update' : 'create', requestResourceData: payload
         }));
       });
   };
@@ -342,8 +398,9 @@ export default function ReportsManagerPage() {
                   const balance = total - paid;
                   const isDone = ['Concluído', 'Entregue'].includes(order.status);
                   const today = new Date();
-                  const deadline = parseISO(order.delivery_date || order.deliveryDate || '9999-12-31');
-                  const isLate = isBefore(deadline, today) && !isDone;
+                  const deadlineStr = order.delivery_date || order.deliveryDate;
+                  const deadline = deadlineStr ? parseISO(deadlineStr) : null;
+                  const isLate = deadline && isBefore(deadline, today) && !isDone;
 
                   return (
                     <motion.div 
@@ -362,7 +419,7 @@ export default function ReportsManagerPage() {
                         ) : isDone ? (
                           <div className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2 py-1 rounded text-[8px] font-black uppercase">Finalizado</div>
                         ) : (
-                          <div className="bg-zinc-800 text-zinc-400 px-2 py-1 rounded text-[8px] font-black uppercase">Prazo: {format(deadline, 'dd/MM')}</div>
+                          <div className="bg-zinc-800 text-zinc-400 px-2 py-1 rounded text-[8px] font-black uppercase">Prazo: {deadline ? format(deadline, 'dd/MM') : '--/--'}</div>
                         )}
                       </div>
 
@@ -421,7 +478,7 @@ export default function ReportsManagerPage() {
                    <h2 className="text-4xl font-black text-white tracking-tighter mb-2">{accountsSummary.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</h2>
                    <div className="w-12 h-1 bg-primary rounded-full mt-4" />
                 </div>
-                <Button onClick={() => setIsEntryModalOpen(true)} className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.3)] hover:bg-white transition-all"><Plus size={18} className="mr-2" /> Novo Lançamento Manual</Button>
+                <Button onClick={() => { setEditingEntryId(null); setIsEntryModalOpen(true); }} className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.3)] hover:bg-white transition-all"><Plus size={18} className="mr-2" /> Novo Lançamento Manual</Button>
               </div>
             </div>
 
@@ -438,12 +495,13 @@ export default function ReportsManagerPage() {
                         <th className="p-4">Descrição</th>
                         <th className="p-4 text-center">Conta / Destino</th>
                         <th className="p-4 text-center">Tipo</th>
-                        <th className="p-4 pr-6 text-right">Valor</th>
+                        <th className="p-4 text-center">Valor</th>
+                        <th className="p-4 pr-6 text-right">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {transactions.length === 0 ? (
-                        <tr><td colSpan={5} className="p-12 text-center text-zinc-600 uppercase font-black text-[10px] tracking-[0.3em]">Nenhuma movimentação para este mês</td></tr>
+                        <tr><td colSpan={6} className="p-12 text-center text-zinc-600 uppercase font-black text-[10px] tracking-[0.3em]">Nenhuma movimentação para este mês</td></tr>
                       ) : (
                         transactions.map(tx => (
                           <tr key={tx.id} className="hover:bg-white/5 transition-colors group">
@@ -451,7 +509,7 @@ export default function ReportsManagerPage() {
                             <td className="p-4">
                                <div className="flex flex-col">
                                   <span className="text-xs font-bold text-white uppercase group-hover:text-primary transition-colors">{tx.description}</span>
-                                  {tx.isAuto && <span className="text-[8px] text-zinc-600 uppercase font-black tracking-tighter">Baixa Automática OS</span>}
+                                  {tx.isAuto && <span className="text-[8px] text-zinc-600 uppercase font-black tracking-tighter flex items-center gap-1"><Info size={8}/> Baixa Automática OS</span>}
                                </div>
                             </td>
                             <td className="p-4 text-center">
@@ -469,10 +527,28 @@ export default function ReportsManagerPage() {
                                </span>
                             </td>
                             <td className={cn(
-                              "p-4 pr-6 text-right font-mono font-black text-sm",
+                              "p-4 text-center font-mono font-black text-sm",
                               tx.type === 'income' ? 'text-[#4ade80]' : 'text-[#FF5F1F]'
                             )}>
                               {tx.type === 'income' ? '+' : '-'} {tx.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </td>
+                            <td className="p-4 pr-6 text-right">
+                               <div className="flex justify-end gap-3">
+                                  <button 
+                                    onClick={() => handleEditTransaction(tx)}
+                                    className={cn("p-2 rounded-lg transition-all", tx.isAuto ? "opacity-20 cursor-not-allowed" : "text-zinc-500 hover:text-white hover:bg-white/5")}
+                                    title={tx.isAuto ? "Bloqueado: Estorne na OS" : "Editar Lançamento"}
+                                  >
+                                    <Edit size={16} />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteTransaction(tx)}
+                                    className={cn("p-2 rounded-lg transition-all", tx.isAuto ? "opacity-20 cursor-not-allowed" : "text-zinc-500 hover:text-red-500 hover:bg-red-500/10")}
+                                    title={tx.isAuto ? "Bloqueado: Estorne na OS" : "Excluir Lançamento"}
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                               </div>
                             </td>
                           </tr>
                         ))
@@ -528,35 +604,55 @@ export default function ReportsManagerPage() {
           </TabsContent>
         </Tabs>
 
-        {/* MODAL DE LANÇAMENTO MANUAL (FLUXO DE CAIXA) */}
+        {/* MODAL DE LANÇAMENTO MANUAL (FLUXO DE CAIXA) - SUPORTA CRIAÇÃO E EDIÇÃO */}
         <AnimatePresence>
           {isEntryModalOpen && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm" onClick={() => setIsEntryModalOpen(false)}>
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm" onClick={() => { setIsEntryModalOpen(false); setEditingEntryId(null); }}>
               <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#09090b] w-full max-w-md border border-zinc-800 rounded-3xl p-8 shadow-2xl">
-                <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">Novo Lançamento Manual</h2>
+                <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">{editingEntryId ? 'Editar Lançamento' : 'Novo Lançamento Manual'}</h2>
                 <form onSubmit={handleSaveEntry} className="space-y-4">
                   <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-900 rounded-xl border border-zinc-800 mb-4">
                      <button type="button" onClick={() => setEntryForm({...entryForm, type: 'income'})} className={cn("py-2 rounded-lg text-[10px] font-black uppercase transition-all", entryForm.type === 'income' ? "bg-emerald-500 text-black shadow-lg" : "text-zinc-500")}>Entrada</button>
                      <button type="button" onClick={() => setEntryForm({...entryForm, type: 'expense'})} className={cn("py-2 rounded-lg text-[10px] font-black uppercase transition-all", entryForm.type === 'expense' ? "bg-red-500 text-white shadow-lg" : "text-zinc-500")}>Saída</button>
                   </div>
                   
-                  <input required placeholder="Descrição (Ex: Retirada Sócios, Venda Balcão...)" value={entryForm.description} onChange={e => setEntryForm({...entryForm, description: e.target.value})} className={inputClass} />
+                  <div>
+                    <label className={labelClass}>Descrição do Lançamento</label>
+                    <input required placeholder="Ex: Retirada Sócios, Venda Balcão..." value={entryForm.description} onChange={e => setEntryForm({...entryForm, description: e.target.value})} className={inputClass} />
+                  </div>
                   
                   <div className="grid grid-cols-2 gap-4">
-                    <input required type="number" step="0.01" placeholder="Valor R$" value={entryForm.amount} onChange={e => setEntryForm({...entryForm, amount: e.target.value})} className={inputClass} />
-                    <input required type="date" value={entryForm.date} onChange={e => setEntryForm({...entryForm, date: e.target.value})} className={inputClass} />
+                    <div>
+                      <label className={labelClass}>Valor (R$)</label>
+                      <input required type="number" step="0.01" placeholder="0,00" value={entryForm.amount} onChange={e => setEntryForm({...entryForm, amount: e.target.value})} className={inputClass} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Data</label>
+                      <input required type="date" value={entryForm.date} onChange={e => setEntryForm({...entryForm, date: e.target.value})} className={inputClass} />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <select value={entryForm.method} onChange={e => setEntryForm({...entryForm, method: e.target.value})} className={inputClass}>
-                      {['Dinheiro/Pix', 'Cartão', 'Boleto', 'Outros'].map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                    <select value={entryForm.account} onChange={e => setEntryForm({...entryForm, account: e.target.value})} className={inputClass}>
-                      {['Caixa Interno', 'SICOOB - Lindóia', 'SICOOB - Serra Negra', 'Máquina PAGBANK', 'Máquina SIPAG'].map(a => <option key={a} value={a}>{a}</option>)}
-                    </select>
+                    <div>
+                      <label className={labelClass}>Modalidade</label>
+                      <select value={entryForm.method} onChange={e => setEntryForm({...entryForm, method: e.target.value})} className={inputClass}>
+                        {['Dinheiro/Pix', 'Cartão', 'Boleto', 'Outros'].map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Conta Destino</label>
+                      <select value={entryForm.account} onChange={e => setEntryForm({...entryForm, account: e.target.value})} className={inputClass}>
+                        {['Caixa Interno', 'SICOOB - Lindóia', 'SICOOB - Serra Negra', 'Máquina PAGBANK', 'Máquina SIPAG'].map(a => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                    </div>
                   </div>
 
-                  <Button type="submit" className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_25px_rgba(255,95,31,0.4)] mt-4">Confirmar Lançamento</Button>
+                  <div className="flex gap-3 pt-4">
+                    <button type="button" onClick={() => { setIsEntryModalOpen(false); setEditingEntryId(null); }} className="flex-1 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors">Cancelar</button>
+                    <Button type="submit" className="flex-[2] h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_25px_rgba(255,95,31,0.4)]">
+                      {editingEntryId ? 'Atualizar Registro' : 'Confirmar Lançamento'}
+                    </Button>
+                  </div>
                 </form>
               </motion.div>
             </div>
