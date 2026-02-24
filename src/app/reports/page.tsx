@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   BarChart3, Calendar, ArrowUpRight, ArrowDownRight, Wallet, CreditCard, 
   Banknote, TrendingUp, FileText, Plus, Trash2, Loader2, DollarSign, 
-  Briefcase, AlertCircle, X, RefreshCw, Filter, Clock
+  Briefcase, AlertCircle, X, RefreshCw, Filter, Clock, CheckCircle2,
+  Package, ChevronRight, AlertTriangle
 } from 'lucide-react';
 import { startOfMonth, endOfMonth, format, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
 
@@ -18,10 +19,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 /**
  * REPORTS MANAGER: O Cérebro Financeiro (NEXUS/FLUX)
- * Refatorado para Centro de Liquidez e Radar de Operações.
+ * Refatorado para Listagem Operacional Individualizada e Radar de Liquidez.
  */
 export default function ReportsManagerPage() {
   const firestore = useFirestore();
@@ -109,57 +111,6 @@ export default function ReportsManagerPage() {
     };
   }, [orders, expenses, appliedDateRange]);
 
-  // Lógica do Radar de Operações (Foco em Volume e Urgência)
-  const stagesSummary = useMemo(() => {
-    if (!financialData?.filteredOrders) return [];
-
-    const summary: Record<string, any> = {
-      'Arte': { label: 'ARTE FINAL', count: 0, critical: 0, color: '#d946ef' },
-      'Impressão': { label: 'IMPRESSÃO', count: 0, critical: 0, color: '#3B82F6' },
-      'Serralheria': { label: 'SERRALHERIA', count: 0, critical: 0, color: '#EAB308' },
-      'Acabamento': { label: 'ACABAMENTO', count: 0, critical: 0, color: '#FF5F1F' },
-      'Instalação': { label: 'INSTALAÇÃO', count: 0, critical: 0, color: '#8B5CF6' },
-      'Finalizado': { label: 'FINALIZADO', count: 0, critical: 0, color: '#4ade80' } 
-    };
-
-    let totalActiveOrders = 0;
-    const today = new Date().toISOString().split('T')[0];
-
-    financialData.filteredOrders.forEach(order => {
-      const statusKey = (order.status === 'Concluído' || order.status === 'Entregue') 
-        ? 'Finalizado' 
-        : order.status;
-
-      if (summary[statusKey]) {
-        summary[statusKey].count += 1;
-        
-        if (statusKey !== 'Finalizado') {
-          totalActiveOrders += 1;
-        }
-
-        const dDate = order.delivery_date || order.deliveryDate;
-        if (statusKey !== 'Finalizado' && dDate && dDate <= today) {
-           summary[statusKey].critical += 1;
-        }
-      }
-    });
-
-    return Object.values(summary).map(stage => {
-      let percentage = 0;
-      if (stage.label === 'FINALIZADO') {
-         percentage = stage.count > 0 ? 100 : 0;
-      } else {
-         percentage = totalActiveOrders === 0 ? 0 : (stage.count / totalActiveOrders) * 100;
-      }
-
-      return {
-        ...stage,
-        percentage
-      };
-    });
-  }, [financialData?.filteredOrders]);
-
-  // Lógica de Distribuição do Fluxo de Caixa (À Prova de Balas)
   const accountsSummary = useMemo(() => {
     const accounts: Record<string, any> = {
       'CAIXA INTERNO': { label: 'CAIXA INTERNO', value: 0, color: '#10b981', type: 'Dinheiro', icon: '💵' },
@@ -173,12 +124,10 @@ export default function ReportsManagerPage() {
     const ordersData = financialData?.filteredOrders || [];
 
     ordersData.forEach(order => {
-      // 1. Verifica se o pedido tem o sistema de parcelas
       if (order.installments && Array.isArray(order.installments)) {
         order.installments.forEach(inst => {
           if (inst.status === 'paid') {
             const amount = Number(inst.amount) || 0;
-            // Normaliza para maiúsculas e remove acentos comuns para busca
             const method = String(inst.payment_method || inst.paymentMethod || '').toUpperCase();
 
             if (method.includes('PAGBANK')) accounts['PAGBANK'].value += amount;
@@ -191,7 +140,6 @@ export default function ReportsManagerPage() {
           }
         });
       } 
-      // 2. Fallback para pedidos legados (campo amount_paid direto)
       else if (order.amount_paid || order.amountPaid) {
         const amount = Number(order.amount_paid || order.amountPaid) || 0;
         const method = String(order.payment_method || order.paymentMethod || '').toUpperCase();
@@ -257,7 +205,20 @@ export default function ReportsManagerPage() {
 
   const kpis = financialData || { 
     income: 0, outcome: 0, net: 0, aReceber: 0,
-    filteredExpenses: []
+    filteredOrders: [], filteredExpenses: []
+  };
+
+  const getStatusColor = (currentStatus: string) => {
+    switch(currentStatus) {
+      case 'Arte': return '#d946ef';
+      case 'Serralheria': return '#EAB308';
+      case 'Impressão': return '#3B82F6';
+      case 'Acabamento': return '#FF5F1F';
+      case 'Instalação': return '#8B5CF6';
+      case 'Concluído':
+      case 'Entregue': return '#4ade80';
+      default: return '#71717A';
+    }
   };
 
   return (
@@ -339,72 +300,86 @@ export default function ReportsManagerPage() {
 
           <TabsContent value="operacional" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="bg-[#09090b] border border-zinc-800 rounded-3xl p-6 lg:col-span-2 flex flex-col transition-all hover:border-primary/20">
-                <div className="flex justify-between items-center mb-8">
-                  <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">
-                    Radar de Operações (Gargalos)
-                  </h3>
-                  <span className="text-[8px] bg-zinc-900 text-zinc-500 px-3 py-1 rounded-full border border-zinc-800 font-black uppercase tracking-widest">
-                    Volume & Urgência
-                  </span>
+              {/* LISTAGEM DE PEDIDOS (COLUNA ESQUERDA) */}
+              <div className="lg:col-span-2 space-y-4">
+                <div className="flex justify-between items-center px-2">
+                  <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">Monitor de Entregas e Liquidação</h3>
+                  <span className="text-[10px] text-zinc-600 font-bold uppercase">{kpis.filteredOrders.length} Pedidos no período</span>
                 </div>
-                
-                <div className="space-y-6 flex-1 flex flex-col justify-between">
-                  {stagesSummary.map((stage) => {
-                    const hasAlert = stage.critical > 0;
 
-                    return (
-                      <div key={stage.label} className="relative group">
-                        <div className="flex justify-between items-center mb-2">
-                          <div className="flex items-center gap-4">
-                            <div 
-                              className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-black text-black shadow-lg transition-transform group-hover:scale-105"
-                              style={{ backgroundColor: stage.color, boxShadow: `0 0 15px ${stage.color}40` }}
-                            >
-                              {stage.count}
+                <div className="grid grid-cols-1 gap-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                  {kpis.filteredOrders.length === 0 ? (
+                    <div className="py-20 text-center border-2 border-dashed border-zinc-800 rounded-3xl bg-zinc-900/10">
+                       <Package size={40} className="mx-auto mb-4 text-zinc-800 opacity-20" />
+                       <p className="text-[10px] text-zinc-600 font-black uppercase tracking-[0.4em]">Nenhuma atividade no período filtrado</p>
+                    </div>
+                  ) : (
+                    kpis.filteredOrders.map(order => {
+                      const today = new Date().toISOString().split('T')[0];
+                      const delivery = order.delivery_date || order.deliveryDate;
+                      const isFinished = ['Concluído', 'Entregue'].includes(order.status);
+                      const isLate = !isFinished && delivery && delivery < today;
+                      
+                      const total = Number(order.total_value || order.totalValue) || 0;
+                      const paid = Number(order.amount_paid || order.amountPaid) || 0;
+                      const balance = total - paid;
+
+                      return (
+                        <div key={order.id} className="bg-[#09090b] border border-zinc-800 rounded-2xl p-4 group hover:border-primary/30 transition-all">
+                          <div className="flex justify-between items-start mb-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[8px] font-mono font-bold text-zinc-600 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800 uppercase tracking-tighter">#{order.id.slice(-6)}</span>
+                                <div className="flex items-center gap-1">
+                                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: getStatusColor(order.status) }} />
+                                  <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: getStatusColor(order.status) }}>{order.status}</span>
+                                </div>
+                              </div>
+                              <h4 className="text-sm font-black text-white uppercase truncate group-hover:text-primary transition-colors">{order.client}</h4>
                             </div>
-                            
-                            <div className="flex flex-col">
-                              <span className="text-white text-sm font-black uppercase tracking-wider block">
-                                {stage.label}
-                              </span>
-                              
-                              {stage.label === 'FINALIZADO' ? (
-                                <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-bold">
-                                  Prontos para Retirada / Entregues
+
+                            <div className="text-right shrink-0">
+                              {isFinished ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-[9px] font-black uppercase tracking-widest">
+                                  <CheckCircle2 size={10} /> FINALIZADO
                                 </span>
-                              ) : hasAlert ? (
-                                <span className="text-[9px] text-red-400 uppercase tracking-widest font-black flex items-center gap-1 animate-pulse">
-                                  ⚠️ {stage.critical} {stage.critical === 1 ? 'Pedido Crítico' : 'Pedidos Críticos'} (Atrasado/Hoje)
+                              ) : isLate ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/30 text-red-500 text-[9px] font-black uppercase tracking-widest animate-pulse">
+                                  <AlertTriangle size={10} /> ATRASADO
                                 </span>
                               ) : (
-                                <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">
-                                  {Math.round(stage.percentage)}% da carga de trabalho
-                                </span>
+                                <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+                                  Prazo: <span className="text-white font-mono">{delivery ? format(parseISO(delivery), 'dd/MM') : '--/--'}</span>
+                                </div>
                               )}
                             </div>
                           </div>
+
+                          <div className="grid grid-cols-3 gap-2 pt-3 border-t border-white/5">
+                            <div className="bg-black/20 p-2 rounded-xl border border-zinc-800/50">
+                              <p className="text-[7px] text-zinc-600 uppercase font-black mb-0.5">Total OS</p>
+                              <p className="text-[10px] text-zinc-400 font-mono font-bold">{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                            </div>
+                            <div className="bg-emerald-500/5 p-2 rounded-xl border border-emerald-500/10">
+                              <p className="text-[7px] text-emerald-500/60 uppercase font-black mb-0.5">Liquidado</p>
+                              <p className="text-[10px] text-emerald-500 font-mono font-bold">{paid.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                            </div>
+                            <div className="bg-primary/5 p-2 rounded-xl border border-primary/10">
+                              <p className="text-[7px] text-primary/60 uppercase font-black mb-0.5">A Receber</p>
+                              <p className={cn("text-[10px] font-mono font-bold", balance > 0 ? "text-primary" : "text-zinc-600")}>
+                                {balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </p>
+                            </div>
+                          </div>
                         </div>
-                        
-                        <div className="h-1.5 w-full bg-zinc-900/80 rounded-full overflow-hidden border border-zinc-800/30">
-                          <motion.div 
-                            initial={{ width: 0 }}
-                            animate={{ width: `${stage.percentage}%` }}
-                            transition={{ duration: 1, ease: "easeOut" }}
-                            className="h-full rounded-full opacity-80 group-hover:opacity-100 transition-all"
-                            style={{ 
-                              backgroundColor: stage.color,
-                              boxShadow: `0 0 10px ${stage.color}` 
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
               </div>
 
-              <Card className="bg-zinc-900/30 border-zinc-800 p-6 flex flex-col">
+              {/* PANORAMA FINANCEIRO (COLUNA DIREITA) */}
+              <Card className="bg-zinc-900/30 border-zinc-800 p-6 flex flex-col h-fit lg:sticky lg:top-8">
                 <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em] mb-8">
                   Panorama Financeiro
                 </h3>
