@@ -1,41 +1,110 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * VISCOMM COMMAND CENTER - SECURE RULES
-     * Deployment Trigger: Add expenses collection permissions.
+     * CORE PHILOSOPHY
+     * This ruleset implements a dual-layer security model: Strict Ownership for personal financial
+     * records and Role-Based Access Control (RBAC) for company-wide ERP data (Orders and Installments).
+     *
+     * DATA STRUCTURE
+     * - /cashFlowManualEntries/{entryId}: User-specific manual transactions (Income/Expense).
+     * - /orders/{orderId}: Company-wide production orders.
+     * - /installments/{installmentId}: Company-wide payment tracking, decoupled from orders for query efficiency.
+     *
+     * KEY SECURITY DECISIONS
+     * 1. Authorization Independence: Manual entries include a denormalized 'userId' to allow
+     *    immediate ownership validation without checking a parent 'users' collection.
+     * 2. QAPs (Queries as Authorization Policies): Rules for manual entries are designed to
+     *    automatically filter list results based on the authenticated user's ID.
+     * 3. Role-Based Perimeter: Orders and Installments are protected by an 'isEmployee' check,
+     *    which validates the user against a global registry.
+     * 4. Prototyping Flexibility: Data types and schema shapes are not enforced, only
+     *    relational integrity and identity fields are validated.
      */
 
+    // --- HELPER FUNCTIONS ---
+
+    /**
+     * @description Checks if the request is from an authenticated user.
+     */
     function isSignedIn() {
-      return request.auth != null && request.auth.uid != null;
+      return request.auth != null;
     }
 
+    /**
+     * @description Validates if the user's UID matches the provided owner ID.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * @description Validates ownership for existing documents during update/delete.
+     */
+    function isExistingOwner(userId) {
+      return resource != null && isOwner(userId);
+    }
+
+    /**
+     * @description Validates if the user has an 'employee' role.
+     * Note: This relies on a '/roles_employees' collection as specified in the architecture reasoning.
+     */
+    function isEmployee() {
+      return isSignedIn() && exists(/databases/$(database)/documents/roles_employees/$(request.auth.uid));
+    }
+
+    // --- COLLECTION RULES ---
+
+    /**
+     * @description Rules for manual cash flow entries. Enforces strict owner-only access.
+     * @path /cashFlowManualEntries/{entryId}
+     * @allow (create) If the user is signed in and sets 'userId' to their own UID.
+     * @deny (list) If the query does not filter by the user's own UID.
+     * @principle Ownership-based security with relational integrity.
+     */
+    match /cashFlowManualEntries/{entryId} {
+      allow get: if isOwner(resource.data.userId);
+      allow list: if isOwner(resource.data.userId);
+      allow create: if isOwner(request.resource.data.userId);
+      allow update: if isExistingOwner(resource.data.userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(resource.data.userId);
+    }
+
+    /**
+     * @description Rules for Orders. Accessible only by authorized internal employees.
+     * @path /orders/{orderId}
+     * @allow (get) If the user is registered in the 'roles_employees' collection.
+     * @deny (create) If the user is not an authorized employee.
+     * @principle Role-Based Access Control (RBAC).
+     */
     match /orders/{orderId} {
-      allow read, write: if isSignedIn();
+      allow get, list: if isEmployee();
+      allow create: if isEmployee();
+      // 'resource != null' is implicit for update operations.
+      allow update: if isEmployee();
+      // 'resource != null' is implicit for delete operations.
+      allow delete: if isEmployee();
     }
 
-    match /clients/{clientId} {
-      allow read, write: if isSignedIn();
-    }
-    
-    match /suppliers/{supplierId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /expenses/{expenseId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /counters/{counterId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /kpis/{kpiId} {
-      allow read, write: if isSignedIn();
+    /**
+     * @description Rules for Installments. Accessible only by authorized internal employees for financial reporting.
+     * @path /installments/{installmentId}
+     * @allow (list) If the user is an employee (supports cross-order month/year filtering).
+     * @deny (update) If the user is not an authorized employee.
+     * @principle Role-Based Access Control (RBAC) with support for efficient top-level querying.
+     */
+    match /installments/{installmentId} {
+      allow get, list: if isEmployee();
+      allow create: if isEmployee();
+      // 'resource != null' is implicit for update operations.
+      allow update: if isEmployee();
+      // 'resource != null' is implicit for delete operations.
+      allow delete: if isEmployee();
     }
 
+    // --- GLOBAL DENY ---
+    // Explicitly deny any access to unspecified paths.
     match /{path=**} {
       allow read, write: if false;
     }

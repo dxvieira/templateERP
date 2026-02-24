@@ -1,109 +1,272 @@
-
 {
   "entities": {
     "Order": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Order",
-      "description": "Represents a customer order with integrated financial tracking and installments.",
       "type": "object",
+      "description": "Represents a customer order within the Visual Communication ERP, tracking its production lifecycle. Payments for orders are tracked via the 'Installment' entity.",
       "properties": {
-        "id": { "type": "string" },
-        "client": { "type": "string" },
-        "clientId": { "type": "string" },
-        "emissionDate": { "type": "string", "format": "date" },
-        "deliveryDate": { "type": "string", "format": "date" },
-        "seller": { "type": "string" },
-        "observations": { "type": "string" },
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Order entity."
+        },
+        "clientName": {
+          "type": "string",
+          "description": "The name of the client who placed the order."
+        },
+        "description": {
+          "type": "string",
+          "description": "A brief description of the order, often including client name and service order (OS) number."
+        },
         "status": {
           "type": "string",
-          "enum": ["Arte", "Impressão", "Serralheria", "Acabamento", "Instalação", "Entregue"]
-        },
-        "totalValue": { "type": "number" },
-        "amountPaid": { "type": "number" },
-        "balanceDue": { "type": "number" },
-        "items": {
-          "type": "array",
+          "description": "The current production status of the order.",
+          "format": "enum",
           "items": {
-            "type": "object",
-            "properties": {
-              "desc": { "type": "string" },
-              "quantity": { "type": "number" },
-              "unitValue": { "type": "number" },
-              "productCode": { "type": "string" }
-            }
+            "type": "string"
           }
         },
-        "installments": {
-          "type": "array",
+        "deliveryDate": {
+          "type": "string",
+          "description": "The promised delivery date for the order.",
+          "format": "date-time"
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "The total monetary value of the order."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the order record was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the order record was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "clientName",
+        "description",
+        "status",
+        "deliveryDate",
+        "totalAmount",
+        "createdAt"
+      ]
+    },
+    "Installment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Installment",
+      "type": "object",
+      "description": "Represents a single payment installment for a specific order, used for tracking automatic income entries for cash flow.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Installment entity."
+        },
+        "orderId": {
+          "type": "string",
+          "description": "Reference to the Order entity this installment belongs to. (Relationship: Order 1:N Installment)"
+        },
+        "description": {
+          "type": "string",
+          "description": "A description for the installment, e.g., 'Installment 1/3 for Order ABC'."
+        },
+        "amount": {
+          "type": "number",
+          "description": "The monetary value of this specific installment."
+        },
+        "dueDate": {
+          "type": "string",
+          "description": "The date when this installment is due.",
+          "format": "date-time"
+        },
+        "paidDate": {
+          "type": "string",
+          "description": "The date when this installment was actually paid. Null if not yet paid.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "The current payment status of the installment.",
+          "format": "enum",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string", "description": "Ex: 1/4, 2/4" },
-              "amount": { "type": "number" },
-              "dueDate": { "type": "string", "format": "date" },
-              "status": { "type": "string", "enum": ["pending", "paid", "overdue"] },
-              "type": { "type": "string", "enum": ["Boleto", "Cartão", "Dinheiro/Pix"] },
-              "paymentMethod": { "type": "string" },
-              "paidDate": { "type": "string", "format": "date" }
-            }
+            "type": "string"
           }
         },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "updatedAt": { "type": "string", "format": "date-time" }
+        "paymentMethod": {
+          "type": "string",
+          "description": "The method used or expected for this installment payment (e.g., 'Boleto', 'Pix', 'Cartão', 'Dinheiro').",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "account": {
+          "type": "string",
+          "description": "The bank account where the payment was received or is expected (e.g., 'Sicoob', 'PagBank', 'Caixa').",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the installment record was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the installment record was last updated.",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "client"]
+      "required": [
+        "id",
+        "orderId",
+        "description",
+        "amount",
+        "dueDate",
+        "status",
+        "paymentMethod",
+        "account",
+        "createdAt"
+      ]
     },
-    "Client": {
-      "title": "Client",
-      "description": "Customer information.",
+    "CashFlowManualEntry": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "CashFlowManualEntry",
       "type": "object",
+      "description": "Represents a manual financial transaction, either an income or an expense, not directly tied to an order. Used for tracking manual cash flow entries.",
       "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "phone": { "type": "string" },
-        "email": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the CashFlowManualEntry entity."
+        },
+        "date": {
+          "type": "string",
+          "description": "The date when the manual transaction occurred.",
+          "format": "date-time"
+        },
+        "description": {
+          "type": "string",
+          "description": "A detailed description of the manual income or expense."
+        },
+        "type": {
+          "type": "string",
+          "description": "Specifies if the entry is an 'income' or an 'expense'.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "method": {
+          "type": "string",
+          "description": "The payment method used for this manual transaction (e.g., 'Boleto', 'Pix', 'Cartão', 'Dinheiro').",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "account": {
+          "type": "string",
+          "description": "The bank account associated with this manual transaction (e.g., 'Sicoob', 'PagBank', 'Caixa').",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "amount": {
+          "type": "number",
+          "description": "The monetary value of the manual transaction."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User who created this manual cash flow entry. (Relationship: User 1:N CashFlowManualEntry)"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the manual cash flow entry was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the manual cash flow entry was last updated.",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "name"]
-    },
-    "Supplier": {
-      "title": "Supplier",
-      "description": "Information about material and service providers.",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "cnpj": { "type": "string" },
-        "email": { "type": "string" },
-        "landline": { "type": "string" },
-        "mobile": { "type": "string" },
-        "category": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "updatedAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["id", "name"]
-    },
-    "Expense": {
-      "title": "Expense",
-      "description": "Records of financial outputs/costs.",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "description": { "type": "string" },
-        "value": { "type": "number" },
-        "category": { "type": "string" },
-        "date": { "type": "string", "format": "date" },
-        "createdAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["id", "description", "value", "date"]
+      "required": [
+        "id",
+        "date",
+        "description",
+        "type",
+        "method",
+        "account",
+        "amount",
+        "userId",
+        "createdAt"
+      ]
     }
   },
   "auth": {
-    "providers": ["password", "anonymous", "google"]
+    "providers": [
+      "password",
+      "anonymous"
+    ]
   },
   "firestore": {
-    "/orders/{orderId}": { "schema": { "$ref": "#/backend/entities/Order" }, "description": "Stores customer orders." },
-    "/clients/{clientId}": { "schema": { "$ref": "#/backend/entities/Client" }, "description": "Stores customer contact information." },
-    "/suppliers/{supplierId}": { "schema": { "$ref": "#/backend/entities/Supplier" }, "description": "Stores supplier information." },
-    "/expenses/{expenseId}": { "schema": { "$ref": "#/backend/entities/Expense" }, "description": "Stores financial outputs." }
+    "structure": [
+      {
+        "path": "/cashFlowManualEntries/{entryId}",
+        "definition": {
+          "entityName": "CashFlowManualEntry",
+          "schema": {
+            "$ref": "#/backend/entities/CashFlowManualEntry"
+          },
+          "description": "Collection for manual cash flow entries, including both incomes and expenses, created by individual users. Each document contains the `userId` of its creator for authorization. This collection supports efficient querying by date and user for cash flow reports. Includes denormalized 'userId' for authorization independence.",
+          "params": [
+            {
+              "name": "entryId",
+              "description": "Unique identifier for a specific manual cash flow entry."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/orders/{orderId}",
+        "definition": {
+          "entityName": "Order",
+          "schema": {
+            "$ref": "#/backend/entities/Order"
+          },
+          "description": "Primary collection for tracking all customer orders within the ERP. Documents include details like client name, status, and total amount. Access is controlled by global employee roles.",
+          "params": [
+            {
+              "name": "orderId",
+              "description": "Unique identifier for an order."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/installments/{installmentId}",
+        "definition": {
+          "entityName": "Installment",
+          "schema": {
+            "$ref": "#/backend/entities/Installment"
+          },
+          "description": "Collection for individual payment installments related to orders. Stored as a top-level collection to facilitate efficient month/year based queries for paid installments across all orders. Includes `orderId` for linking back to the parent order. Access is controlled by global employee roles.",
+          "params": [
+            {
+              "name": "installmentId",
+              "description": "Unique identifier for a payment installment."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to efficiently support the cash flow management features, balancing data accessibility with robust security, and adhering to the core design principles of Authorization Independence and QAPs (Queries as Authorization Policies).\n\n**Authorization Independence via Denormalization:**\n*   **CashFlowManualEntry:** Each manual entry document explicitly contains a `userId` field. This denormalizes the ownership information directly into the document. Security rules for the `/cashFlowManualEntries/{entryId}` collection will directly check `request.auth.uid == resource.data.userId`. This eliminates the need for `get()` calls to a parent `user` document for authorization, making rules atomic, simpler to write, and easier to debug. It fully supports atomic operations.\n*   **Order and Installment:** These are modeled as top-level collections, `/orders/{orderId}` and `/installments/{installmentId}`. For an ERP system, these are typically company-wide resources, not owned by a single user in the same way a personal cash flow entry might be. Authorization for these collections would rely on checking if the `request.auth.uid` exists in a separate, dedicated role collection (e.g., `/roles_employees/{uid}`). While not explicitly listed here due to the schema constraints, this pattern inherently avoids hierarchical authorization dependencies, as the authorization check is an `exists()` call rather than a `get()` on a parent document.\n\n**QAPs (Queries as Authorization Policies):**\n*   **CashFlowManualEntry:** The structure `/cashFlowManualEntries/{entryId}` combined with the `userId` field within each document enables secure `list` operations. Users can only query for entries where `userId` matches their `request.auth.uid`. Firestore security rules will enforce this, ensuring that any `list` request is implicitly filtered to only return data the user is authorized to see. This pattern makes the client-side query `collection('cashFlowManualEntries').where('userId', '==', auth.currentUser.uid).where('date', '>=', startOfMonth).where('date', '<=', endOfMonth)` inherently secure and performant with appropriate indexing on `userId` and `date`.\n*   **Installment:** By placing `Installment` documents in a top-level collection `/installments/{installmentId}`, we enable efficient and secure queries for 'paid' installments within a specific month across all orders. This supports the \"Fusão de Dados\" requirement effectively. A query like `collection('installments').where('status', '==', 'paid').where('paidDate', '>=', startOfMonth).where('paidDate', '<=', endOfMonth)` will work efficiently. Authorization rules for this collection (and `/orders`) would ensure that only authorized internal employees can access this company-sensitive data.\n*   **Structural Segregation:** Each collection (`/cashFlowManualEntries`, `/orders`, `/installments`) holds documents with a homogeneous security posture (user-private vs. company-wide data), simplifying the security rules. For example, all `CashFlowManualEntry` documents are private to the `userId` field, while all `Order` and `Installment` documents would be accessible by authorized internal users."
   }
 }
