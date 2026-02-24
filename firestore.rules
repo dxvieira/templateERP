@@ -12,7 +12,6 @@ service cloud.firestore {
 
     // --- COLLECTION RULES ---
 
-    // Permite leitura e escrita para usuários logados (MVP Prototyping)
     match /orders/{orderId} {
       allow read, write: if isSignedIn();
     }
@@ -34,6 +33,10 @@ service cloud.firestore {
     }
 
     match /cashflow_manual/{entryId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /accounts_payable/{payableId} {
       allow read, write: if isSignedIn();
     }
 

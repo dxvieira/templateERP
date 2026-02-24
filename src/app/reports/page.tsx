@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
@@ -6,9 +7,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   BarChart3, Wallet, TrendingUp, TrendingDown, Plus, Trash2, Loader2, 
   X, RefreshCw, Download, ArrowLeft, ArrowRight,
-  Package, Edit, Info, Clock
+  Package, Edit, Info, Clock, CheckCircle2, AlertTriangle, Calendar as CalendarIcon, ArrowDownLeft
 } from 'lucide-react';
-import { startOfMonth, endOfMonth, format, isWithinInterval, parseISO, addMonths, subMonths, isBefore } from 'date-fns';
+import { startOfMonth, endOfMonth, format, isWithinInterval, parseISO, addMonths, subMonths, isBefore, isSameDay } from 'date-fns';
 
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { collection, query, orderBy, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
@@ -41,6 +42,17 @@ export default function ReportsManagerPage() {
     method: 'Dinheiro/Pix'
   });
 
+  // --- ESTADOS DE CONTAS A PAGAR ---
+  const [isPayableModalOpen, setIsPayableModalOpen] = useState(false);
+  const [editingPayableId, setEditingPayableId] = useState<string | null>(null);
+  const [payableForm, setPayableForm] = useState({
+    description: '',
+    supplier: '',
+    dueDate: format(new Date(), 'yyyy-MM-dd'),
+    amount: '',
+    category: 'Material'
+  });
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
@@ -56,8 +68,14 @@ export default function ReportsManagerPage() {
     return query(collection(firestore, 'cashflow_manual'), orderBy('date', 'desc'));
   }, [firestore, user]);
 
+  const accountsPayableQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(collection(firestore, 'accounts_payable'), orderBy('dueDate', 'asc'));
+  }, [firestore, user]);
+
   const { data: orders, isLoading: loadingOrders } = useCollection(ordersQuery);
   const { data: manualEntries, isLoading: loadingManual } = useCollection(manualCashflowQuery);
+  const { data: payables, isLoading: loadingPayables } = useCollection(accountsPayableQuery);
 
   // --- LÓGICA DE DATAS ---
   const dateRange = useMemo(() => {
@@ -68,7 +86,7 @@ export default function ReportsManagerPage() {
     };
   }, [selectedMonth]);
 
-  // --- MOTOR OPERACIONAL (ORDENAÇÃO PRIORITÁRIA POR SALDO DEVEDOR) ---
+  // --- MOTOR OPERACIONAL ---
   const sortedOrders = useMemo(() => {
     if (!orders) return [];
     
@@ -96,15 +114,12 @@ export default function ReportsManagerPage() {
       const dateA = a.delivery_date || a.deliveryDate || '9999-99-99';
       const dateB = b.delivery_date || b.deliveryDate || '9999-99-99';
       
-      if (hasDebtA) {
-        return dateA.localeCompare(dateB);
-      } else {
-        return dateB.localeCompare(dateA);
-      }
+      if (hasDebtA) return dateA.localeCompare(dateB);
+      return dateB.localeCompare(dateA);
     });
   }, [orders, dateRange]);
 
-  // --- LIVRO-CAIXA (TRANSAÇÕES UNIFICADAS) ---
+  // --- LIVRO-CAIXA ---
   const transactions = useMemo(() => {
     if (!orders || !manualEntries) return [];
     const result: any[] = [];
@@ -152,13 +167,18 @@ export default function ReportsManagerPage() {
       return acc + Math.max(0, total - paid);
     }, 0);
 
+    const payableTotal = (payables || [])
+      .filter(p => p.status === 'pending')
+      .reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+
     return {
       income,
       expense,
       balance: income - expense,
-      pending
+      pending,
+      payableTotal
     };
-  }, [transactions, sortedOrders]);
+  }, [transactions, sortedOrders, payables]);
 
   // --- CONCENTRAÇÃO DE CAPITAL ---
   const accountsSummary = useMemo(() => {
@@ -171,12 +191,10 @@ export default function ReportsManagerPage() {
     };
 
     let totalEmCaixa = 0;
-    
     transactions.forEach(tx => {
       if (tx.type === 'income') {
         const method = String(tx.account || '').toUpperCase();
         let targetKey = 'CAIXA INTERNO';
-
         if (method.includes('PAGBANK')) targetKey = 'PAGBANK';
         else if (method.includes('SIPAG')) targetKey = 'SIPAG';
         else if (method.includes('LINDÓIA') || method.includes('LINDOIA')) targetKey = 'SICOOB LINDOIA';
@@ -218,52 +236,7 @@ export default function ReportsManagerPage() {
     document.body.removeChild(link);
   }, [transactions, selectedMonth]);
 
-  // --- LÓGICA DE LANÇAMENTOS MANUAIS (CRUD) ---
-  const handleEditTransaction = (tx: any) => {
-    if (tx.isAuto) {
-      toast({ 
-        title: "Acesso Bloqueado", 
-        description: "Esta movimentação é vinculada a uma OS. Para alterar, estorne a baixa diretamente no pedido.",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    setEditingEntryId(tx.id);
-    setEntryForm({
-      description: tx.description || '',
-      amount: String(tx.amount || ''),
-      type: tx.type || 'income',
-      date: tx.date || format(new Date(), 'yyyy-MM-dd'),
-      account: tx.account || 'Caixa Interno',
-      method: tx.method || 'Dinheiro/Pix'
-    });
-    setIsEntryModalOpen(true);
-  };
-
-  const handleDeleteTransaction = async (tx: any) => {
-    if (tx.isAuto) {
-      toast({ 
-        title: "Exclusão Bloqueada", 
-        description: "Movimentações automáticas de pedidos não podem ser excluídas por aqui.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!firestore) return;
-    if (window.confirm("Remover este lançamento permanentemente do Livro-Caixa?")) {
-      deleteDoc(doc(firestore, 'cashflow_manual', tx.id))
-        .then(() => toast({ title: "Lançamento Removido" }))
-        .catch(() => {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: `cashflow_manual/${tx.id}`,
-            operation: 'delete'
-          }));
-        });
-    }
-  };
-
+  // --- LÓGICA DE LANÇAMENTOS MANUAIS ---
   const handleSaveEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore || !user) return;
@@ -295,13 +268,87 @@ export default function ReportsManagerPage() {
       });
   };
 
+  // --- LÓGICA DE CONTAS A PAGAR ---
+  const handleSavePayable = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!firestore || !user) return;
+
+    const payload = {
+      ...payableForm,
+      amount: Number(payableForm.amount),
+      status: 'pending',
+      updatedAt: serverTimestamp(),
+      ...(editingPayableId ? {} : { createdAt: serverTimestamp() })
+    };
+
+    const docRef = editingPayableId 
+      ? doc(firestore, 'accounts_payable', editingPayableId) 
+      : doc(collection(firestore, 'accounts_payable'));
+
+    setDoc(docRef, { ...payload, id: docRef.id }, { merge: true })
+      .then(() => {
+        toast({ title: editingPayableId ? "Conta Atualizada" : "Nova Conta a Pagar Registrada" });
+        setIsPayableModalOpen(false);
+        setEditingPayableId(null);
+        setPayableForm({ description: '', supplier: '', dueDate: format(new Date(), 'yyyy-MM-dd'), amount: '', category: 'Material' });
+      })
+      .catch(err => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: 'accounts_payable', operation: editingPayableId ? 'update' : 'create', requestResourceData: payload
+        }));
+      });
+  };
+
+  const handlePayAccount = async (payable: any) => {
+    if (!firestore || !user) return;
+    
+    // 1. Marcar como paga na accounts_payable
+    const payableRef = doc(firestore, 'accounts_payable', payable.id);
+    const cashflowRef = doc(collection(firestore, 'cashflow_manual'));
+
+    const cashflowPayload = {
+      id: cashflowRef.id,
+      description: `PGTO: ${payable.description} ${payable.supplier ? `(${payable.supplier})` : ''}`,
+      amount: Number(payable.amount),
+      type: 'expense',
+      date: format(new Date(), 'yyyy-MM-dd'),
+      account: 'Caixa Interno',
+      method: 'Boleto',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+
+    try {
+      await setDoc(payableRef, { status: 'paid', updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(cashflowRef, cashflowPayload);
+      toast({ title: "Pagamento Confirmado", description: "A conta foi marcada como paga e registrada no fluxo de caixa." });
+    } catch (err) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: 'accounts_payable/pay', operation: 'update'
+      }));
+    }
+  };
+
+  const handleDeletePayable = async (id: string) => {
+    if (!firestore) return;
+    if (window.confirm("Remover este boleto da pauta permanentemente?")) {
+      deleteDoc(doc(firestore, 'accounts_payable', id))
+        .then(() => toast({ title: "Conta Removida" }))
+        .catch(() => {
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: `accounts_payable/${id}`, operation: 'delete'
+          }));
+        });
+    }
+  };
+
   const handleMonthNav = (direction: 'prev' | 'next') => {
     const current = parseISO(`${selectedMonth}-01`);
     const next = direction === 'next' ? addMonths(current, 1) : subMonths(current, 1);
     setSelectedMonth(format(next, 'yyyy-MM'));
   };
 
-  if (!isMounted || loadingOrders || loadingManual) {
+  if (!isMounted || loadingOrders || loadingManual || loadingPayables) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -347,107 +394,69 @@ export default function ReportsManagerPage() {
         </header>
 
         {/* --- KPI GRID --- */}
-        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-          {/* Entradas */}
-          <motion.div 
-            whileHover={{ y: -4 }}
-            className="group relative bg-[#09090b] border border-zinc-800 rounded-3xl p-6 transition-all duration-300 hover:border-[#4ade80]/40 hover:shadow-[0_0_20px_rgba(74,222,128,0.1)]"
-          >
+        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
+          <motion.div whileHover={{ y: -4 }} className="group relative bg-[#09090b] border border-zinc-800 rounded-3xl p-6 transition-all duration-300 hover:border-[#4ade80]/40">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-2.5 rounded-2xl bg-[#4ade80]/10 text-[#4ade80] border border-[#4ade80]/20">
-                <TrendingUp size={20} />
-              </div>
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Receitas do Mês</span>
+              <div className="p-2.5 rounded-2xl bg-[#4ade80]/10 text-[#4ade80] border border-[#4ade80]/20"><TrendingUp size={20} /></div>
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Receitas</span>
             </div>
-            <div>
-              <span className="text-3xl font-black text-white">{kpiMetrics.income.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-              <div className="h-1 w-12 bg-[#4ade80] rounded-full mt-3 opacity-40 group-hover:opacity-100 transition-opacity" />
-            </div>
+            <span className="text-2xl font-black text-white">{kpiMetrics.income.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
           </motion.div>
 
-          {/* Saídas */}
-          <motion.div 
-            whileHover={{ y: -4 }}
-            className="group relative bg-[#09090b] border border-zinc-800 rounded-3xl p-6 transition-all duration-300 hover:border-[#ef4444]/40 hover:shadow-[0_0_20px_rgba(239,68,68,0.1)]"
-          >
+          <motion.div whileHover={{ y: -4 }} className="group relative bg-[#09090b] border border-zinc-800 rounded-3xl p-6 transition-all duration-300 hover:border-[#ef4444]/40">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-2.5 rounded-2xl bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/20">
-                <TrendingDown size={20} />
-              </div>
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Despesas do Mês</span>
+              <div className="p-2.5 rounded-2xl bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/20"><TrendingDown size={20} /></div>
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Despesas</span>
             </div>
-            <div>
-              <span className="text-3xl font-black text-white">{kpiMetrics.expense.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-              <div className="h-1 w-12 bg-[#ef4444] rounded-full mt-3 opacity-40 group-hover:opacity-100 transition-opacity" />
-            </div>
+            <span className="text-2xl font-black text-white">{kpiMetrics.expense.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
           </motion.div>
 
-          {/* Saldo Líquido */}
-          <motion.div 
-            whileHover={{ y: -4 }}
-            className="group relative bg-[#09090b] border border-zinc-800 rounded-3xl p-6 transition-all duration-300 hover:border-primary/40 hover:shadow-[0_0_20px_rgba(255,95,31,0.1)]"
-          >
+          <motion.div whileHover={{ y: -4 }} className="group relative bg-[#09090b] border border-zinc-800 rounded-3xl p-6 transition-all duration-300 hover:border-primary/40">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-2.5 rounded-2xl bg-primary/10 text-primary border border-primary/20">
-                <Wallet size={20} />
-              </div>
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Saldo em Caixa</span>
+              <div className="p-2.5 rounded-2xl bg-primary/10 text-primary border border-primary/20"><Wallet size={20} /></div>
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Saldo Caixa</span>
             </div>
-            <div>
-              <span className="text-3xl font-black text-white">{kpiMetrics.balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-              <div className="h-1 w-12 bg-primary rounded-full mt-3 opacity-40 group-hover:opacity-100 transition-opacity" />
-            </div>
+            <span className="text-2xl font-black text-white">{kpiMetrics.balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
           </motion.div>
 
-          {/* A Receber */}
-          <motion.div 
-            whileHover={{ y: -4 }}
-            className="group relative bg-[#09090b] border border-zinc-800 rounded-3xl p-6 transition-all duration-300 hover:border-[#eab308]/40 hover:shadow-[0_0_20px_rgba(234,179,8,0.1)]"
-          >
+          <motion.div whileHover={{ y: -4 }} className="group relative bg-[#09090b] border border-zinc-800 rounded-3xl p-6 transition-all duration-300 hover:border-[#eab308]/40">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-2.5 rounded-2xl bg-[#eab308]/10 text-[#eab308] border border-[#eab308]/20">
-                <Clock size={20} />
-              </div>
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Saldo a Receber</span>
+              <div className="p-2.5 rounded-2xl bg-[#eab308]/10 text-[#eab308] border border-[#eab308]/20"><Clock size={20} /></div>
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">A Receber</span>
             </div>
-            <div>
-              <span className="text-3xl font-black text-white">{kpiMetrics.pending.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-              <div className="h-1 w-12 bg-[#eab308] rounded-full mt-3 opacity-40 group-hover:opacity-100 transition-opacity" />
+            <span className="text-2xl font-black text-white">{kpiMetrics.pending.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+          </motion.div>
+
+          <motion.div whileHover={{ y: -4 }} className="group relative bg-[#09090b] border border-zinc-800 rounded-3xl p-6 transition-all duration-300 hover:border-[#ef4444]/60">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-2.5 rounded-2xl bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/20"><AlertTriangle size={20} /></div>
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">Contas a Pagar</span>
             </div>
+            <span className="text-2xl font-black text-white">{kpiMetrics.payableTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
           </motion.div>
         </section>
 
         <Tabs defaultValue="operacional" className="w-full">
           <TabsList className="bg-zinc-900/50 border border-zinc-800 mb-8 p-1">
-            <TabsTrigger value="operacional" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-8 h-10">Monitor Operacional</TabsTrigger>
-            <TabsTrigger value="financeiro" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-8 h-10">Fluxo de Caixa</TabsTrigger>
+            <TabsTrigger value="operacional" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-6 h-10">Monitor Operacional</TabsTrigger>
+            <TabsTrigger value="financeiro" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-6 h-10">Fluxo de Caixa</TabsTrigger>
+            <TabsTrigger value="payable" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-6 h-10">Contas a Pagar</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="operacional" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 h-[calc(100vh-450px)] overflow-y-auto custom-scrollbar pr-2">
+          <TabsContent value="operacional" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
               {sortedOrders.length === 0 ? (
-                <div className="col-span-full py-20 text-center border-2 border-dashed border-zinc-800 rounded-3xl opacity-20">
-                   <Package size={48} className="mx-auto mb-4" />
-                   <p className="text-[10px] uppercase font-black tracking-widest">Nenhuma OS para este período</p>
-                </div>
+                <div className="col-span-full py-20 text-center border-2 border-dashed border-zinc-800 rounded-3xl opacity-20"><Package size={48} className="mx-auto mb-4" /><p className="text-[10px] uppercase font-black tracking-widest">Nenhuma OS para este período</p></div>
               ) : (
                 sortedOrders.map((order) => {
                   const total = Number(order.total_value || order.totalValue || 0);
                   const paid = Number(order.amount_paid || order.amountPaid || 0);
-                  const balance = total - paid;
                   const isDone = ['Concluído', 'Entregue'].includes(order.status);
-                  const today = new Date();
-                  const deadlineStr = order.delivery_date || order.deliveryDate;
-                  const deadline = deadlineStr ? parseISO(deadlineStr) : null;
-                  const isLate = deadline && isBefore(deadline, today) && !isDone;
+                  const deadline = order.delivery_date || order.deliveryDate ? parseISO(order.delivery_date || order.deliveryDate) : null;
+                  const isLate = deadline && isBefore(deadline, new Date()) && !isDone;
 
                   return (
-                    <motion.div 
-                      key={order.id}
-                      layout
-                      onClick={() => router.push(`/orders?edit=${order.id}`)}
-                      className="group bg-[#09090b] border border-zinc-800 rounded-2xl p-5 cursor-pointer hover:border-primary/40 hover:scale-[1.01] transition-all"
-                    >
+                    <motion.div key={order.id} layout onClick={() => router.push(`/orders?edit=${order.id}`)} className="group bg-[#09090b] border border-zinc-800 rounded-2xl p-5 cursor-pointer hover:border-primary/40 hover:scale-[1.01] transition-all">
                       <div className="flex justify-between items-start mb-4">
                         <div className="min-w-0">
                           <h3 className="text-sm font-black text-white uppercase truncate group-hover:text-primary transition-colors">{order.client}</h3>
@@ -461,20 +470,10 @@ export default function ReportsManagerPage() {
                           <div className="bg-zinc-800 text-zinc-400 px-2 py-1 rounded text-[8px] font-black uppercase">Prazo: {deadline ? format(deadline, 'dd/MM') : '--/--'}</div>
                         )}
                       </div>
-
                       <div className="grid grid-cols-3 gap-2 border-t border-white/5 pt-4">
-                        <div className="space-y-1">
-                          <span className="text-[10px] uppercase font-bold tracking-widest opacity-60 block">Total OS</span>
-                          <span className="text-base md:text-lg font-bold tracking-tight text-white">{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                        </div>
-                        <div className="space-y-1">
-                          <span className="text-[10px] uppercase font-bold tracking-widest opacity-60 block text-emerald-500">Liquidado</span>
-                          <span className="text-base md:text-lg font-bold tracking-tight text-emerald-500">{paid.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                        </div>
-                        <div className="space-y-1">
-                          <span className="text-[10px] uppercase font-bold tracking-widest opacity-60 block text-primary">A Receber</span>
-                          <span className="text-base md:text-lg font-bold tracking-tight text-primary">{balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                        </div>
+                        <div className="space-y-1"><span className={labelClass}>Total OS</span><span className="text-base md:text-lg font-bold tracking-tight text-white">{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+                        <div className="space-y-1"><span className={cn(labelClass, "text-emerald-500")}>Liquidado</span><span className="text-base md:text-lg font-bold tracking-tight text-emerald-500">{paid.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
+                        <div className="space-y-1"><span className={cn(labelClass, "text-primary")}>A Receber</span><span className="text-base md:text-lg font-bold tracking-tight text-primary">{(total - paid).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></div>
                       </div>
                     </motion.div>
                   );
@@ -483,7 +482,7 @@ export default function ReportsManagerPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="financeiro" className="space-y-8 animate-in fade-in duration-500">
+          <TabsContent value="financeiro" className="space-y-8">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="bg-[#09090b] border border-zinc-800 rounded-3xl p-6 lg:col-span-2">
                 <div className="flex justify-between items-center mb-8">
@@ -510,7 +509,6 @@ export default function ReportsManagerPage() {
                   ))}
                 </div>
               </div>
-
               <div className="flex flex-col gap-6">
                 <div className="bg-gradient-to-br from-[#09090b] to-zinc-900 border border-zinc-800 rounded-3xl p-8 flex flex-col items-center justify-center relative overflow-hidden shadow-2xl">
                    <span className="text-[10px] text-zinc-400 uppercase font-black tracking-[0.3em] mb-4">Total Liquidado no Mês</span>
@@ -558,35 +556,13 @@ export default function ReportsManagerPage() {
                                </div>
                             </td>
                             <td className="p-4 text-center">
-                               <span className={cn(
-                                 "text-[8px] font-black uppercase px-2 py-0.5 rounded-full border",
-                                 tx.type === 'income' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'
-                               )}>
-                                 {tx.type === 'income' ? 'ENTRADA' : 'SAÍDA'}
-                               </span>
+                               <span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded-full border", tx.type === 'income' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20')}>{tx.type === 'income' ? 'ENTRADA' : 'SAÍDA'}</span>
                             </td>
-                            <td className={cn(
-                              "p-4 text-center font-mono font-black text-sm",
-                              tx.type === 'income' ? 'text-[#4ade80]' : 'text-[#FF5F1F]'
-                            )}>
-                              {tx.type === 'income' ? '+' : '-'} {tx.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            </td>
+                            <td className={cn("p-4 text-center font-mono font-black text-sm", tx.type === 'income' ? 'text-[#4ade80]' : 'text-[#FF5F1F]')}>{tx.type === 'income' ? '+' : '-'} {tx.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                             <td className="p-4 pr-6 text-right">
                                <div className="flex justify-end gap-3">
-                                  <button 
-                                    onClick={() => handleEditTransaction(tx)}
-                                    className={cn("p-2 rounded-lg transition-all", tx.isAuto ? "opacity-20 cursor-not-allowed" : "text-zinc-500 hover:text-white hover:bg-white/5")}
-                                    title={tx.isAuto ? "Bloqueado: Estorne na OS" : "Editar Lançamento"}
-                                  >
-                                    <Edit size={16} />
-                                  </button>
-                                  <button 
-                                    onClick={() => handleDeleteTransaction(tx)}
-                                    className={cn("p-2 rounded-lg transition-all", tx.isAuto ? "opacity-20 cursor-not-allowed" : "text-zinc-500 hover:text-red-500 hover:bg-red-500/10")}
-                                    title={tx.isAuto ? "Bloqueado: Estorne na OS" : "Excluir Lançamento"}
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
+                                  <button onClick={() => { if(!tx.isAuto) { setEditingEntryId(tx.id); setEntryForm({...tx, amount: String(tx.amount)}); setIsEntryModalOpen(true); } else { toast({ title: "Proteção de Dados", description: "Estorne na OS correspondente." }); } }} className={cn("p-2 rounded-lg", tx.isAuto ? "opacity-20" : "text-zinc-500 hover:text-white")}><Edit size={16}/></button>
+                                  <button onClick={() => { if(!tx.isAuto) { if(window.confirm("Excluir lançamento?")) deleteDoc(doc(firestore, 'cashflow_manual', tx.id)); } else { toast({ title: "Proteção de Dados", description: "Estorne na OS correspondente." }); } }} className={cn("p-2 rounded-lg", tx.isAuto ? "opacity-20" : "text-zinc-500 hover:text-red-500")}><Trash2 size={16}/></button>
                                </div>
                             </td>
                           </tr>
@@ -597,9 +573,78 @@ export default function ReportsManagerPage() {
                </div>
             </section>
           </TabsContent>
+
+          <TabsContent value="payable" className="space-y-6">
+            <header className="flex justify-between items-center mb-4">
+               <div><h2 className="text-xl font-black text-white uppercase tracking-tight">Pauta de Pagamentos</h2><p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Gestão de boletos e compromissos</p></div>
+               <Button onClick={() => { setEditingPayableId(null); setIsPayableModalOpen(true); }} className="bg-primary text-black font-black uppercase text-[10px] tracking-widest px-6 h-12 rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.3)] hover:bg-white transition-all"><Plus size={16} className="mr-2" /> Nova Conta a Pagar</Button>
+            </header>
+
+            <div className="bg-[#09090b] border border-zinc-800 rounded-3xl overflow-hidden">
+               <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-zinc-900/50 text-[10px] text-zinc-500 uppercase font-black border-b border-white/5 sticky top-0 z-10">
+                      <th className="p-4 pl-6">Vencimento</th>
+                      <th className="p-4">Descrição / Fornecedor</th>
+                      <th className="p-4 text-center">Categoria</th>
+                      <th className="p-4 text-center">Valor</th>
+                      <th className="p-4 text-center">Status</th>
+                      <th className="p-4 pr-6 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {(!payables || payables.length === 0) ? (
+                      <tr><td colSpan={6} className="p-12 text-center text-zinc-600 uppercase font-black text-[10px] tracking-[0.3em]">Nenhuma conta pendente registrada</td></tr>
+                    ) : (
+                      payables.map(payable => {
+                        const isPaid = payable.status === 'paid';
+                        const dueDate = parseISO(payable.dueDate);
+                        const isLate = isBefore(dueDate, new Date()) && !isPaid && !isSameDay(dueDate, new Date());
+
+                        return (
+                          <tr key={payable.id} className={cn("hover:bg-white/5 transition-colors group", isPaid && "opacity-40")}>
+                            <td className="p-4 pl-6">
+                               <div className={cn("flex flex-col items-start px-2 py-1 rounded border w-fit", isLate ? "bg-red-500/10 border-red-500/20 text-red-500" : "bg-zinc-900 border-zinc-800 text-zinc-400")}>
+                                  <span className="text-[10px] font-mono font-bold">{format(dueDate, 'dd/MM/yy')}</span>
+                               </div>
+                            </td>
+                            <td className="p-4">
+                               <div className="flex flex-col">
+                                  <span className="text-xs font-bold text-white uppercase group-hover:text-primary transition-colors">{payable.description}</span>
+                                  {payable.supplier && <span className="text-[8px] text-zinc-500 uppercase font-black tracking-widest">{payable.supplier}</span>}
+                               </div>
+                            </td>
+                            <td className="p-4 text-center"><span className="text-[9px] text-zinc-400 font-black uppercase bg-zinc-900 border border-white/5 px-2 py-0.5 rounded">{payable.category}</span></td>
+                            <td className="p-4 text-center font-mono font-black text-sm text-white">{Number(payable.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                            <td className="p-4 text-center">
+                               {isPaid ? (
+                                 <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Pago</span>
+                               ) : isLate ? (
+                                 <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/20 animate-pulse">Atrasado</span>
+                               ) : (
+                                 <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">Pendente</span>
+                               )}
+                            </td>
+                            <td className="p-4 pr-6 text-right">
+                               <div className="flex justify-end gap-2">
+                                  {!isPaid && (
+                                    <button onClick={() => handlePayAccount(payable)} className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-500 hover:bg-emerald-500 hover:text-black transition-all" title="Dar Baixa"><CheckCircle2 size={16}/></button>
+                                  )}
+                                  <button onClick={() => { setEditingPayableId(payable.id); setPayableForm({...payable, amount: String(payable.amount)}); setIsPayableModalOpen(true); }} className="p-2 rounded-lg text-zinc-500 hover:text-white"><Edit size={16}/></button>
+                                  <button onClick={() => handleDeletePayable(payable.id)} className="p-2 rounded-lg text-zinc-500 hover:text-red-500"><Trash2 size={16}/></button>
+                               </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+               </table>
+            </div>
+          </TabsContent>
         </Tabs>
 
-        {/* MODAL DE LANÇAMENTO MANUAL (FLUXO DE CAIXA) - SUPORTA CRIAÇÃO E EDIÇÃO */}
+        {/* MODAL LANÇAMENTO MANUAL */}
         <AnimatePresence>
           {isEntryModalOpen && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm" onClick={() => { setIsEntryModalOpen(false); setEditingEntryId(null); }}>
@@ -610,44 +655,37 @@ export default function ReportsManagerPage() {
                      <button type="button" onClick={() => setEntryForm({...entryForm, type: 'income'})} className={cn("py-2 rounded-lg text-[10px] font-black uppercase transition-all", entryForm.type === 'income' ? "bg-emerald-500 text-black shadow-lg" : "text-zinc-500")}>Entrada</button>
                      <button type="button" onClick={() => setEntryForm({...entryForm, type: 'expense'})} className={cn("py-2 rounded-lg text-[10px] font-black uppercase transition-all", entryForm.type === 'expense' ? "bg-red-500 text-white shadow-lg" : "text-zinc-500")}>Saída</button>
                   </div>
-                  
-                  <div>
-                    <label className={labelClass}>Descrição do Lançamento</label>
-                    <input required placeholder="Ex: Retirada Sócios, Venda Balcão..." value={entryForm.description} onChange={e => setEntryForm({...entryForm, description: e.target.value})} className={inputClass} />
-                  </div>
-                  
+                  <div><label className={labelClass}>Descrição</label><input required placeholder="Ex: Retirada, Venda Balcão..." value={entryForm.description} onChange={e => setEntryForm({...entryForm, description: e.target.value})} className={inputClass} /></div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={labelClass}>Valor (R$)</label>
-                      <input required type="number" step="0.01" placeholder="0,00" value={entryForm.amount} onChange={e => setEntryForm({...entryForm, amount: e.target.value})} className={inputClass} />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Data</label>
-                      <input required type="date" value={entryForm.date} onChange={e => setEntryForm({...entryForm, date: e.target.value})} className={inputClass} />
-                    </div>
+                    <div><label className={labelClass}>Valor (R$)</label><input required type="number" step="0.01" value={entryForm.amount} onChange={e => setEntryForm({...entryForm, amount: e.target.value})} className={inputClass} /></div>
+                    <div><label className={labelClass}>Data</label><input required type="date" value={entryForm.date} onChange={e => setEntryForm({...entryForm, date: e.target.value})} className={inputClass} /></div>
                   </div>
-
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={labelClass}>Modalidade</label>
-                      <select value={entryForm.method} onChange={e => setEntryForm({...entryForm, method: e.target.value})} className={inputClass}>
-                        {['Dinheiro/Pix', 'Cartão', 'Boleto', 'Outros'].map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className={labelClass}>Conta Destino</label>
-                      <select value={entryForm.account} onChange={e => setEntryForm({...entryForm, account: e.target.value})} className={inputClass}>
-                        {['Caixa Interno', 'SICOOB - Lindóia', 'SICOOB - Serra Negra', 'Máquina PAGBANK', 'Máquina SIPAG'].map(a => <option key={a} value={a}>{a}</option>)}
-                      </select>
-                    </div>
+                    <div><label className={labelClass}>Modalidade</label><select value={entryForm.method} onChange={e => setEntryForm({...entryForm, method: e.target.value})} className={inputClass}>{['Dinheiro/Pix', 'Cartão', 'Boleto', 'Outros'].map(m => <option key={m} value={m}>{m}</option>)}</select></div>
+                    <div><label className={labelClass}>Conta</label><select value={entryForm.account} onChange={e => setEntryForm({...entryForm, account: e.target.value})} className={inputClass}>{['Caixa Interno', 'SICOOB - Lindóia', 'SICOOB - Serra Negra', 'Máquina PAGBANK', 'Máquina SIPAG'].map(a => <option key={a} value={a}>{a}</option>)}</select></div>
                   </div>
+                  <div className="flex gap-3 pt-4"><button type="button" onClick={() => { setIsEntryModalOpen(false); setEditingEntryId(null); }} className="flex-1 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors">Cancelar</button><Button type="submit" className="flex-[2] h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_25px_rgba(255,95,31,0.4)]">{editingEntryId ? 'Atualizar' : 'Confirmar'}</Button></div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
-                  <div className="flex gap-3 pt-4">
-                    <button type="button" onClick={() => { setIsEntryModalOpen(false); setEditingEntryId(null); }} className="flex-1 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors">Cancelar</button>
-                    <Button type="submit" className="flex-[2] h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_25px_rgba(255,95,31,0.4)]">
-                      {editingEntryId ? 'Atualizar Registro' : 'Confirmar Lançamento'}
-                    </Button>
+        {/* MODAL CONTAS A PAGAR */}
+        <AnimatePresence>
+          {isPayableModalOpen && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm" onClick={() => { setIsPayableModalOpen(false); setEditingPayableId(null); }}>
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#09090b] w-full max-w-md border border-zinc-800 rounded-3xl p-8 shadow-2xl">
+                <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">{editingPayableId ? 'Editar Boleto' : 'Nova Conta a Pagar'}</h2>
+                <form onSubmit={handleSavePayable} className="space-y-4">
+                  <div><label className={labelClass}>Descrição do Boleto</label><input required placeholder="Ex: NF 1234 - Papelaria Industrial" value={payableForm.description} onChange={e => setPayableForm({...payableForm, description: e.target.value})} className={inputClass} /></div>
+                  <div><label className={labelClass}>Fornecedor (Opcional)</label><input placeholder="Ex: Acrílicos S.A." value={payableForm.supplier} onChange={e => setPayableForm({...payableForm, supplier: e.target.value})} className={inputClass} /></div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div><label className={labelClass}>Valor (R$)</label><input required type="number" step="0.01" value={payableForm.amount} onChange={e => setPayableForm({...payableForm, amount: e.target.value})} className={inputClass} /></div>
+                    <div><label className={labelClass}>Vencimento</label><input required type="date" value={payableForm.dueDate} onChange={e => setPayableForm({...payableForm, dueDate: e.target.value})} className={inputClass} /></div>
                   </div>
+                  <div><label className={labelClass}>Categoria</label><select value={payableForm.category} onChange={e => setPayableForm({...payableForm, category: e.target.value})} className={inputClass}>{['Material', 'Impostos/Taxas', 'Infraestrutura', 'Comissões', 'Outros'].map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                  <div className="flex gap-3 pt-4"><button type="button" onClick={() => { setIsPayableModalOpen(false); setEditingPayableId(null); }} className="flex-1 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors">Cancelar</button><Button type="submit" className="flex-[2] h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_25px_rgba(255,95,31,0.4)]">{editingPayableId ? 'Atualizar Conta' : 'Registrar Boleto'}</Button></div>
                 </form>
               </motion.div>
             </div>

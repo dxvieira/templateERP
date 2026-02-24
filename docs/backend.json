@@ -44,6 +44,21 @@
         "account": { "type": "string" },
         "method": { "type": "string" }
       }
+    },
+    "AccountPayable": {
+      "title": "AccountPayable",
+      "type": "object",
+      "description": "Bills and commitments to be paid by the company.",
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string" },
+        "supplier": { "type": "string" },
+        "dueDate": { "type": "string", "format": "date" },
+        "amount": { "type": "number" },
+        "category": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "paid"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "auth": {
@@ -62,6 +77,10 @@
       {
         "path": "/cashflow_manual/{entryId}",
         "definition": { "entityName": "CashflowEntry", "description": "Manual cashflow entries." }
+      },
+      {
+        "path": "/accounts_payable/{payableId}",
+        "definition": { "entityName": "AccountPayable", "description": "Company bills to pay." }
       }
     ]
   }
