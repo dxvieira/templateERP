@@ -42,16 +42,17 @@ export default function ReportsManagerPage() {
     method: 'Dinheiro/Pix'
   });
 
-  // --- ESTADOS DE CONTAS A PAGAR ---
+  // --- ESTADOS DE CONTAS A PAGAR (GERADOR DE PARCELAS) ---
   const [isPayableModalOpen, setIsPayableModalOpen] = useState(false);
   const [editingPayableId, setEditingPayableId] = useState<string | null>(null);
   const [payableForm, setPayableForm] = useState({
     description: '',
     supplier: '',
-    dueDate: format(new Date(), 'yyyy-MM-dd'),
-    amount: '',
-    category: 'Material'
+    category: 'Material',
+    totalAmount: '',
+    installmentsCount: '1'
   });
+  const [generatedInstallments, setGeneratedInstallments] = useState<any[]>([]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -268,35 +269,76 @@ export default function ReportsManagerPage() {
       });
   };
 
-  // --- LÓGICA DE CONTAS A PAGAR ---
-  const handleSavePayable = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!firestore || !user) return;
+  // --- LÓGICA DE CONTAS A PAGAR (GERADOR) ---
+  const handleGenerateInstallments = () => {
+    const total = parseFloat(payableForm.totalAmount);
+    const count = parseInt(payableForm.installmentsCount);
+    if (isNaN(total) || isNaN(count) || count <= 0) {
+      toast({ variant: "destructive", title: "Erro na Geração", description: "Informe o valor total e a quantidade de parcelas." });
+      return;
+    }
 
-    const payload = {
-      ...payableForm,
-      amount: Number(payableForm.amount),
-      status: 'pending',
-      updatedAt: serverTimestamp(),
-      ...(editingPayableId ? {} : { createdAt: serverTimestamp() })
-    };
+    const amountPerInstallment = parseFloat((total / count).toFixed(2));
+    const newInstallments = [];
+    const baseDate = new Date();
 
-    const docRef = editingPayableId 
-      ? doc(firestore, 'accounts_payable', editingPayableId) 
-      : doc(collection(firestore, 'accounts_payable'));
-
-    setDoc(docRef, { ...payload, id: docRef.id }, { merge: true })
-      .then(() => {
-        toast({ title: editingPayableId ? "Conta Atualizada" : "Nova Conta a Pagar Registrada" });
-        setIsPayableModalOpen(false);
-        setEditingPayableId(null);
-        setPayableForm({ description: '', supplier: '', dueDate: format(new Date(), 'yyyy-MM-dd'), amount: '', category: 'Material' });
-      })
-      .catch(err => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: 'accounts_payable', operation: editingPayableId ? 'update' : 'create', requestResourceData: payload
-        }));
+    for (let i = 0; i < count; i++) {
+      const dueDate = addMonths(baseDate, i);
+      newInstallments.push({
+        id: i + 1,
+        amount: i === count - 1 ? (total - (amountPerInstallment * (count - 1))).toFixed(2) : amountPerInstallment.toFixed(2),
+        dueDate: format(dueDate, 'yyyy-MM-dd')
       });
+    }
+    setGeneratedInstallments(newInstallments);
+    toast({ title: "Parcelas Projetadas", description: "Você pode ajustar datas e valores individualmente agora." });
+  };
+
+  const handleSavePayablesBatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!firestore || !user || generatedInstallments.length === 0) return;
+
+    try {
+      if (editingPayableId) {
+        // Edição de item único
+        const inst = generatedInstallments[0];
+        const payload = {
+          description: payableForm.description,
+          supplier: payableForm.supplier,
+          category: payableForm.category,
+          amount: Number(inst.amount),
+          dueDate: inst.dueDate,
+          updatedAt: serverTimestamp(),
+        };
+        await setDoc(doc(firestore, 'accounts_payable', editingPayableId), payload, { merge: true });
+      } else {
+        // Criação em lote
+        for (const inst of generatedInstallments) {
+          const payload = {
+            description: `${payableForm.description} (${inst.id}/${payableForm.installmentsCount})`,
+            supplier: payableForm.supplier,
+            category: payableForm.category,
+            amount: Number(inst.amount),
+            dueDate: inst.dueDate,
+            status: 'pending',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          };
+          const docRef = doc(collection(firestore, 'accounts_payable'));
+          await setDoc(docRef, { ...payload, id: docRef.id });
+        }
+      }
+
+      toast({ title: editingPayableId ? "Conta Atualizada" : "Parcelas Registradas", description: "Seu cronograma de pagamentos foi atualizado." });
+      setIsPayableModalOpen(false);
+      setEditingPayableId(null);
+      setGeneratedInstallments([]);
+      setPayableForm({ description: '', supplier: '', category: 'Material', totalAmount: '', installmentsCount: '1' });
+    } catch (err) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: 'accounts_payable', operation: 'write'
+      }));
+    }
   };
 
   const handlePayAccount = async (payable: any) => {
@@ -346,6 +388,19 @@ export default function ReportsManagerPage() {
     const current = parseISO(`${selectedMonth}-01`);
     const next = direction === 'next' ? addMonths(current, 1) : subMonths(current, 1);
     setSelectedMonth(format(next, 'yyyy-MM'));
+  };
+
+  const handleOpenEditPayable = (payable: any) => {
+    setEditingPayableId(payable.id);
+    setPayableForm({
+      description: payable.description.split(' (')[0],
+      supplier: payable.supplier || '',
+      category: payable.category || 'Material',
+      totalAmount: String(payable.amount),
+      installmentsCount: '1'
+    });
+    setGeneratedInstallments([{ id: 1, amount: String(payable.amount), dueDate: payable.dueDate }]);
+    setIsPayableModalOpen(true);
   };
 
   if (!isMounted || loadingOrders || loadingManual || loadingPayables) {
@@ -577,7 +632,7 @@ export default function ReportsManagerPage() {
           <TabsContent value="payable" className="space-y-6">
             <header className="flex justify-between items-center mb-4">
                <div><h2 className="text-xl font-black text-white uppercase tracking-tight">Pauta de Pagamentos</h2><p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Gestão de boletos e compromissos</p></div>
-               <Button onClick={() => { setEditingPayableId(null); setIsPayableModalOpen(true); }} className="bg-primary text-black font-black uppercase text-[10px] tracking-widest px-6 h-12 rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.3)] hover:bg-white transition-all"><Plus size={16} className="mr-2" /> Nova Conta a Pagar</Button>
+               <Button onClick={() => { setEditingPayableId(null); setGeneratedInstallments([]); setIsPayableModalOpen(true); }} className="bg-primary text-black font-black uppercase text-[10px] tracking-widest px-6 h-12 rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.3)] hover:bg-white transition-all"><Plus size={16} className="mr-2" /> Nova Conta a Pagar</Button>
             </header>
 
             <div className="bg-[#09090b] border border-zinc-800 rounded-3xl overflow-hidden">
@@ -630,7 +685,7 @@ export default function ReportsManagerPage() {
                                   {!isPaid && (
                                     <button onClick={() => handlePayAccount(payable)} className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-500 hover:bg-emerald-500 hover:text-black transition-all" title="Dar Baixa"><CheckCircle2 size={16}/></button>
                                   )}
-                                  <button onClick={() => { setEditingPayableId(payable.id); setPayableForm({...payable, amount: String(payable.amount)}); setIsPayableModalOpen(true); }} className="p-2 rounded-lg text-zinc-500 hover:text-white"><Edit size={16}/></button>
+                                  <button onClick={() => handleOpenEditPayable(payable)} className="p-2 rounded-lg text-zinc-500 hover:text-white"><Edit size={16}/></button>
                                   <button onClick={() => handleDeletePayable(payable.id)} className="p-2 rounded-lg text-zinc-500 hover:text-red-500"><Trash2 size={16}/></button>
                                </div>
                             </td>
@@ -671,22 +726,53 @@ export default function ReportsManagerPage() {
           )}
         </AnimatePresence>
 
-        {/* MODAL CONTAS A PAGAR */}
+        {/* MODAL CONTAS A PAGAR (GERADOR DE PARCELAS) */}
         <AnimatePresence>
           {isPayableModalOpen && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm" onClick={() => { setIsPayableModalOpen(false); setEditingPayableId(null); }}>
-              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#09090b] w-full max-w-md border border-zinc-800 rounded-3xl p-8 shadow-2xl">
-                <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">{editingPayableId ? 'Editar Boleto' : 'Nova Conta a Pagar'}</h2>
-                <form onSubmit={handleSavePayable} className="space-y-4">
-                  <div><label className={labelClass}>Descrição do Boleto</label><input required placeholder="Ex: NF 1234 - Papelaria Industrial" value={payableForm.description} onChange={e => setPayableForm({...payableForm, description: e.target.value})} className={inputClass} /></div>
-                  <div><label className={labelClass}>Fornecedor (Opcional)</label><input placeholder="Ex: Acrílicos S.A." value={payableForm.supplier} onChange={e => setPayableForm({...payableForm, supplier: e.target.value})} className={inputClass} /></div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><label className={labelClass}>Valor (R$)</label><input required type="number" step="0.01" value={payableForm.amount} onChange={e => setPayableForm({...payableForm, amount: e.target.value})} className={inputClass} /></div>
-                    <div><label className={labelClass}>Vencimento</label><input required type="date" value={payableForm.dueDate} onChange={e => setPayableForm({...payableForm, dueDate: e.target.value})} className={inputClass} /></div>
-                  </div>
-                  <div><label className={labelClass}>Categoria</label><select value={payableForm.category} onChange={e => setPayableForm({...payableForm, category: e.target.value})} className={inputClass}>{['Material', 'Impostos/Taxas', 'Infraestrutura', 'Comissões', 'Outros'].map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                  <div className="flex gap-3 pt-4"><button type="button" onClick={() => { setIsPayableModalOpen(false); setEditingPayableId(null); }} className="flex-1 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors">Cancelar</button><Button type="submit" className="flex-[2] h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_25px_rgba(255,95,31,0.4)]">{editingPayableId ? 'Atualizar Conta' : 'Registrar Boleto'}</Button></div>
-                </form>
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#09090b] w-full max-w-2xl border border-zinc-800 rounded-3xl p-8 shadow-2xl flex flex-col max-h-[90vh]">
+                <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">{editingPayableId ? 'Editar Boleto' : 'Gerador de Contas a Pagar'}</h2>
+                
+                <div className="overflow-y-auto custom-scrollbar flex-1 pr-2">
+                  <form onSubmit={handleSavePayablesBatch} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="md:col-span-2"><label className={labelClass}>Descrição Geral / Fornecedor</label><input required placeholder="Ex: Papelaria Industrial" value={payableForm.description} onChange={e => setPayableForm({...payableForm, description: e.target.value})} className={inputClass} /></div>
+                      <div><label className={labelClass}>Fornecedor (Opcional)</label><input placeholder="Ex: Acrílicos S.A." value={payableForm.supplier} onChange={e => setPayableForm({...payableForm, supplier: e.target.value})} className={inputClass} /></div>
+                      <div><label className={labelClass}>Categoria</label><select value={payableForm.category} onChange={e => setPayableForm({...payableForm, category: e.target.value})} className={inputClass}>{['Material', 'Impostos/Taxas', 'Infraestrutura', 'Comissões', 'Outros'].map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                    </div>
+
+                    {!editingPayableId && (
+                      <div className="bg-zinc-900/30 border border-zinc-800 p-6 rounded-2xl space-y-4">
+                        <div className="flex items-center gap-3 mb-2"><TrendingDown className="text-primary w-4 h-4" /><h4 className="text-[10px] font-black text-white uppercase tracking-widest">Plano de Parcelamento</h4></div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                          <div><label className={labelClass}>Valor Total (R$)</label><input type="number" step="0.01" value={payableForm.totalAmount} onChange={e => setPayableForm({...payableForm, totalAmount: e.target.value})} className={inputClass} /></div>
+                          <div><label className={labelClass}>Qtd. Parcelas</label><input type="number" min="1" value={payableForm.installmentsCount} onChange={e => setPayableForm({...payableForm, installmentsCount: e.target.value})} className={inputClass} /></div>
+                          <button type="button" onClick={handleGenerateInstallments} className="h-12 bg-white/5 border border-white/10 rounded-xl text-white font-black uppercase text-[10px] tracking-widest hover:bg-white hover:text-black transition-all">Gerar Parcelas</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {generatedInstallments.length > 0 && (
+                      <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex justify-between items-center border-b border-white/5 pb-2"><h4 className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">Configuração Individual de Boletos</h4><span className="text-[9px] text-primary font-bold uppercase">{generatedInstallments.length} Itens no Lote</span></div>
+                        <div className="space-y-2">
+                          {generatedInstallments.map((inst, index) => (
+                            <div key={index} className="flex flex-col sm:flex-row gap-3 items-center bg-zinc-900/50 p-3 rounded-2xl border border-zinc-800 hover:border-zinc-700 transition-colors">
+                              <span className="text-[10px] font-black text-zinc-600 w-8 text-center">{inst.id}/{payableForm.installmentsCount}</span>
+                              <div className="flex-1 w-full"><label className="text-[8px] text-zinc-600 uppercase font-black ml-1 mb-1 block">Vencimento</label><input type="date" value={inst.dueDate} onChange={e => { const n = [...generatedInstallments]; n[index].dueDate = e.target.value; setGeneratedInstallments(n); }} className={cn(inputClass, "p-2 h-10")} /></div>
+                              <div className="flex-1 w-full"><label className="text-[8px] text-zinc-600 uppercase font-black ml-1 mb-1 block">Valor da Parcela</label><input type="number" step="0.01" value={inst.amount} onChange={e => { const n = [...generatedInstallments]; n[index].amount = e.target.value; setGeneratedInstallments(n); }} className={cn(inputClass, "p-2 h-10 text-right")} /></div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </form>
+                </div>
+
+                <div className="flex gap-3 pt-6 border-t border-white/5">
+                  <button type="button" onClick={() => { setIsPayableModalOpen(false); setEditingPayableId(null); setGeneratedInstallments([]); }} className="flex-1 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors">Cancelar</button>
+                  <Button onClick={handleSavePayablesBatch} disabled={generatedInstallments.length === 0} className="flex-[2] h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_25px_rgba(255,95,31,0.4)] disabled:opacity-20">{editingPayableId ? 'Atualizar Registro' : 'Salvar Todos os Boletos'}</Button>
+                </div>
               </motion.div>
             </div>
           )}
