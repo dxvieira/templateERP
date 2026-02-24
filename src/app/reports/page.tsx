@@ -4,19 +4,16 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  BarChart3, ArrowUpRight, ArrowDownRight, Wallet, CreditCard, 
-  Banknote, TrendingUp, FileText, Plus, Trash2, Loader2, DollarSign, 
-  Briefcase, AlertCircle, X, RefreshCw, Filter, Clock, CheckCircle2,
-  Package, ChevronRight, AlertTriangle, Download, ArrowLeft, ArrowRight,
-  Receipt, ShoppingCart, Tag, Save, Edit, Info
+  BarChart3, Wallet, TrendingUp, Plus, Trash2, Loader2, 
+  X, RefreshCw, Download, ArrowLeft, ArrowRight,
+  Package, Edit, Info
 } from 'lucide-react';
-import { startOfMonth, endOfMonth, format, isWithinInterval, parseISO, startOfDay, endOfDay, addMonths, subMonths, isBefore } from 'date-fns';
+import { startOfMonth, endOfMonth, format, isWithinInterval, parseISO, addMonths, subMonths, isBefore } from 'date-fns';
 
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { collection, query, orderBy, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -32,7 +29,7 @@ export default function ReportsManagerPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   
-  // --- ESTADOS DE LANÇAMENTO ---
+  // --- ESTADOS DE LANÇAMENTO (LIVRO-CAIXA) ---
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [entryForm, setEntryForm] = useState({
@@ -42,15 +39,6 @@ export default function ReportsManagerPage() {
     date: format(new Date(), 'yyyy-MM-dd'), 
     account: 'Caixa Interno', 
     method: 'Dinheiro/Pix'
-  });
-
-  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
-  const [expenseForm, setExpenseForm] = useState({
-    date: format(new Date(), 'yyyy-MM-dd'),
-    description: '',
-    amount: '',
-    paymentMethod: 'Dinheiro',
-    category: 'Outros'
   });
 
   useEffect(() => {
@@ -63,18 +51,12 @@ export default function ReportsManagerPage() {
     return query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
   }, [firestore, user]);
 
-  const expensesQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return query(collection(firestore, 'expenses'), orderBy('date', 'desc'));
-  }, [firestore, user]);
-
   const manualCashflowQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collection(firestore, 'cashflow_manual'), orderBy('date', 'desc'));
   }, [firestore, user]);
 
   const { data: orders, isLoading: loadingOrders } = useCollection(ordersQuery);
-  const { data: expenses, isLoading: loadingExpenses } = useCollection(expensesQuery);
   const { data: manualEntries, isLoading: loadingManual } = useCollection(manualCashflowQuery);
 
   // --- LÓGICA DE DATAS ---
@@ -86,7 +68,7 @@ export default function ReportsManagerPage() {
     };
   }, [selectedMonth]);
 
-  // --- MOTOR OPERACIONAL (ORDENAÇÃO PRIORITÁRIA) ---
+  // --- MOTOR OPERACIONAL (ORDENAÇÃO PRIORITÁRIA POR SALDO DEVEDOR) ---
   const sortedOrders = useMemo(() => {
     if (!orders) return [];
     
@@ -295,37 +277,6 @@ export default function ReportsManagerPage() {
       });
   };
 
-  const handleSaveExpense = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!firestore || !user) return;
-
-    const payload = {
-      ...expenseForm,
-      amount: Number(expenseForm.amount),
-      value: Number(expenseForm.amount),
-      createdAt: serverTimestamp()
-    };
-
-    const docRef = doc(collection(firestore, 'expenses'));
-    setDoc(docRef, { ...payload, id: docRef.id })
-      .then(() => {
-        toast({ title: "Custo Registrado" });
-        setIsExpenseModalOpen(false);
-        setExpenseForm({
-          date: format(new Date(), 'yyyy-MM-dd'),
-          description: '',
-          amount: '',
-          paymentMethod: 'Dinheiro',
-          category: 'Outros'
-        });
-      })
-      .catch(err => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: 'expenses', operation: 'create', requestResourceData: payload
-        }));
-      });
-  };
-
   const handleMonthNav = (direction: 'prev' | 'next') => {
     const current = parseISO(`${selectedMonth}-01`);
     const next = direction === 'next' ? addMonths(current, 1) : subMonths(current, 1);
@@ -381,7 +332,6 @@ export default function ReportsManagerPage() {
           <TabsList className="bg-zinc-900/50 border border-zinc-800 mb-8 p-1">
             <TabsTrigger value="operacional" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-8 h-10">Monitor Operacional</TabsTrigger>
             <TabsTrigger value="financeiro" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-8 h-10">Fluxo de Caixa</TabsTrigger>
-            <TabsTrigger value="despesas" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-8 h-10">Custos e Despesas</TabsTrigger>
           </TabsList>
 
           <TabsContent value="operacional" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -558,50 +508,6 @@ export default function ReportsManagerPage() {
                </div>
             </section>
           </TabsContent>
-
-          <TabsContent value="despesas" className="space-y-6 animate-in fade-in duration-500">
-             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                <Card className="bg-[#09090b] border-zinc-800 p-6 flex flex-col justify-center">
-                   <span className="text-[10px] text-zinc-500 font-black uppercase tracking-widest mb-2">Total Operacional</span>
-                   <h3 className="text-2xl font-black text-white">R$ {(expenses?.reduce((acc, e) => acc + (Number(e.value || e.amount) || 0), 0) || 0).toLocaleString('pt-BR')}</h3>
-                </Card>
-             </div>
-
-             <div className="bg-[#09090b] border border-zinc-800 rounded-3xl overflow-hidden">
-                <div className="p-6 border-b border-white/5 flex items-center justify-between">
-                   <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2"><Receipt size={14} className="text-primary" /> Histórico de Despesas</h3>
-                   <Button onClick={() => setIsExpenseModalOpen(true)} size="sm" className="h-10 bg-primary text-black font-black uppercase text-[10px] tracking-widest shadow-[0_0_15px_rgba(255,95,31,0.3)] hover:bg-white">+ Registrar Custo</Button>
-                </div>
-                <div className="overflow-x-auto custom-scrollbar">
-                   <table className="w-full text-left">
-                      <thead>
-                        <tr className="bg-zinc-900/50 text-[10px] text-zinc-500 uppercase font-black border-b border-white/5">
-                           <th className="p-4 pl-6">Data</th>
-                           <th className="p-4">Descrição</th>
-                           <th className="p-4">Categoria</th>
-                           <th className="p-4 pr-6 text-right">Valor</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                         {expenses?.length === 0 ? (
-                           <tr><td colSpan={4} className="p-12 text-center text-zinc-600 font-black uppercase text-[10px]">Nenhum registro de custo encontrado</td></tr>
-                         ) : (
-                           expenses?.map(exp => (
-                             <tr key={exp.id} className="hover:bg-white/5 transition-colors">
-                               <td className="p-4 pl-6 text-[10px] font-mono text-zinc-500">{exp.date ? format(parseISO(exp.date), 'dd/MM/yy') : '--/--/--'}</td>
-                               <td className="p-4 text-xs font-bold text-white uppercase">{exp.description}</td>
-                               <td className="p-4">
-                                  <span className="text-[9px] bg-zinc-900 border border-white/5 px-2 py-1 rounded-full text-zinc-400 font-black uppercase">{exp.category || 'Geral'}</span>
-                               </td>
-                               <td className="p-4 pr-6 text-right font-mono font-black text-[#FF5F1F]">- {Number(exp.value || exp.amount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                             </tr>
-                           ))
-                         )}
-                      </tbody>
-                   </table>
-                </div>
-             </div>
-          </TabsContent>
         </Tabs>
 
         {/* MODAL DE LANÇAMENTO MANUAL (FLUXO DE CAIXA) - SUPORTA CRIAÇÃO E EDIÇÃO */}
@@ -651,67 +557,6 @@ export default function ReportsManagerPage() {
                     <button type="button" onClick={() => { setIsEntryModalOpen(false); setEditingEntryId(null); }} className="flex-1 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors">Cancelar</button>
                     <Button type="submit" className="flex-[2] h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_25px_rgba(255,95,31,0.4)]">
                       {editingEntryId ? 'Atualizar Registro' : 'Confirmar Lançamento'}
-                    </Button>
-                  </div>
-                </form>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
-
-        {/* MODAL DE REGISTRO DE DESPESA (CUSTOS OPERACIONAIS) */}
-        <AnimatePresence>
-          {isExpenseModalOpen && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setIsExpenseModalOpen(false)}>
-              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#0c0c0e] w-full max-w-md border border-zinc-800 rounded-3xl p-8 shadow-2xl">
-                <div className="flex justify-between items-center mb-8">
-                  <h2 className="text-xl font-black text-white uppercase tracking-tighter">Registrar Custo</h2>
-                  <button onClick={() => setIsExpenseModalOpen(false)} className="p-2 text-zinc-500 hover:text-white bg-white/5 rounded-full"><X size={20}/></button>
-                </div>
-
-                <form onSubmit={handleSaveExpense} className="space-y-5">
-                  <div className="space-y-4">
-                    <div>
-                      <label className={labelClass}>Data da Despesa</label>
-                      <input required type="date" value={expenseForm.date} onChange={e => setExpenseForm({...expenseForm, date: e.target.value})} className={inputClass} />
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>Descrição do Custo</label>
-                      <input required placeholder="Ex: Compra de Lona, Almoço Equipe..." value={expenseForm.description} onChange={e => setExpenseForm({...expenseForm, description: e.target.value})} className={inputClass} />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className={labelClass}>Valor (R$)</label>
-                        <input required type="number" step="0.01" value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: e.target.value})} className={inputClass} />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Pagamento</label>
-                        <select value={expenseForm.paymentMethod} onChange={e => setExpenseForm({...expenseForm, paymentMethod: e.target.value})} className={inputClass}>
-                          <option value="Dinheiro">Dinheiro/Pix</option>
-                          <option value="Cartão">Cartão</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>Categoria</label>
-                      <select value={expenseForm.category} onChange={e => setExpenseForm({...expenseForm, category: e.target.value})} className={inputClass}>
-                        <option value="Material">Material de Produção</option>
-                        <option value="Alimentação">Alimentação</option>
-                        <option value="Impostos/Taxas">Impostos / Taxas</option>
-                        <option value="Manutenção">Manutenção</option>
-                        <option value="Logística">Logística / Frete</option>
-                        <option value="Outros">Outros</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 pt-4">
-                    <button type="button" onClick={() => setIsExpenseModalOpen(false)} className="flex-1 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors">Cancelar</button>
-                    <Button type="submit" className="flex-[2] h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.4)] flex items-center justify-center gap-2">
-                      <Save size={18} /> Salvar Despesa
                     </Button>
                   </div>
                 </form>
