@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { 
   Search, 
   Filter, 
@@ -30,7 +31,11 @@ const PRODUCTION_STAGES = [
   'Concluído'
 ];
 
-export default function OrdersManagerPage() {
+function OrdersManagerContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const editId = searchParams.get('edit');
+
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [isPassError, setIsPassError] = useState(false);
@@ -41,6 +46,22 @@ export default function OrdersManagerPage() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
+
+  // Efeito para lidar com redirecionamento de relatórios
+  useEffect(() => {
+    if (editId && orders.length > 0 && isAuthenticated) {
+      const orderToEdit = orders.find(o => o.id === editId);
+      if (orderToEdit) {
+        setEditingOrder(orderToEdit);
+        setIsModalOpen(true);
+        
+        // Limpa o parâmetro da URL para não reabrir ao atualizar
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete('edit');
+        router.replace(`/orders${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false });
+      }
+    }
+  }, [editId, orders, isAuthenticated, router, searchParams]);
 
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,9 +85,9 @@ export default function OrdersManagerPage() {
       filtered = filtered.filter(o => o.status === statusFilter);
     }
     return filtered.sort((a, b) => {
-      if (!a.deliveryDate) return 1;
-      if (!b.deliveryDate) return -1;
-      return a.deliveryDate.localeCompare(b.deliveryDate);
+      const dateA = a.delivery_date || a.deliveryDate || '9999-99-99';
+      const dateB = b.delivery_date || b.deliveryDate || '9999-99-99';
+      return dateA.localeCompare(dateB);
     });
   }, [orders, searchTerm, statusFilter, isAuthenticated]);
 
@@ -148,5 +169,13 @@ export default function OrdersManagerPage() {
         />
       </main>
     </div>
+  );
+}
+
+export default function OrdersManagerPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#050505] flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin" /></div>}>
+      <OrdersManagerContent />
+    </Suspense>
   );
 }

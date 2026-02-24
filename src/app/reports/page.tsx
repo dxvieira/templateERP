@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   BarChart3, Calendar, ArrowUpRight, ArrowDownRight, Wallet, CreditCard, 
@@ -29,6 +30,7 @@ export default function ReportsManagerPage() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  const router = useRouter();
 
   const [isMounted, setIsMounted] = useState(false);
   const [tempDateRange, setTempDateRange] = useState({ start: '', end: '' });
@@ -111,6 +113,48 @@ export default function ReportsManagerPage() {
     };
   }, [orders, expenses, appliedDateRange]);
 
+  // Lógica do Radar de Operações (Volume e Urgência)
+  const stagesSummary = useMemo(() => {
+    if (!financialData?.filteredOrders) return [];
+
+    const summary = {
+      'Arte Final': { label: 'ARTE FINAL', count: 0, critical: 0, color: '#d946ef' },
+      'Impressão': { label: 'IMPRESSÃO', count: 0, critical: 0, color: '#3B82F6' },
+      'Serralheria': { label: 'SERRALHERIA', count: 0, critical: 0, color: '#EAB308' },
+      'Acabamento': { label: 'ACABAMENTO', count: 0, critical: 0, color: '#FF5F1F' },
+      'Instalação': { label: 'INSTALAÇÃO', count: 0, critical: 0, color: '#8B5CF6' },
+      'Finalizado': { label: 'FINALIZADO', count: 0, critical: 0, color: '#4ade80' } 
+    };
+
+    let totalActiveOrders = 0;
+    const today = new Date().toISOString().split('T')[0];
+
+    financialData.filteredOrders.forEach(order => {
+      const statusKey = (order.status === 'Concluído' || order.status === 'Entregue') ? 'Finalizado' : order.status;
+      const normalizedKey = statusKey === 'Arte' ? 'Arte Final' : statusKey;
+
+      if (summary[normalizedKey]) {
+        summary[normalizedKey].count += 1;
+        if (normalizedKey !== 'Finalizado') totalActiveOrders += 1;
+        
+        const delivery = order.delivery_date || order.deliveryDate;
+        if (normalizedKey !== 'Finalizado' && delivery && delivery <= today) {
+           summary[normalizedKey].critical += 1;
+        }
+      }
+    });
+
+    return Object.values(summary).map(stage => {
+      let percentage = 0;
+      if (stage.label === 'FINALIZADO') {
+         percentage = stage.count > 0 ? 100 : 0;
+      } else {
+         percentage = totalActiveOrders === 0 ? 0 : (stage.count / totalActiveOrders) * 100;
+      }
+      return { ...stage, percentage };
+    });
+  }, [financialData?.filteredOrders]);
+
   // NOVO: Ordenação por Prioridade Financeira e Prazo
   const sortedOrders = useMemo(() => {
     if (!financialData?.filteredOrders) return [];
@@ -127,20 +171,16 @@ export default function ReportsManagerPage() {
       const hasBalanceA = balanceA > 0;
       const hasBalanceB = balanceB > 0;
 
-      // 1. Prioridade Máxima: Pedidos com Saldo Devedor
       if (hasBalanceA && !hasBalanceB) return -1;
       if (!hasBalanceA && hasBalanceB) return 1;
 
-      // Se ambos tiverem saldo ou ambos estiverem pagos, desempata pelo prazo/data
       const dateA = a.delivery_date || a.deliveryDate || '9999-99-99';
       const dateB = b.delivery_date || b.deliveryDate || '9999-99-99';
 
       if (hasBalanceA && hasBalanceB) {
-        // Ambos devedores: prazo mais próximo (ou atrasado) primeiro
         return dateA.localeCompare(dateB);
       }
 
-      // Ambos pagos: exibe os mais recentes no topo da categoria de "finalizados"
       return dateB.localeCompare(dateA);
     });
   }, [financialData?.filteredOrders]);
@@ -359,10 +399,14 @@ export default function ReportsManagerPage() {
                       const balance = total - paid;
 
                       return (
-                        <div key={order.id} className={cn(
-                          "bg-[#09090b] border border-zinc-800 rounded-2xl p-4 group hover:border-primary/30 transition-all",
-                          balance > 0 && "border-primary/10 shadow-[inset_0_0_20px_rgba(255,95,31,0.02)]"
-                        )}>
+                        <div 
+                          key={order.id} 
+                          onClick={() => router.push(`/orders?edit=${order.id}`)}
+                          className={cn(
+                            "bg-[#09090b] border border-zinc-800 rounded-2xl p-4 group hover:border-primary/30 transition-all cursor-pointer hover:scale-[1.01]",
+                            balance > 0 && "border-primary/10 shadow-[inset_0_0_20px_rgba(255,95,31,0.02)]"
+                          )}
+                        >
                           <div className="flex justify-between items-start mb-4">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
