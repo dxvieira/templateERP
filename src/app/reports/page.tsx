@@ -371,9 +371,14 @@ export default function ReportsManagerPage() {
     }
   };
 
-  const handleDeletePayable = async (id: string) => {
+  const handleDeletePayable = async (id: string, status: string) => {
     if (!firestore) return;
-    if (window.confirm("Remover este boleto da pauta permanentemente?")) {
+    
+    const confirmMessage = status === 'paid'
+      ? "⚠️ Esta conta já foi marcada como PAGA. Excluí-la aqui não removerá automaticamente o desconto feito no Fluxo de Caixa. Deseja excluir o registro mesmo assim?"
+      : "Remover este boleto da pauta permanentemente?";
+
+    if (window.confirm(confirmMessage)) {
       deleteDoc(doc(firestore, 'accounts_payable', id))
         .then(() => toast({ title: "Conta Removida" }))
         .catch(() => {
@@ -657,20 +662,20 @@ export default function ReportsManagerPage() {
                         const isLate = isBefore(dueDate, new Date()) && !isPaid && !isSameDay(dueDate, new Date());
 
                         return (
-                          <tr key={payable.id} className={cn("hover:bg-white/5 transition-colors group", isPaid && "opacity-40")}>
+                          <tr key={payable.id} className="hover:bg-white/5 transition-colors group">
                             <td className="p-4 pl-6">
                                <div className={cn("flex flex-col items-start px-2 py-1 rounded border w-fit", isLate ? "bg-red-500/10 border-red-500/20 text-red-500" : "bg-zinc-900 border-zinc-800 text-zinc-400")}>
                                   <span className="text-[10px] font-mono font-bold">{format(dueDate, 'dd/MM/yy')}</span>
                                </div>
                             </td>
                             <td className="p-4">
-                               <div className="flex flex-col">
+                               <div className={cn("flex flex-col", isPaid && "opacity-50")}>
                                   <span className="text-xs font-bold text-white uppercase group-hover:text-primary transition-colors">{payable.description}</span>
                                   {payable.supplier && <span className="text-[8px] text-zinc-500 uppercase font-black tracking-widest">{payable.supplier}</span>}
                                </div>
                             </td>
-                            <td className="p-4 text-center"><span className="text-[9px] text-zinc-400 font-black uppercase bg-zinc-900 border border-white/5 px-2 py-0.5 rounded">{payable.category}</span></td>
-                            <td className="p-4 text-center font-mono font-black text-sm text-white">{Number(payable.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                            <td className="p-4 text-center"><span className={cn("text-[9px] text-zinc-400 font-black uppercase bg-zinc-900 border border-white/5 px-2 py-0.5 rounded", isPaid && "opacity-50")}>{payable.category}</span></td>
+                            <td className={cn("p-4 text-center font-mono font-black text-sm text-white", isPaid && "opacity-50")}>{Number(payable.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                             <td className="p-4 text-center">
                                {isPaid ? (
                                  <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Pago</span>
@@ -685,8 +690,8 @@ export default function ReportsManagerPage() {
                                   {!isPaid && (
                                     <button onClick={() => handlePayAccount(payable)} className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-500 hover:bg-emerald-500 hover:text-black transition-all" title="Dar Baixa"><CheckCircle2 size={16}/></button>
                                   )}
-                                  <button onClick={() => handleOpenEditPayable(payable)} className="p-2 rounded-lg text-zinc-500 hover:text-white"><Edit size={16}/></button>
-                                  <button onClick={() => handleDeletePayable(payable.id)} className="p-2 rounded-lg text-zinc-500 hover:text-red-500"><Trash2 size={16}/></button>
+                                  <button onClick={() => handleOpenEditPayable(payable)} className={cn("p-2 rounded-lg text-zinc-500 hover:text-white", isPaid && "opacity-50")}><Edit size={16}/></button>
+                                  <button onClick={() => handleDeletePayable(payable.id, payable.status)} className="p-2 rounded-lg text-zinc-500 hover:text-red-500 transition-colors" title="Excluir Registro"><Trash2 size={16}/></button>
                                </div>
                             </td>
                           </tr>
