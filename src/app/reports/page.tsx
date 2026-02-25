@@ -85,7 +85,6 @@ export default function ReportsManagerPage() {
     });
 
     return [...filtered].map(order => {
-      // CÁLCULO DINÂMICO DE VALORES (Real-time de parcelas)
       const totalOS = Number(order.total_value || order.totalValue) || 0;
       let liquidado = 0;
       
@@ -130,7 +129,6 @@ export default function ReportsManagerPage() {
     const receivedFromOrders = sortedOrders.reduce((acc, o) => acc + o.calculated_paid, 0);
     const pendingFromOrders = sortedOrders.reduce((acc, o) => acc + o.calculated_balance, 0);
     
-    // Manual cashflow
     const manualIncome = filteredCashflow.filter(e => e.type === 'income').reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
     const manualExpense = filteredCashflow.filter(e => e.type === 'expense').reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
 
@@ -386,8 +384,12 @@ export default function ReportsManagerPage() {
                         {item.amount?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </span>
                       <button 
-                        onClick={() => handleDeleteCashflowItem(item.id)}
-                        className="p-2 text-zinc-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCashflowItem(item.id);
+                        }}
+                        className="p-2 text-zinc-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                        title="Excluir Lançamento"
                       >
                         <Trash2 size={16} />
                       </button>
