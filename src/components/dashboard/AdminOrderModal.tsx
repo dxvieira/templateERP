@@ -136,7 +136,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     if (!inst) return;
 
     if (inst.status === 'paid') {
-      // REVERSÃO (ESTORNO)
       setInstallments(installments.map(i => {
         if (i.uid !== uid) return i;
         const dDate = i.due_date || i.dueDate;
@@ -155,8 +154,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       }));
       toast({ title: "Pagamento Estornado", description: "A parcela voltou ao estado pendente." });
     } else {
-      // INTERCEPTAÇÃO: Abrir seletor de conta
-      let suggestedMethod = PAYMENT_METHODS[0]; // Caixa Interno
+      let suggestedMethod = PAYMENT_METHODS[0];
       if (inst.type === 'Cartão') suggestedMethod = inst.payment_method || "Máquina PAGBANK";
       else if (inst.type === 'Boleto') suggestedMethod = "SICOOB - Lindóia";
 
@@ -177,32 +175,33 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     toast({ title: "Recebimento Registrado", description: "Lembre-se de salvar a OS para efetivar no sistema." });
   };
 
-  // FUNÇÃO SIMULADA DE EMISSÃO DE NFe
-  const handleEmitNFe = async () => {
+  // FUNÇÃO DE TESTE PARA EMISSÃO DE NFe (SIMULADA)
+  const handleTestEmitNFe = async () => {
     if (!order?.id || !firestore) {
       toast({ variant: 'destructive', title: "Erro", description: "O pedido precisa estar registrado para emitir NFe." });
       return;
     }
     
-    const orderRef = doc(firestore, 'orders', order.id);
-    
     try {
-      // ESTADO 2: PROCESSANDO
+      const orderRef = doc(firestore, 'orders', order.id);
+      
+      // Passo 1: Muda para processando (Amarelo)
       await updateDoc(orderRef, { nfe_status: 'processing' });
-      toast({ title: "Enviando para SEFAZ", description: "Validando dados fiscais do protocolo..." });
+      toast({ title: "SEFAZ", description: "Validando dados fiscais do protocolo..." });
 
-      // SIMULAÇÃO DE RESPOSTA DA SEFAZ (3 SEGUNDOS)
-      setTimeout(async () => {
-        await updateDoc(orderRef, { 
-          nfe_status: 'issued',
-          nfe_url: 'https://www.focusnfe.com.br/blog/wp-content/uploads/2018/01/modelo-de-danfe.pdf' 
-        });
-        toast({ title: "NFe Autorizada", description: "Documento fiscal emitido com sucesso." });
-      }, 3000);
-
-    } catch (err) {
-      console.error("Erro NFe:", err);
-      toast({ variant: 'destructive', title: "Erro SEFAZ", description: "Não foi possível autorizar a nota fiscal." });
+      // Passo 2: Simula o tempo de resposta da SEFAZ (3 segundos)
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Passo 3: Conclui a emissão (Verde) e injeta um PDF de teste
+      await updateDoc(orderRef, { 
+        nfe_status: 'issued',
+        nfe_url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf' 
+      });
+      
+      toast({ title: "NFe Autorizada", description: "Documento fiscal emitido com sucesso." });
+    } catch (error: any) {
+      console.error("Erro ao simular NFe:", error);
+      toast({ variant: 'destructive', title: "Erro SEFAZ", description: error.message });
     }
   };
 
@@ -263,29 +262,35 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </div>
           
           <div className="hidden md:flex gap-6 items-center">
-             {/* BOTÃO INTELIGENTE DE NFe */}
+             {/* BOTÃO INTELIGENTE DE NFe (ESTADOS DINÂMICOS) */}
              {order && (
                <div className="flex items-center mr-4 border-r border-zinc-800 pr-6 h-10">
-                 {order.nfe_status === 'processing' ? (
+                 {(!order.nfe_status || order.nfe_status === 'pending') && (
+                   <button 
+                     onClick={handleTestEmitNFe}
+                     className="flex items-center gap-2 px-4 py-2 bg-zinc-800/50 border border-zinc-700 text-zinc-400 rounded-xl hover:bg-white hover:text-black transition-all group"
+                     title="Emitir Nota Fiscal Eletrônica"
+                   >
+                     <FileText size={14} className="group-hover:rotate-12 transition-transform" />
+                     <span className="text-[10px] font-black uppercase tracking-[0.2em]">Emitir NFe</span>
+                   </button>
+                 )}
+
+                 {order.nfe_status === 'processing' && (
                    <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 rounded-xl cursor-wait">
                      <Loader2 size={14} className="animate-spin" />
                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">Processando...</span>
                    </div>
-                 ) : order.nfe_status === 'issued' ? (
+                 )}
+
+                 {order.nfe_status === 'issued' && (
                    <button 
                      onClick={() => window.open(order.nfe_url, '_blank')}
-                     className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl hover:bg-emerald-500 hover:text-black transition-all group shadow-lg shadow-emerald-900/10"
+                     className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl hover:bg-emerald-500 hover:text-white transition-all group shadow-lg shadow-emerald-900/10"
+                     title="Baixar PDF da Nota Fiscal"
                    >
                      <Download size={14} className="group-hover:-translate-y-0.5 transition-transform" />
                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">Baixar NFe</span>
-                   </button>
-                 ) : (
-                   <button 
-                     onClick={handleEmitNFe}
-                     className="flex items-center gap-2 px-4 py-2 bg-zinc-800/50 border border-zinc-700 text-zinc-400 rounded-xl hover:bg-white hover:text-black transition-all group"
-                   >
-                     <FileText size={14} className="group-hover:rotate-12 transition-transform" />
-                     <span className="text-[10px] font-black uppercase tracking-[0.2em]">Emitir NFe</span>
                    </button>
                  )}
                </div>
@@ -371,7 +376,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
               </div>
             ) : (
               <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                {/* GERADOR DE PARCELAS */}
                 <section className="bg-zinc-900/30 border border-zinc-800 rounded-3xl p-6">
                    <div className="flex items-center gap-3 mb-6">
                       <div className="p-2 bg-primary/10 rounded-xl"><RefreshCw size={18} className="text-primary"/></div>
@@ -393,7 +397,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                          </select>
                       </div>
                       
-                      {/* CAMPO CONDICIONAL DE MÁQUINA */}
                       {genConfig.type === 'Cartão' && (
                         <div>
                            <label className={labelClass}>Máquina</label>
@@ -416,7 +419,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                    </div>
                 </section>
 
-                {/* LISTA DE PARCELAS */}
                 <section className="space-y-4">
                    <h3 className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] border-b border-white/5 pb-2 flex items-center gap-2"><History size={14}/> Cronograma de Recebíveis</h3>
                    
