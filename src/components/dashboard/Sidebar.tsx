@@ -12,7 +12,8 @@ import {
   Menu,
   X,
   Users,
-  LogOut
+  LogOut,
+  BarChart3
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,7 @@ import { useAuth, initiateSignOut } from '@/firebase';
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: Target, label: 'Meta da Semana', path: '/goals' },
+  { icon: BarChart3, label: 'Relatórios Flux', path: '/reports' },
   { icon: ClipboardList, label: 'Gestão de Pedidos', path: '/orders' },
   { icon: Users, label: 'Meus Clientes', path: '/clients' },
   { icon: Truck, label: 'Fornecedores', path: '/suppliers' },
