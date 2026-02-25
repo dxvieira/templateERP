@@ -18,7 +18,7 @@ import {
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { 
   collection, query, orderBy, deleteDoc, doc, 
-  addDoc, serverTimestamp, setDoc
+  addDoc, serverTimestamp
 } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { useToast } from '@/hooks/use-toast';
@@ -50,7 +50,7 @@ export default function ReportsManagerPage() {
     setSelectedMonth(format(now, 'yyyy-MM'));
   }, []);
 
-  // --- QUERIES ---
+  // --- QUERIES REATIVAS ---
   const ordersQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
@@ -150,18 +150,24 @@ export default function ReportsManagerPage() {
     setSelectedMonth(format(next, 'yyyy-MM'));
   };
 
+  /**
+   * FUNÇÃO DE EXCLUSÃO DEFINITIVA (NON-BLOCKING)
+   * Resolve o problema de travamento e garante reatividade total.
+   */
   const handleDeleteCashflowItem = useCallback((id: string) => {
     if (!firestore || !id) return;
-    if (!window.confirm("Deseja realmente apagar este lançamento permanentemente?")) return;
+    
+    if (!window.confirm("Deseja apagar permanentemente este lançamento do fluxo de caixa?")) return;
 
     const docRef = doc(firestore, 'cashflow_manual', id);
     
-    // Non-blocking delete
+    // Execução sem await para garantir otimismo na UI
     deleteDoc(docRef)
       .then(() => {
-        toast({ title: "Lançamento Removido" });
+        toast({ title: "Lançamento Excluído" });
       })
-      .catch(async (error) => {
+      .catch((error) => {
+        console.error("Falha ao excluir do Firebase:", error);
         errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: docRef.path,
           operation: 'delete'
@@ -195,7 +201,7 @@ export default function ReportsManagerPage() {
           type: 'income'
         });
       })
-      .catch(async (error) => {
+      .catch((error) => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: 'cashflow_manual',
           operation: 'create',
@@ -249,14 +255,14 @@ export default function ReportsManagerPage() {
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-primary">
               <BarChart3 size={16} />
-              <span className="text-[10px] font-black uppercase tracking-[0.3em]">Terminal de Inteligência VisComm</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.3em]">Inteligência Financeira VisComm</span>
             </div>
             <h1 className="text-4xl font-black text-white uppercase tracking-tighter leading-none">
               REPORTS <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">FLUX</span>
             </h1>
           </div>
 
-          <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+          <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-xl">
             <button onClick={() => handleMonthNav('prev')} className="p-3 hover:bg-white/5 text-zinc-500 hover:text-white transition-colors border-r border-zinc-800"><ArrowLeft size={16}/></button>
             <span className="px-6 py-2 text-xs font-black uppercase text-white tracking-widest min-w-[140px] text-center">
               {selectedMonth ? format(parseISO(`${selectedMonth}-01`), 'MMMM yyyy') : '--'}
@@ -268,9 +274,9 @@ export default function ReportsManagerPage() {
         {/* KPI GRID */}
         <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {[
-            { label: 'Total Entradas', val: kpiMetrics.receivedTotal, color: '#4ade80', icon: TrendingUp },
-            { label: 'Total Saídas', val: kpiMetrics.expenseTotal, color: '#ef4444', icon: TrendingDown },
-            { label: 'Saldo Líquido', val: kpiMetrics.netBalance, color: '#FF5F1F', icon: Wallet },
+            { label: 'Entradas Reais', val: kpiMetrics.receivedTotal, color: '#4ade80', icon: TrendingUp },
+            { label: 'Saídas Reais', val: kpiMetrics.expenseTotal, color: '#ef4444', icon: TrendingDown },
+            { label: 'Saldo em Caixa', val: kpiMetrics.netBalance, color: '#FF5F1F', icon: Wallet },
             { label: 'A Receber (OS)', val: kpiMetrics.pendingTotal, color: '#eab308', icon: Clock }
           ].map((kpi, i) => (
             <motion.div key={i} whileHover={{ y: -4 }} className="group relative bg-[#0c0c0e] border border-zinc-800 rounded-3xl p-6 transition-all duration-300" style={{ borderBottom: `2px solid ${kpi.color}20` }}>
@@ -288,17 +294,17 @@ export default function ReportsManagerPage() {
         <section className="space-y-6">
           <div className="flex items-center justify-between">
              <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-2">
-               <Package size={20} className="text-primary" /> Monitor Operacional
+               <Package size={20} className="text-primary" /> Pauta Operacional
              </h2>
              <span className="text-[10px] text-zinc-500 font-black uppercase tracking-widest bg-zinc-900 px-3 py-1 rounded-full border border-zinc-800">
-               {sortedOrders.length} Protocolos no Mês
+               {sortedOrders.length} OS Localizadas
              </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {sortedOrders.length === 0 ? (
               <div className="col-span-full py-16 text-center border-2 border-dashed border-zinc-800 rounded-3xl opacity-20">
-                <p className="text-[10px] uppercase font-black tracking-widest text-zinc-500">Nenhuma Ordem de Serviço para este período</p>
+                <p className="text-[10px] uppercase font-black tracking-widest text-zinc-500">Sem atividade operacional detectada</p>
               </div>
             ) : (
               sortedOrders.map((order) => {
@@ -316,12 +322,12 @@ export default function ReportsManagerPage() {
                     <div className="flex justify-between items-start mb-4">
                       <div className="min-w-0">
                         <h3 className="text-sm font-black text-white uppercase truncate group-hover:text-primary transition-colors">{order.client}</h3>
-                        <p className="text-[9px] font-mono text-zinc-500 mt-0.5">#{order.id.slice(-6)}</p>
+                        <p className="text-[9px] font-mono text-zinc-500 mt-0.5">ID: #{order.id}</p>
                       </div>
                       {isLate ? (
                         <div className="bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-1 rounded-lg text-[8px] font-black uppercase animate-pulse">Atrasado</div>
                       ) : isDone ? (
-                        <div className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2 py-1 rounded-lg text-[8px] font-black uppercase">Finalizado</div>
+                        <div className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2 py-1 rounded-lg text-[8px] font-black uppercase">Liquidado</div>
                       ) : (
                         <div className="bg-zinc-800 text-zinc-400 px-2 py-1 rounded-lg text-[8px] font-black uppercase">Prazo: {deadline && isValid(deadline) ? format(deadline, 'dd/MM') : '--/--'}</div>
                       )}
@@ -329,11 +335,11 @@ export default function ReportsManagerPage() {
                     
                     <div className="grid grid-cols-2 gap-4 border-t border-white/5 pt-4">
                       <div className="space-y-1">
-                        <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-500/60 block">Liquidado</span>
+                        <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-500/60 block">Pago</span>
                         <span className="text-base font-bold text-white">{order.calculated_paid.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                       </div>
                       <div className="space-y-1">
-                        <span className="text-[10px] uppercase font-bold tracking-widest text-primary/60 block">A Receber</span>
+                        <span className="text-[10px] uppercase font-bold tracking-widest text-primary/60 block">Em Aberto</span>
                         <span className="text-base font-bold text-white">{order.calculated_balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                       </div>
                     </div>
@@ -349,9 +355,9 @@ export default function ReportsManagerPage() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-2">
-                <Wallet size={20} className="text-[#FF5F1F]" /> Fluxo de Caixa
+                <Wallet size={20} className="text-[#FF5F1F]" /> Livro-Caixa Consolidado
               </h2>
-              <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mt-1">Gestão de Entradas e Saídas Manuais</p>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mt-1">Lançamentos Manuais de Receitas e Despesas</p>
             </div>
             
             <div className="flex gap-3 w-full sm:w-auto">
@@ -372,23 +378,23 @@ export default function ReportsManagerPage() {
             </div>
           </div>
 
-          <div className="flex flex-col divide-y divide-zinc-800/50">
+          <div className="flex flex-col divide-y divide-zinc-800/50 bg-[#050505] rounded-2xl border border-zinc-800/50 overflow-hidden">
             {filteredCashflow.length === 0 ? (
               <div className="py-20 text-center opacity-20">
                 <FileText size={48} className="mx-auto mb-4" />
-                <p className="text-[10px] uppercase font-black tracking-widest text-zinc-500">Nenhum lançamento manual para este período</p>
+                <p className="text-[10px] uppercase font-black tracking-widest text-zinc-500">Nenhum registro manual identificado</p>
               </div>
             ) : (
               filteredCashflow.map((item) => (
-                <div key={item.id} className="group flex items-center justify-between py-4 hover:bg-zinc-900/40 transition-colors rounded-xl px-2">
-                  <div className="flex flex-col">
+                <div key={item.id} className="group flex items-center justify-between py-4 px-6 hover:bg-zinc-900/40 transition-all">
+                  <div className="flex flex-col min-w-0 flex-1">
                     <span className="text-[10px] text-zinc-500 font-mono">
                       {item.date ? format(parseISO(item.date), 'dd/MM/yyyy') : '--/--/--'}
                     </span>
-                    <span className="text-zinc-100 font-medium text-sm uppercase tracking-tight">{item.description}</span>
+                    <span className="text-zinc-100 font-bold text-sm uppercase tracking-tight truncate">{item.description}</span>
                   </div>
 
-                  <div className="flex items-center gap-8">
+                  <div className="flex items-center gap-8 shrink-0">
                     <div className={item.type === 'income' ? 
                       "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full text-[9px] uppercase font-black tracking-widest" : 
                       "bg-red-500/10 text-red-400 border border-red-500/20 px-2.5 py-0.5 rounded-full text-[9px] uppercase font-black tracking-widest"
@@ -396,20 +402,22 @@ export default function ReportsManagerPage() {
                       {item.type === 'income' ? 'Entrada' : 'Saída'}
                     </div>
 
-                    <div className="flex items-center gap-4 min-w-[120px] justify-end">
-                      <span className="text-sm font-black text-white">
-                        {item.amount?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    <div className="flex items-center gap-4 min-w-[140px] justify-end">
+                      <span className="text-sm font-black text-white font-mono">
+                        {Number(item.amount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </span>
+                      
+                      {/* BOTÃO DE EXCLUSÃO REFORÇADO */}
                       <button 
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDeleteCashflowItem(item.id);
                         }}
-                        className="p-2 text-zinc-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
-                        title="Excluir Lançamento"
+                        className="p-2.5 text-zinc-600 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all active:scale-90"
+                        title="Remover Permanentemente"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={18} />
                       </button>
                     </div>
                   </div>
@@ -469,11 +477,11 @@ export default function ReportsManagerPage() {
                     </div>
 
                     <div>
-                      <label className="text-[10px] text-zinc-500 font-black uppercase tracking-widest mb-2 block ml-1">Descrição do Lançamento</label>
+                      <label className="text-[10px] text-zinc-500 font-black uppercase tracking-widest mb-2 block ml-1">Descrição</label>
                       <input 
                         type="text" 
                         required 
-                        placeholder="Ex: Compra de Tintas, Pagamento Aluguel..."
+                        placeholder="Ex: Compra de Tintas, Recebimento Pix..."
                         value={entryForm.description} 
                         onChange={e => setEntryForm({...entryForm, description: e.target.value})}
                         className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-white focus:border-primary outline-none transition-all"
@@ -499,7 +507,7 @@ export default function ReportsManagerPage() {
                     disabled={isSubmitting}
                     className="w-full h-14 bg-primary text-black rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg hover:bg-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <><Save size={18} /> Efetivar Registro</>}
+                    {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <><Save size={18} /> Confirmar Lançamento</>}
                   </button>
                 </form>
               </motion.div>
