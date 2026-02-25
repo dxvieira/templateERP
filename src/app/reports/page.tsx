@@ -18,10 +18,12 @@ import {
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { 
   collection, query, orderBy, deleteDoc, doc, 
-  addDoc, serverTimestamp 
+  addDoc, serverTimestamp, setDoc
 } from 'firebase/firestore';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { useToast } from '@/hooks/use-toast';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function ReportsManagerPage() {
   const firestore = useFirestore();
@@ -148,48 +150,61 @@ export default function ReportsManagerPage() {
     setSelectedMonth(format(next, 'yyyy-MM'));
   };
 
-  const handleDeleteCashflowItem = async (id: string) => {
-    if (!firestore) return;
-    if (!window.confirm("Deseja realmente apagar este lançamento do fluxo de caixa?")) return;
+  const handleDeleteCashflowItem = useCallback((id: string) => {
+    if (!firestore || !id) return;
+    if (!window.confirm("Deseja realmente apagar este lançamento permanentemente?")) return;
 
-    try {
-      await deleteDoc(doc(firestore, 'cashflow_manual', id));
-      toast({ title: "Lançamento Removido" });
-    } catch (error: any) {
-      console.error("Erro ao excluir:", error);
-      alert("Erro ao excluir: " + error.message);
-    }
-  };
+    const docRef = doc(firestore, 'cashflow_manual', id);
+    
+    // Non-blocking delete
+    deleteDoc(docRef)
+      .then(() => {
+        toast({ title: "Lançamento Removido" });
+      })
+      .catch(async (error) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: docRef.path,
+          operation: 'delete'
+        }));
+      });
+  }, [firestore, toast]);
 
   const handleSaveEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore || !user) return;
     setIsSubmitting(true);
 
-    try {
-      const payload = {
-        ...entryForm,
-        amount: Number(entryForm.amount),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        userId: user.uid
-      };
+    const payload = {
+      ...entryForm,
+      amount: Number(entryForm.amount),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      userId: user.uid
+    };
 
-      await addDoc(collection(firestore, 'cashflow_manual'), payload);
-      toast({ title: "Lançamento Registrado" });
-      setIsEntryModalOpen(false);
-      setEntryForm({
-        date: new Date().toISOString().split('T')[0],
-        description: '',
-        amount: '',
-        type: 'income'
+    const collectionRef = collection(firestore, 'cashflow_manual');
+    
+    addDoc(collectionRef, payload)
+      .then(() => {
+        toast({ title: "Lançamento Registrado" });
+        setIsEntryModalOpen(false);
+        setEntryForm({
+          date: new Date().toISOString().split('T')[0],
+          description: '',
+          amount: '',
+          type: 'income'
+        });
+      })
+      .catch(async (error) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: 'cashflow_manual',
+          operation: 'create',
+          requestResourceData: payload
+        }));
+      })
+      .finally(() => {
+        setIsSubmitting(false);
       });
-    } catch (error: any) {
-      console.error("Erro ao salvar:", error);
-      alert("Erro ao salvar: " + error.message);
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   const exportCashflowCSV = () => {
@@ -341,12 +356,14 @@ export default function ReportsManagerPage() {
             
             <div className="flex gap-3 w-full sm:w-auto">
               <button 
+                type="button"
                 onClick={exportCashflowCSV}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900 transition-all text-[10px] font-black uppercase tracking-widest"
               >
                 <Download size={14} /> Exportar CSV
               </button>
               <button 
+                type="button"
                 onClick={() => setIsEntryModalOpen(true)}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-black hover:bg-white transition-all text-[10px] font-black uppercase tracking-widest shadow-[0_0_20px_rgba(255,95,31,0.3)]"
               >
@@ -384,6 +401,7 @@ export default function ReportsManagerPage() {
                         {item.amount?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </span>
                       <button 
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDeleteCashflowItem(item.id);
