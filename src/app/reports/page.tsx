@@ -224,7 +224,6 @@ function ReportsContent() {
         console.error("Erro ao excluir do fluxo de caixa:", error);
         alert("Erro ao excluir do banco de dados: " + (error.message || "Erro desconhecido"));
         
-        // Emitir erro para o listener global se for falha de permissão
         errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: `cashflow_manual/${id}`,
           operation: 'delete'
@@ -234,20 +233,22 @@ function ReportsContent() {
   };
 
   const handleDeletePayable = async (id: string) => {
-    if (window.confirm("Deseja remover este compromisso permanentemente?")) {
-      try {
-        if (!firestore) return;
-        await deleteDoc(doc(firestore, 'accounts_payable', id));
-        toast({ title: "Conta Removida" });
-      } catch (error: any) {
-        console.error("Erro ao excluir conta a pagar:", error);
-        alert("Erro ao excluir conta: " + (error.message || "Erro desconhecido"));
-        
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: `accounts_payable/${id}`,
-          operation: 'delete'
-        }));
-      }
+    const confirmacao = window.confirm("⚠️ Tem certeza que deseja excluir esta conta da pauta de pagamentos? Esta ação não pode ser desfeita.");
+    
+    if (!confirmacao) return;
+
+    try {
+      if (!firestore) return;
+      await deleteDoc(doc(firestore, 'accounts_payable', id));
+      toast({ title: "Conta Removida" });
+    } catch (error: any) {
+      console.error("Erro ao excluir a conta:", error);
+      alert("Ocorreu um erro ao tentar excluir: " + (error.message || "Erro desconhecido"));
+      
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `accounts_payable/${id}`,
+        operation: 'delete'
+      }));
     }
   };
 
