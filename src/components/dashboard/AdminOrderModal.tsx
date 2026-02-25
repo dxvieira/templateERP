@@ -175,33 +175,24 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     toast({ title: "Recebimento Registrado", description: "Lembre-se de salvar a OS para efetivar no sistema." });
   };
 
-  // FUNÇÃO DE TESTE PARA EMISSÃO DE NFe (SIMULADA)
-  const handleTestEmitNFe = async () => {
-    if (!order?.id || !firestore) {
-      toast({ variant: 'destructive', title: "Erro", description: "O pedido precisa estar registrado para emitir NFe." });
-      return;
-    }
+  // FUNÇÃO DEFINITIVA DE EMISSÃO DE NFe
+  const handleEmitNFe = async () => {
+    if (!order?.id || !firestore) return;
     
+    const confirmar = window.confirm("Deseja enviar este pedido para emissão na Focus NFe?");
+    if (!confirmar) return;
+
     try {
       const orderRef = doc(firestore, 'orders', order.id);
       
-      // Passo 1: Muda para processando (Amarelo)
+      // O Front-end apenas sinaliza que o processo começou (Amarelo)
+      // O gatilho do backend (Cloud Function) assumirá a partir daqui.
       await updateDoc(orderRef, { nfe_status: 'processing' });
-      toast({ title: "SEFAZ", description: "Validando dados fiscais do protocolo..." });
-
-      // Passo 2: Simula o tempo de resposta da SEFAZ (3 segundos)
-      await new Promise(resolve => setTimeout(resolve, 3000));
       
-      // Passo 3: Conclui a emissão (Verde) e injeta um PDF de teste
-      await updateDoc(orderRef, { 
-        nfe_status: 'issued',
-        nfe_url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf' 
-      });
-      
-      toast({ title: "NFe Autorizada", description: "Documento fiscal emitido com sucesso." });
+      toast({ title: "Solicitação Enviada", description: "O pedido foi colocado na fila de faturamento Focus NFe." });
     } catch (error: any) {
-      console.error("Erro ao simular NFe:", error);
-      toast({ variant: 'destructive', title: "Erro SEFAZ", description: error.message });
+      console.error("Erro ao iniciar emissão de NFe:", error);
+      alert("Erro no banco de dados: " + error.message);
     }
   };
 
@@ -267,9 +258,9 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                <div className="flex items-center mr-4 border-r border-zinc-800 pr-6 h-10">
                  {(!order.nfe_status || order.nfe_status === 'pending') && (
                    <button 
-                     onClick={handleTestEmitNFe}
+                     onClick={handleEmitNFe}
                      className="flex items-center gap-2 px-4 py-2 bg-zinc-800/50 border border-zinc-700 text-zinc-400 rounded-xl hover:bg-white hover:text-black transition-all group"
-                     title="Emitir Nota Fiscal Eletrônica"
+                     title="Enviar para Faturamento Focus NFe"
                    >
                      <FileText size={14} className="group-hover:rotate-12 transition-transform" />
                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">Emitir NFe</span>
