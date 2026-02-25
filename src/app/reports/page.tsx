@@ -8,7 +8,7 @@ import {
   TrendingUp, TrendingDown, Wallet, Target, AlertCircle, 
   Download, Plus, Search, Trash2, Calendar, 
   Loader2, X, Wallet2, CheckCircle2, Receipt, 
-  ArrowRight, CreditCard, Box, Factory
+  ArrowRight, CreditCard, Box, Factory, Check
 } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -25,6 +25,7 @@ export default function ReportsManager() {
   const [activeTab, setActiveTab] = useState<'FLUXO' | 'CONTAS'>('FLUXO');
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [itemToDelete, setItemToDelete] = useState<any>(null);
+  const [itemToPay, setItemToPay] = useState<any>(null);
   
   // Modais
   const [isCashflowModalOpen, setIsCashflowModalOpen] = useState(false);
@@ -79,7 +80,6 @@ export default function ReportsManager() {
       const totalVal = Number(order.total_value || order.totalValue || 0);
       const paidVal = Number(order.amount_paid || order.amountPaid || 0);
       
-      // Saldo a receber global (Ignora mês)
       if (order.status !== 'Entregue') {
         globalReceivable += Math.max(0, totalVal - paidVal);
       }
@@ -196,36 +196,46 @@ export default function ReportsManager() {
     }
   };
 
-  const handlePayAccount = async (account: any) => {
-    if (!firestore || !user) return;
-    if (!window.confirm(`Confirmar pagamento de R$ ${account.amount.toFixed(2)} para ${account.supplier}?`)) return;
-
+  const handleConfirmPayment = async () => {
+    if (!itemToPay || !firestore || !user) return;
+    
     try {
       // 1. Atualizar conta para paga
-      await updateDoc(doc(firestore, 'accounts_payable', account.id), {
+      const contaRef = doc(firestore, 'accounts_payable', itemToPay.id);
+      await updateDoc(contaRef, { 
         status: 'paid',
-        paidAt: serverTimestamp()
+        paidAt: serverTimestamp(),
+        paymentDate: new Date().toISOString()
       });
 
       // 2. Injetar saída no fluxo de caixa manual
       await addDoc(collection(firestore, 'cashflow_manual'), {
-        description: `PGTO: ${account.supplier} (${account.description})`,
-        amount: account.amount,
+        description: `PGTO: ${itemToPay.supplier || itemToPay.description || 'Conta'}`,
+        amount: Number(itemToPay.amount),
         type: 'expense',
         date: format(new Date(), 'yyyy-MM-dd'),
-        origin: 'PAGAMENTO CONTA',
+        origin: 'CONTAS A PAGAR',
         createdAt: serverTimestamp(),
         userId: user.uid
       });
 
       toast({ title: "Baixa Confirmada", description: "O valor foi debitado do fluxo de caixa." });
-    } catch (e) {
-      toast({ variant: 'destructive', title: "Erro ao dar baixa" });
+      setItemToPay(null);
+    } catch (error: any) {
+      console.error("Erro ao processar pagamento:", error);
+      alert("Erro ao dar baixa: " + error.message);
     }
   };
 
   const handleConfirmDelete = async () => {
     if (!itemToDelete || !firestore) return;
+    
+    if (itemToDelete.origin === 'SISTEMA (OS)') {
+      alert("⚠️ Esta entrada é automática. Cancele a baixa diretamente no pedido do cliente.");
+      setItemToDelete(null);
+      return;
+    }
+
     const collectionName = itemToDelete.supplier ? 'accounts_payable' : 'cashflow_manual';
     
     try {
@@ -308,7 +318,6 @@ export default function ReportsManager() {
           <KPICard label="Contas a Pagar" value={kpis.payables} color="text-rose-500" icon={AlertCircle} />
         </section>
 
-        {/* TABS SELECTOR */}
         <div className="flex gap-2 p-1 bg-zinc-900/50 rounded-2xl w-fit border border-zinc-800">
            <button 
              onClick={() => setActiveTab('FLUXO')}
@@ -324,7 +333,6 @@ export default function ReportsManager() {
            </button>
         </div>
 
-        {/* LISTA DINÂMICA */}
         <div className="bg-[#09090b] border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
           {activeTab === 'FLUXO' ? (
             <div className="divide-y divide-white/5">
@@ -347,9 +355,13 @@ export default function ReportsManager() {
                      <p className={cn("text-lg font-black font-mono tracking-tighter", t.type === 'income' ? "text-emerald-500" : "text-red-500")}>
                        {t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                      </p>
-                     {t.origin === 'MANUAL' && (
-                       <button onClick={() => setItemToDelete(t)} className="p-2 text-zinc-700 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
-                     )}
+                     <button 
+                       type="button"
+                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setItemToDelete(t); }} 
+                       className="relative z-50 p-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all border border-red-500/20 pointer-events-auto cursor-pointer"
+                     >
+                       <Trash2 size={16}/>
+                     </button>
                   </div>
                 </div>
               )) : <EmptyState icon={Target} text="Sem movimentos no período" />}
@@ -377,9 +389,21 @@ export default function ReportsManager() {
                      </div>
                      <div className="flex gap-2">
                         {p.status !== 'paid' && (
-                          <button onClick={() => handlePayAccount(p)} className="p-3 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black rounded-xl transition-all border border-emerald-500/20"><CheckCircle2 size={18}/></button>
+                          <button 
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setItemToPay(p); }} 
+                            className="relative z-50 p-3 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black rounded-xl transition-all border border-emerald-500/20 pointer-events-auto cursor-pointer"
+                          >
+                            <Check size={18} strokeWidth={3} />
+                          </button>
                         )}
-                        <button onClick={() => setItemToDelete(p)} className="p-3 bg-zinc-900 text-zinc-600 hover:text-red-500 rounded-xl transition-all border border-zinc-800"><Trash2 size={18}/></button>
+                        <button 
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setItemToDelete(p); }} 
+                          className="relative z-50 p-3 bg-zinc-900 text-zinc-600 hover:text-red-500 rounded-xl transition-all border border-zinc-800 pointer-events-auto cursor-pointer"
+                        >
+                          <Trash2 size={18}/>
+                        </button>
                      </div>
                   </div>
                 </div>
@@ -399,6 +423,26 @@ export default function ReportsManager() {
                 <div className="flex gap-4">
                   <button onClick={() => setItemToDelete(null)} className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-400 font-black uppercase text-[10px] tracking-widest hover:bg-zinc-800/50 transition-all">Cancelar</button>
                   <button onClick={handleConfirmDelete} className="flex-1 py-4 rounded-xl bg-red-500 text-white font-black uppercase text-[10px] tracking-widest hover:bg-red-600 shadow-[0_0_25px_rgba(239,68,68,0.4)] transition-all">Sim, Excluir</button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* MODAL CONFIRMAR PAGAMENTO */}
+        <AnimatePresence>
+          {itemToPay && (
+            <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-[#0c0c0e] border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl text-center">
+                <div className="w-20 h-20 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mb-6 border border-emerald-500/20 mx-auto"><span className="text-4xl">💰</span></div>
+                <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-3">Confirmar Pagamento</h3>
+                <p className="text-zinc-400 text-sm uppercase tracking-widest leading-relaxed mb-8">
+                  Liquidar <strong className="text-white">"{itemToPay.description || itemToPay.supplier}"</strong> no valor de <strong className="text-emerald-400">R$ {Number(itemToPay.amount).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>? <br/><br/>
+                  Isso lançará uma saída automática no seu Fluxo de Caixa.
+                </p>
+                <div className="flex gap-4">
+                  <button onClick={() => setItemToPay(null)} className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-400 font-black uppercase text-[10px] tracking-widest hover:bg-zinc-800/50 transition-all">Cancelar</button>
+                  <button onClick={handleConfirmPayment} className="flex-1 py-4 rounded-xl bg-emerald-500 text-white font-black uppercase text-[10px] tracking-widest hover:bg-emerald-600 shadow-[0_0_25px_rgba(16,185,129,0.4)] transition-all">Confirmar Baixa</button>
                 </div>
               </motion.div>
             </div>
