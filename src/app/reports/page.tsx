@@ -6,7 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   BarChart3, Wallet, TrendingUp, TrendingDown, Plus, Trash2, Loader2, 
   X, RefreshCw, Download, ArrowLeft, ArrowRight,
-  Package, Edit, Info, Clock, CheckCircle2, AlertTriangle, Calendar as CalendarIcon, ArrowDownLeft
+  Package, Edit, Info, Clock, CheckCircle2, AlertTriangle, Calendar as CalendarIcon, ArrowDownLeft,
+  DollarSign
 } from 'lucide-react';
 import { startOfMonth, endOfMonth, format, isWithinInterval, parseISO, addMonths, subMonths, isBefore, isSameDay, isValid } from 'date-fns';
 
@@ -27,7 +28,7 @@ export default function ReportsManagerPage() {
   const router = useRouter();
 
   const [isMounted, setIsMounted] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(''); // Inicializado vazio para evitar erro de hidratação
+  const [selectedMonth, setSelectedMonth] = useState(''); 
   
   // --- ESTADOS DE LANÇAMENTO (LIVRO-CAIXA) ---
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
@@ -205,30 +206,36 @@ export default function ReportsManagerPage() {
     return { items: Object.values(accounts).sort((a, b) => b.value - a.value), total: totalEmCaixa };
   }, [transactions]);
 
-  // --- EXPORTAÇÃO ---
-  const exportToCSV = useCallback(() => {
-    if (transactions.length === 0) return;
-    const headers = ["DATA", "DESCRIÇÃO", "MODALIDADE", "CONTA", "TIPO", "VALOR"];
-    const rows = transactions.map(tx => [
-      tx.date ? format(parseISO(tx.date), 'dd/MM/yyyy') : '',
-      tx.description,
-      tx.method,
-      tx.account,
-      tx.type === 'income' ? 'ENTRADA' : 'SAÍDA',
-      tx.amount.toFixed(2)
-    ]);
-    const csvContent = [headers, ...rows].map(e => e.join(";")).join("\n");
-    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `fluxo_de_caixa_${selectedMonth}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }, [transactions, selectedMonth]);
+  // --- LÓGICA DE EXCLUSÃO (BLINDADA) ---
+  const handleDeleteTransaction = useCallback(async (id: string) => {
+    if (!firestore || !id) return;
+    if (!window.confirm("Deseja realmente excluir este lançamento? Esta ação é irreversível e afetará seu saldo atual.")) return;
 
-  // --- LÓGICA DE LANÇAMENTOS MANUAIS ---
+    try {
+      const docRef = doc(firestore, 'cashflow_manual', id);
+      await deleteDoc(docRef);
+      toast({ title: "Registro Removido", description: "O item foi excluído do banco de dados." });
+    } catch (error: any) {
+      console.error("Erro ao excluir do fluxo de caixa:", error);
+      alert("Erro ao excluir: " + error.message);
+    }
+  }, [firestore, toast]);
+
+  const handleDeletePayable = useCallback(async (id: string) => {
+    if (!firestore || !id) return;
+    if (!window.confirm("Confirmar exclusão deste compromisso financeiro?")) return;
+
+    try {
+      const docRef = doc(firestore, 'accounts_payable', id);
+      await deleteDoc(docRef);
+      toast({ title: "Boleto Removido", description: "O registro foi deletado com sucesso." });
+    } catch (error: any) {
+      console.error("Erro ao excluir conta a pagar:", error);
+      alert("Erro ao excluir: " + error.message);
+    }
+  }, [firestore, toast]);
+
+  // --- LANÇAMENTOS E PAGAMENTOS ---
   const handleSaveEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore || !user) return;
@@ -255,26 +262,25 @@ export default function ReportsManagerPage() {
       });
   };
 
-  // EXCLUSÃO DE LANÇAMENTO MANUAL (FLUXO DE CAIXA) - REESCRITA DO ZERO
-  const handleDeleteTransaction = useCallback(async (id: string) => {
-    if (!firestore || !id) return;
-    if (!window.confirm("Deseja realmente excluir este lançamento? Esta ação removerá o registro permanentemente do banco de dados.")) return;
-
+  const handlePayAccount = async (payable: any) => {
+    if (!firestore || !user) return;
+    const payableRef = doc(firestore, 'accounts_payable', payable.id);
+    const cashflowRef = doc(collection(firestore, 'cashflow_manual'));
+    const cashflowPayload = {
+      id: cashflowRef.id,
+      description: `PGTO: ${payable.description} ${payable.supplier ? `(${payable.supplier})` : ''}`,
+      amount: Number(payable.amount), type: 'expense', date: format(new Date(), 'yyyy-MM-dd'),
+      account: 'Caixa Interno', method: 'Boleto', createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+    };
     try {
-      const docRef = doc(firestore, 'cashflow_manual', id);
-      await deleteDoc(docRef);
-      toast({ title: "Lançamento Removido", description: "O registro foi excluído com sucesso." });
-    } catch (error: any) {
-      console.error("Erro ao excluir do fluxo de caixa:", error);
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: `cashflow_manual/${id}`,
-        operation: 'delete'
-      }));
-      toast({ variant: "destructive", title: "Erro na Exclusão", description: "Não foi possível remover o item. Verifique as permissões." });
+      await setDoc(payableRef, { status: 'paid', updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(cashflowRef, cashflowPayload);
+      toast({ title: "Pagamento Confirmado" });
+    } catch (err) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({ path: 'accounts_payable/pay', operation: 'update' }));
     }
-  }, [firestore, toast]);
+  };
 
-  // --- LÓGICA DE CONTAS A PAGAR (GERADOR) ---
   const handleGenerateInstallments = () => {
     const total = parseFloat(payableForm.totalAmount);
     const count = parseInt(payableForm.installmentsCount);
@@ -329,44 +335,6 @@ export default function ReportsManagerPage() {
     }
   };
 
-  const handlePayAccount = async (payable: any) => {
-    if (!firestore || !user) return;
-    const payableRef = doc(firestore, 'accounts_payable', payable.id);
-    const cashflowRef = doc(collection(firestore, 'cashflow_manual'));
-    const cashflowPayload = {
-      id: cashflowRef.id,
-      description: `PGTO: ${payable.description} ${payable.supplier ? `(${payable.supplier})` : ''}`,
-      amount: Number(payable.amount), type: 'expense', date: format(new Date(), 'yyyy-MM-dd'),
-      account: 'Caixa Interno', method: 'Boleto', createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-    };
-    try {
-      await setDoc(payableRef, { status: 'paid', updatedAt: serverTimestamp() }, { merge: true });
-      await setDoc(cashflowRef, cashflowPayload);
-      toast({ title: "Pagamento Confirmado" });
-    } catch (err) {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({ path: 'accounts_payable/pay', operation: 'update' }));
-    }
-  };
-
-  // EXCLUSÃO DE CONTA A PAGAR (BOLETO) - REESCRITA DO ZERO
-  const handleDeletePayable = useCallback(async (id: string) => {
-    if (!firestore || !id) return;
-    if (!window.confirm("Deseja realmente excluir esta conta a pagar? Esta ação é irreversível.")) return;
-
-    try {
-      const docRef = doc(firestore, 'accounts_payable', id);
-      await deleteDoc(docRef);
-      toast({ title: "Registro Removido", description: "O compromisso financeiro foi excluído do banco." });
-    } catch (error: any) {
-      console.error("Erro ao excluir conta a pagar:", error);
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: `accounts_payable/${id}`,
-        operation: 'delete'
-      }));
-      toast({ variant: "destructive", title: "Falha na Exclusão", description: "Erro ao acessar o banco de dados." });
-    }
-  }, [firestore, toast]);
-
   const handleMonthNav = (direction: 'prev' | 'next') => {
     if (!selectedMonth) return;
     const current = parseISO(`${selectedMonth}-01`);
@@ -409,14 +377,6 @@ export default function ReportsManagerPage() {
               </span>
               <button onClick={() => handleMonthNav('next')} className="p-3 hover:bg-white/5 text-zinc-500 hover:text-white transition-colors border-l border-zinc-800"><ArrowRight size={16}/></button>
             </div>
-            
-            <button 
-              onClick={exportToCSV}
-              disabled={transactions.length === 0}
-              className="flex items-center gap-2 px-6 h-12 bg-white/5 border border-white/10 rounded-xl text-zinc-400 hover:text-white hover:bg-white/10 transition-all text-[10px] font-black uppercase tracking-widest disabled:opacity-20"
-            >
-              <Download size={14} /> Exportar CSV
-            </button>
           </div>
         </header>
 
@@ -484,115 +444,128 @@ export default function ReportsManagerPage() {
             </div>
           </TabsContent>
 
+          {/* --- NOVO DESIGN: FLUXO DE CAIXA --- */}
           <TabsContent value="financeiro" className="space-y-8">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="bg-[#09090b] border border-zinc-800 rounded-3xl p-6 lg:col-span-2">
-                <div className="flex justify-between items-center mb-8"><h3 className="text-xs font-black text-zinc-500 uppercase tracking-widest">Concentração de Capital</h3></div>
-                <div className="space-y-6">
-                  {accountsSummary.items.map((acc) => (
-                    <div key={acc.label}>
-                      <div className="flex justify-between items-end mb-2">
-                        <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-lg">{acc.icon}</div><div><span className="text-white text-sm font-black uppercase block">{acc.label}</span><span className="text-[10px] text-zinc-500 uppercase font-mono">{acc.type} • {acc.value > 0 ? Math.round((acc.value / (accountsSummary.total || 1)) * 100) : 0}%</span></div></div>
-                        <span className="text-white font-mono font-black">{acc.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
-                        <motion.div initial={{ width: 0 }} animate={{ width: `${acc.value > 0 ? (acc.value / (accountsSummary.total || 1)) * 100 : 0}%` }} className="h-full rounded-full" style={{ backgroundColor: acc.color }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="flex flex-col gap-6">
-                <div className="bg-gradient-to-br from-[#09090b] to-zinc-900 border border-zinc-800 rounded-3xl p-8 flex flex-col items-center justify-center shadow-2xl">
-                   <span className="text-[10px] text-zinc-400 uppercase font-black tracking-[0.3em] mb-4">Total Liquidado no Mês</span>
-                   <h2 className="text-4xl font-black text-white tracking-tighter mb-2">{accountsSummary.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</h2>
-                   <div className="w-12 h-1 bg-primary rounded-full mt-4" />
-                </div>
-                <Button onClick={() => { setEditingEntryId(null); setIsEntryModalOpen(true); }} className="w-full h-14 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-lg hover:bg-white transition-all"><Plus size={18} className="mr-2" /> Novo Lançamento Manual</Button>
-              </div>
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+               <div><h2 className="text-xl font-black text-white uppercase tracking-tight">Livro-Caixa Consolidado</h2><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Controle cronológico de entradas e saídas</p></div>
+               <div className="flex gap-3">
+                  <Button onClick={() => { setEditingEntryId(null); setIsEntryModalOpen(true); }} className="h-12 bg-primary text-black font-black uppercase text-[10px] tracking-widest px-6 rounded-2xl shadow-lg hover:bg-white transition-all"><Plus size={18} className="mr-2" /> Novo Lançamento</Button>
+               </div>
             </div>
 
-            <section className="bg-[#09090b] border border-zinc-800 rounded-3xl overflow-hidden">
-               <div className="p-6 border-b border-white/5 flex justify-between items-center"><h3 className="text-xs font-black text-white uppercase tracking-widest">Livro-Caixa Consolidado</h3><span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">{transactions.length} Movimentações</span></div>
-               <div className="overflow-x-auto custom-scrollbar max-h-[500px]">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="bg-zinc-900/50 text-[10px] text-zinc-500 uppercase font-black border-b border-white/5 sticky top-0 z-10"><th className="p-4 pl-6">Data</th><th className="p-4">Descrição</th><th className="p-4 text-center">Conta</th><th className="p-4 text-center">Tipo</th><th className="p-4 text-center">Valor</th><th className="p-4 pr-6 text-right">Ações</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {transactions.length === 0 ? (
-                        <tr><td colSpan={6} className="p-12 text-center text-zinc-600 uppercase font-black text-[10px]">Nenhuma movimentação</td></tr>
-                      ) : (
-                        transactions.map(tx => (
-                          <tr key={tx.id} className="hover:bg-white/5 transition-colors group">
-                            <td className="p-4 pl-6 text-[10px] font-mono text-zinc-500">{tx.date ? format(parseISO(tx.date), 'dd/MM/yy') : '--'}</td>
-                            <td className="p-4"><div className="flex flex-col"><span className="text-xs font-bold text-white uppercase">{tx.description}</span>{tx.isAuto && <span className="text-[8px] text-zinc-600 uppercase font-black flex items-center gap-1"><Info size={8}/> Baixa Automática OS</span>}</div></td>
-                            <td className="p-4 text-center"><div className="inline-flex items-center gap-2 px-2 py-1 rounded bg-zinc-900 border border-white/5"><span className="text-[9px] text-zinc-400 font-black uppercase">{tx.method}</span><span className="text-[9px] text-primary font-black uppercase opacity-60">→ {tx.account}</span></div></td>
-                            <td className="p-4 text-center"><span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded-full border", tx.type === 'income' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20')}>{tx.type === 'income' ? 'ENTRADA' : 'SAÍDA'}</span></td>
-                            <td className={cn("p-4 text-center font-mono font-black text-sm", tx.type === 'income' ? 'text-[#4ade80]' : 'text-[#FF5F1F]')}>{tx.type === 'income' ? '+' : '-'} {tx.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                            <td className="p-4 pr-6 text-right">
-                               <div className="flex justify-end gap-3">
-                                  {!tx.isAuto ? (
-                                    <>
-                                      <button onClick={() => { setEditingEntryId(tx.id); setEntryForm({...tx, amount: String(tx.amount)}); setIsEntryModalOpen(true); }} className="p-2 text-zinc-500 hover:text-white transition-colors"><Edit size={16}/></button>
-                                      <button onClick={() => handleDeleteTransaction(tx.id)} className="p-2 text-zinc-500 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
-                                    </>
-                                  ) : (
-                                    <button onClick={() => toast({ title: "Proteção de Dados", description: "Estorne na OS correspondente." })} className="p-2 opacity-20 text-zinc-500 cursor-not-allowed"><Trash2 size={16}/></button>
-                                  )}
-                               </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+            <div className="bg-[#0c0c0e] border border-zinc-800/50 rounded-2xl overflow-hidden shadow-2xl">
+               <div className="flex-1 overflow-y-auto custom-scrollbar max-h-[600px]">
+                  {transactions.length === 0 ? (
+                    <div className="p-20 text-center text-zinc-600 uppercase font-black text-[10px] tracking-[0.3em]"><Package size={40} className="mx-auto mb-4 opacity-10" /> Vazio Nominal</div>
+                  ) : (
+                    transactions.map((tx) => (
+                      <div key={tx.id} className="group flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border-b border-zinc-800/50 hover:bg-zinc-900/40 transition-colors duration-200 gap-4">
+                        <div className="flex items-center gap-4 min-w-0 flex-1">
+                           <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border", tx.type === 'income' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400')}>
+                              {tx.type === 'income' ? <TrendingUp size={18}/> : <TrendingDown size={18}/>}
+                           </div>
+                           <div className="min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                 <span className="text-zinc-100 font-bold text-sm uppercase truncate">{tx.description}</span>
+                                 {tx.isAuto && <span className="bg-zinc-800 text-zinc-500 text-[8px] px-1.5 py-0.5 rounded uppercase font-black border border-white/5">Auto</span>}
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-zinc-500 font-medium">
+                                 <span className="font-mono">{tx.date ? format(parseISO(tx.date), 'dd/MM/yyyy') : '--/--/--'}</span>
+                                 <span className="uppercase tracking-widest text-[9px] opacity-60">• {tx.account}</span>
+                              </div>
+                           </div>
+                        </div>
+
+                        <div className="flex items-center gap-6 self-end sm:self-auto">
+                           <div className="text-right">
+                              <span className={cn("text-lg font-black font-mono tracking-tighter", tx.type === 'income' ? 'text-emerald-400' : 'text-red-400')}>
+                                 {tx.type === 'income' ? '+' : '-'} {tx.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </span>
+                              <div className="text-[9px] text-zinc-600 uppercase font-black tracking-widest">{tx.method}</div>
+                           </div>
+                           <div className="flex gap-1">
+                              {!tx.isAuto ? (
+                                <>
+                                  <button onClick={() => { setEditingEntryId(tx.id); setEntryForm({...tx, amount: String(tx.amount)}); setIsEntryModalOpen(true); }} className="p-2 text-zinc-600 hover:text-white hover:bg-white/5 rounded-lg transition-all"><Edit size={16}/></button>
+                                  <button onClick={() => handleDeleteTransaction(tx.id)} className="p-2 text-zinc-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg cursor-pointer transition-all"><Trash2 size={16}/></button>
+                                </>
+                              ) : (
+                                <button onClick={() => toast({ title: "Segurança", description: "Estorne no pedido original." })} className="p-2 text-zinc-800 cursor-not-allowed"><Info size={16}/></button>
+                              )}
+                           </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                </div>
-            </section>
+            </div>
           </TabsContent>
 
-          <TabsContent value="payable" className="space-y-6">
-            <header className="flex justify-between items-center mb-4">
-               <div><h2 className="text-xl font-black text-white uppercase tracking-tight">Pauta de Pagamentos</h2><p className="text-[10px] text-zinc-500 uppercase font-bold">Gestão de boletos e fornecedores</p></div>
-               <Button onClick={() => { setEditingPayableId(null); setGeneratedInstallments([]); setIsPayableModalOpen(true); }} className="bg-primary text-black font-black uppercase text-[10px] px-6 h-12 rounded-2xl shadow-lg hover:bg-white transition-all"><Plus size={16} className="mr-2" /> Nova Conta a Pagar</Button>
-            </header>
-            <div className="bg-[#09090b] border border-zinc-800 rounded-3xl overflow-hidden">
-               <table className="w-full text-left">
-                  <thead>
-                    <tr className="bg-zinc-900/50 text-[10px] text-zinc-500 uppercase font-black border-b border-white/5 sticky top-0 z-10"><th className="p-4 pl-6">Vencimento</th><th className="p-4">Descrição</th><th className="p-4 text-center">Categoria</th><th className="p-4 text-center">Valor</th><th className="p-4 text-center">Status</th><th className="p-4 pr-6 text-right">Ações</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {(!payables || payables.length === 0) ? (
-                      <tr><td colSpan={6} className="p-12 text-center text-zinc-600 uppercase font-black text-[10px]">Nenhuma conta pendente</td></tr>
-                    ) : (
-                      payables.map(payable => {
-                        const isPaid = payable.status === 'paid';
-                        const dueDate = parseISO(payable.dueDate);
-                        const isLate = isBefore(dueDate, new Date()) && !isPaid && !isSameDay(dueDate, new Date());
-                        return (
-                          <tr key={payable.id} className="hover:bg-white/5 transition-colors group">
-                            <td className="p-4 pl-6"><div className={cn("px-2 py-1 rounded border w-fit font-mono font-bold text-[10px]", isLate ? "bg-red-500/10 border-red-500/20 text-red-500" : "bg-zinc-900 border-zinc-800 text-zinc-400")}>{format(dueDate, 'dd/MM/yy')}</div></td>
-                            <td className="p-4"><div className="flex flex-col"><span className="text-xs font-bold text-white uppercase">{payable.description}</span><span className="text-[8px] text-zinc-500 uppercase font-black">{payable.supplier || 'Geral'}</span></div></td>
-                            <td className="p-4 text-center"><span className="text-[9px] text-zinc-400 font-black uppercase bg-zinc-900 border border-white/5 px-2 py-0.5 rounded">{payable.category}</span></td>
-                            <td className="p-4 text-center font-mono font-black text-sm text-white">{Number(payable.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                            <td className="p-4 text-center">
-                               <span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded-full", isPaid ? "bg-emerald-500/10 text-emerald-500" : isLate ? "bg-red-500/10 text-red-500 animate-pulse" : "bg-yellow-500/10 text-yellow-500")}>
-                                 {isPaid ? 'Pago' : isLate ? 'Atrasado' : 'Pendente'}
-                               </span>
-                            </td>
-                            <td className="p-4 pr-6 text-right">
-                               <div className="flex justify-end gap-2">
-                                  {!isPaid && <button onClick={() => handlePayAccount(payable)} className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-500 hover:bg-emerald-500 hover:text-black transition-all"><CheckCircle2 size={16}/></button>}
-                                  <button onClick={() => { setEditingPayableId(payable.id); setPayableForm({ ...payable, totalAmount: String(payable.amount), installmentsCount: '1' }); setGeneratedInstallments([{ id: 1, amount: String(payable.amount), dueDate: payable.dueDate }]); setIsPayableModalOpen(true); }} className="p-2 text-zinc-500 hover:text-white transition-colors"><Edit size={16}/></button>
-                                  <button onClick={() => handleDeletePayable(payable.id)} className="p-2 text-zinc-500 hover:text-red-500 transition-colors cursor-pointer"><Trash2 size={16}/></button>
-                               </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-               </table>
+          {/* --- NOVO DESIGN: CONTAS A PAGAR --- */}
+          <TabsContent value="payable" className="space-y-8">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+               <div><h2 className="text-xl font-black text-white uppercase tracking-tight">Pauta de Pagamentos</h2><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Gestão de boletos e fornecedores</p></div>
+               <Button onClick={() => { setEditingPayableId(null); setGeneratedInstallments([]); setIsPayableModalOpen(true); }} className="h-12 bg-primary text-black font-black uppercase text-[10px] tracking-widest px-6 rounded-2xl shadow-lg hover:bg-white transition-all"><Plus size={16} className="mr-2" /> Nova Conta a Pagar</Button>
+            </div>
+
+            <div className="bg-[#0c0c0e] border border-zinc-800/50 rounded-2xl overflow-hidden shadow-2xl">
+               <div className="flex-1 overflow-y-auto custom-scrollbar max-h-[600px]">
+                  {(!payables || payables.length === 0) ? (
+                    <div className="p-20 text-center text-zinc-600 uppercase font-black text-[10px] tracking-[0.3em]"><AlertTriangle size={40} className="mx-auto mb-4 opacity-10" /> Fila Limpa</div>
+                  ) : (
+                    payables.map((payable) => {
+                      const isPaid = payable.status === 'paid';
+                      const dueDate = parseISO(payable.dueDate);
+                      const isLate = isBefore(dueDate, new Date()) && !isPaid && !isSameDay(dueDate, new Date());
+                      
+                      return (
+                        <div key={payable.id} className="group flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border-b border-zinc-800/50 hover:bg-zinc-900/40 transition-colors duration-200 gap-4">
+                           <div className="flex items-center gap-4 min-w-0 flex-1">
+                              <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border", isPaid ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : isLate ? 'bg-red-500/10 border-red-500/20 text-red-400 animate-pulse' : 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400')}>
+                                 <CalendarIcon size={18}/>
+                              </div>
+                              <div className="min-w-0">
+                                 <div className="flex items-center gap-2 mb-0.5">
+                                    <span className="text-zinc-100 font-bold text-sm uppercase truncate">{payable.description}</span>
+                                    <span className="text-[9px] text-zinc-500 font-black tracking-widest">• {payable.supplier || 'Geral'}</span>
+                                 </div>
+                                 <div className="flex items-center gap-3 text-xs">
+                                    <span className={cn("font-mono font-bold", isLate ? "text-red-500" : "text-zinc-500")}>
+                                       Venc: {format(dueDate, 'dd/MM/yyyy')}
+                                    </span>
+                                    <span className="bg-zinc-900 text-zinc-500 px-2 py-0.5 rounded border border-white/5 uppercase text-[8px] font-black">{payable.category}</span>
+                                 </div>
+                              </div>
+                           </div>
+
+                           <div className="flex items-center gap-6 self-end sm:self-auto">
+                              <div className="text-right">
+                                 <span className="text-lg font-black text-white font-mono tracking-tighter">
+                                    {Number(payable.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                 </span>
+                                 <div>
+                                    <span className={cn("text-[9px] font-black uppercase px-2 py-0.5 rounded-full border", 
+                                       isPaid ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
+                                       isLate ? 'bg-red-500/10 text-red-500 border-red-500/20' : 
+                                       'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+                                    )}>
+                                       {isPaid ? 'Liquidado' : isLate ? 'Atrasado' : 'Pendente'}
+                                    </span>
+                                 </div>
+                              </div>
+                              <div className="flex gap-1">
+                                 {!isPaid && (
+                                   <button onClick={() => handlePayAccount(payable)} className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-500 hover:bg-emerald-500 hover:text-black transition-all" title="Dar Baixa"><CheckCircle2 size={16}/></button>
+                                 )}
+                                 <button onClick={() => { setEditingPayableId(payable.id); setPayableForm({ ...payable, totalAmount: String(payable.amount), installmentsCount: '1' }); setGeneratedInstallments([{ id: 1, amount: String(payable.amount), dueDate: payable.dueDate }]); setIsPayableModalOpen(true); }} className="p-2 text-zinc-600 hover:text-white hover:bg-white/5 rounded-lg transition-all"><Edit size={16}/></button>
+                                 <button onClick={() => handleDeletePayable(payable.id)} className="p-2 text-zinc-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg cursor-pointer transition-all"><Trash2 size={16}/></button>
+                              </div>
+                           </div>
+                        </div>
+                      );
+                    })
+                  )}
+               </div>
             </div>
           </TabsContent>
         </Tabs>
