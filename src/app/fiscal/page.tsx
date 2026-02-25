@@ -210,13 +210,24 @@ export default function FiscalCenterPage() {
 
                   <div className="col-span-2 flex justify-end gap-2">
                     {status === 'issued' ? (
-                      <button 
-                        onClick={() => window.open(order.nfe_url || order.nfeUrl, '_blank')}
-                        className="p-2.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white rounded-xl transition-all border border-blue-500/20"
-                        title="Ver PDF"
-                      >
-                        <Download size={16} />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {/* BOTÃO PDF (DANFE) */}
+                        <button
+                          onClick={() => window.open(order.nfePdfUrl || order.nfe_pdf_url || order.nfe_url || order.nfeUrl, '_blank')}
+                          className="flex items-center justify-center p-2 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500 hover:text-white rounded border border-emerald-500/20 transition-all"
+                          title="Baixar DANFE (PDF)"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
+                        </button>
+                        {/* BOTÃO XML */}
+                        <button
+                          onClick={() => window.open(order.nfeXmlUrl || order.nfe_xml_url, '_blank')}
+                          className="flex items-center justify-center p-2 text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500 hover:text-white rounded border border-cyan-500/20 transition-all"
+                          title="Baixar XML"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                        </button>
+                      </div>
                     ) : (
                       <button 
                         onClick={() => alert('Função de reemissão em breve')}
