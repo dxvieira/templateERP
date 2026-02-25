@@ -26,6 +26,7 @@ export default function ReportsManager() {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<any>(null); // Estado para o modal de confirmação
   const [formData, setFormData] = useState({
     description: '',
     amount: '',
@@ -138,34 +139,31 @@ export default function ReportsManager() {
     };
   }, [orders, cashflowManual, payables, selectedMonth]);
 
-  // --- FUNÇÃO DE EXCLUSÃO INJETADA (VERBOSA) ---
-  const handleDeleteTransaction = async (id: string, origin: string) => {
-    alert(`Iniciando exclusão! ID: ${id} | Origem: ${origin}`); // ALARME 1
-    
-    if (origin === 'SISTEMA (OS)' || origin === 'orders') {
-      alert("⚠️ Este lançamento é automático. Cancele a baixa no pedido do cliente.");
+  // --- FUNÇÃO DE GATILHO DA EXCLUSÃO ---
+  const handleDeleteTransaction = (item: any) => {
+    if (item.origin === 'SISTEMA (OS)' || item.origin === 'orders') {
+      alert("⚠️ Este lançamento é automático. Cancele a baixa diretamente no pedido do cliente.");
       return;
     }
+    setItemToDelete(item);
+  };
 
-    if (!window.confirm("Deseja realmente DELETAR este lançamento do banco de dados?")) return;
+  // --- FUNÇÃO DE CONFIRMAÇÃO FINAL ---
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete || !firestore) return;
 
     try {
-      if (!firestore) {
-        alert("Erro Crítico: Firestore não inicializado.");
-        return;
-      }
-      
-      const docRef = doc(firestore, 'cashflow_manual', id);
+      const docRef = doc(firestore, 'cashflow_manual', itemToDelete.id);
       await deleteDoc(docRef);
       
-      alert("✅ Apagado com sucesso no Firebase!"); // ALARME 2
+      setItemToDelete(null);
       toast({ title: "Lançamento Removido" });
     } catch (error: any) {
       console.error("Erro Firebase:", error);
       alert("❌ Erro ao apagar no Firebase: " + error.message);
       
       errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: `cashflow_manual/${id}`,
+        path: `cashflow_manual/${itemToDelete.id}`,
         operation: 'delete'
       }));
     }
@@ -304,14 +302,13 @@ export default function ReportsManager() {
                         {t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </p>
                    </div>
-                   {/* BOTÃO DE EXCLUSÃO INJETADO (Z-INDEX FORÇADO) */}
+                   
                    <button 
                      type="button"
                      onClick={(e) => {
                        e.preventDefault();
                        e.stopPropagation();
-                       alert("O BOTÃO ESTÁ VIVO!");
-                       handleDeleteTransaction(t.id, t.origin);
+                       handleDeleteTransaction(t);
                      }}
                      className="relative z-50 flex items-center justify-center p-3 ml-4 bg-red-500/10 text-red-500 rounded-lg border border-red-500/20 hover:bg-red-500 hover:text-white transition-all cursor-pointer pointer-events-auto text-[10px] font-black uppercase tracking-widest"
                    >
@@ -327,6 +324,51 @@ export default function ReportsManager() {
             )}
           </div>
         </section>
+
+        {/* MODAL DE CONFIRMAÇÃO CUSTOMIZADO */}
+        <AnimatePresence>
+          {itemToDelete && (
+            <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
+              <motion.div 
+                initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                className="bg-[#0c0c0e] border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl relative overflow-hidden"
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]" />
+                
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-20 h-20 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6 border border-red-500/20 animate-pulse">
+                    <Trash2 size={32} />
+                  </div>
+                  
+                  <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-3">Confirmar Exclusão</h3>
+                  
+                  <p className="text-zinc-400 text-sm uppercase tracking-widest leading-relaxed mb-8">
+                    Tem certeza que deseja apagar o lançamento <br />
+                    <strong className="text-white">"{itemToDelete.description}"</strong>? <br />
+                    Esta ação não poderá ser desfeita.
+                  </p>
+                  
+                  <div className="flex gap-4 w-full">
+                    <button 
+                      onClick={() => setItemToDelete(null)}
+                      className="flex-1 px-6 py-4 rounded-xl border border-zinc-800 text-zinc-400 font-black uppercase text-[10px] tracking-widest hover:bg-zinc-800/50 transition-all"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      onClick={handleConfirmDelete}
+                      className="flex-1 px-6 py-4 rounded-xl bg-red-500 text-white font-black uppercase text-[10px] tracking-widest hover:bg-red-600 shadow-[0_0_25px_rgba(239,68,68,0.4)] transition-all active:scale-95"
+                    >
+                      Sim, Excluir
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {isModalOpen && (
