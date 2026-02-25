@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useCallback, useEffect, Suspense } from 'react';
@@ -206,45 +205,53 @@ function ReportsContent() {
     return list.sort((a, b) => b.date.localeCompare(a.date));
   }, [orders, cashflowManual, selectedMonth]);
 
-  // --- AÇÕES DE MUTATION (NON-BLOCKING) ---
+  // --- AÇÕES DE EXCLUSÃO (BLINDADAS) ---
 
-  const handleDeleteTransaction = useCallback((item: any) => {
-    if (item.isAutomatic) {
-      alert("⚠️ Lançamentos automáticos de OS devem ser removidos diretamente no pedido do cliente.");
+  const handleDeleteCashflowItem = async (id: string, origin: string) => {
+    // Trava de segurança para não corromper pedidos
+    if (origin === 'Sistema (OS)' || origin === 'orders') {
+      alert("⚠️ Esta entrada é automática de um pedido. Para removê-la, vá na página de Pedidos e desfaça o pagamento lá.");
       return;
     }
-    if (!window.confirm(`Deseja remover "${item.description}" permanentemente?`)) return;
-    if (!firestore || !item.id) return;
-
-    const docRef = doc(firestore, 'cashflow_manual', item.id);
     
-    // Non-blocking delete
-    deleteDoc(docRef)
-      .then(() => toast({ title: "Lançamento Removido" }))
-      .catch(async (err) => {
+    // Exclusão livre para lançamentos manuais / saídas
+    if (window.confirm("Tem certeza que deseja apagar definitivamente este lançamento do caixa?")) {
+      try {
+        if (!firestore) return;
+        await deleteDoc(doc(firestore, 'cashflow_manual', id));
+        toast({ title: "Lançamento Removido" });
+      } catch (error: any) {
+        console.error("Erro ao excluir do fluxo de caixa:", error);
+        alert("Erro ao excluir do banco de dados: " + (error.message || "Erro desconhecido"));
+        
+        // Emitir erro para o listener global se for falha de permissão
         errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: docRef.path,
+          path: `cashflow_manual/${id}`,
           operation: 'delete'
         }));
-      });
-  }, [firestore, toast]);
+      }
+    }
+  };
 
-  const handleDeletePayable = useCallback((payableId: string) => {
-    if (!window.confirm("Deseja remover este compromisso permanentemente?")) return;
-    if (!firestore) return;
-
-    const docRef = doc(firestore, 'accounts_payable', payableId);
-    
-    // Non-blocking delete
-    deleteDoc(docRef)
-      .then(() => toast({ title: "Conta Removida" }))
-      .catch(async (err) => {
+  const handleDeletePayable = async (id: string) => {
+    if (window.confirm("Deseja remover este compromisso permanentemente?")) {
+      try {
+        if (!firestore) return;
+        await deleteDoc(doc(firestore, 'accounts_payable', id));
+        toast({ title: "Conta Removida" });
+      } catch (error: any) {
+        console.error("Erro ao excluir conta a pagar:", error);
+        alert("Erro ao excluir conta: " + (error.message || "Erro desconhecido"));
+        
         errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: docRef.path,
+          path: `accounts_payable/${id}`,
           operation: 'delete'
         }));
-      });
-  }, [firestore, toast]);
+      }
+    }
+  };
+
+  // --- OUTRAS AÇÕES DE MUTATION ---
 
   const handleSaveEntry = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -444,7 +451,7 @@ function ReportsContent() {
                                   {item.type === 'income' ? '+' : '-'} {Number(item.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                 </span>
                                 <button 
-                                  onClick={() => handleDeleteTransaction(item)}
+                                  onClick={() => handleDeleteCashflowItem(item.id, item.origin)}
                                   className="p-2 text-zinc-600 hover:text-red-500 transition-all hover:bg-red-500/10 rounded-lg"
                                   title="Remover Registro"
                                 >
@@ -624,7 +631,7 @@ function ReportsContent() {
 
 export default function ReportsManagerPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#050505] flex items-center justify-center"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#050505] flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin" /></div>}>
       <ReportsContent />
     </Suspense>
   );
