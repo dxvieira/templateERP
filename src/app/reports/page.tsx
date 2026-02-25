@@ -1,14 +1,14 @@
 
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { collection, query, orderBy, doc, deleteDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   TrendingUp, TrendingDown, Wallet, Target, AlertCircle, 
   Download, Plus, Search, Trash2, Calendar, 
-  Filter, ArrowRight, Loader2, X, Check, MoreVertical
+  Loader2, X, Wallet2
 } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -69,23 +69,28 @@ export default function ReportsManager() {
       // Cálculo Global de Recebíveis
       globalReceivable += Number(order.balance_due || order.balanceDue || 0);
 
-      // Extrair parcelas pagas no mês selecionado
-      const installments = order.installments || [];
+      // Extrair parcelas pagas no mês selecionado - FIX: Verificação robusta de Array
+      const installments = Array.isArray(order.installments) ? order.installments : [];
+      
       installments.forEach((inst: any) => {
-        if (inst.status === 'paid' && inst.paid_date) {
-          const paidDate = parseISO(inst.paid_date);
-          if (isWithinInterval(paidDate, { start: startDate, end: endDate })) {
-            const amount = Number(inst.amount) || 0;
-            monthIncomes += amount;
-            fusion.push({
-              id: `${order.id}-${inst.uid}`,
-              date: inst.paid_date,
-              description: `Recebimento OS #${order.id.slice(-6)} - ${order.client}`,
-              type: 'income',
-              amount: amount,
-              origin: 'SISTEMA (OS)',
-              originalId: order.id
-            });
+        if (inst && inst.status === 'paid' && inst.paid_date) {
+          try {
+            const paidDate = parseISO(inst.paid_date);
+            if (isWithinInterval(paidDate, { start: startDate, end: endDate })) {
+              const amount = Number(inst.amount) || 0;
+              monthIncomes += amount;
+              fusion.push({
+                id: `${order.id}-${inst.uid || Math.random()}`,
+                date: inst.paid_date,
+                description: `Recebimento OS #${order.id.slice(-6)} - ${order.client}`,
+                type: 'income',
+                amount: amount,
+                origin: 'SISTEMA (OS)',
+                originalId: order.id
+              });
+            }
+          } catch (e) {
+            console.error("Erro ao processar data da parcela:", inst);
           }
         }
       });
@@ -93,21 +98,25 @@ export default function ReportsManager() {
 
     // 2. Processar Fluxo Manual
     cashflowManual?.forEach(entry => {
-      const entryDate = parseISO(entry.date);
-      const amount = Number(entry.amount) || 0;
+      try {
+        const entryDate = parseISO(entry.date);
+        const amount = Number(entry.amount) || 0;
 
-      if (isWithinInterval(entryDate, { start: startDate, end: endDate })) {
-        if (entry.type === 'income') monthIncomes += amount;
-        else monthExpenses += amount;
+        if (isWithinInterval(entryDate, { start: startDate, end: endDate })) {
+          if (entry.type === 'income') monthIncomes += amount;
+          else monthExpenses += amount;
 
-        fusion.push({
-          id: entry.id,
-          date: entry.date,
-          description: entry.description,
-          type: entry.type,
-          amount: amount,
-          origin: 'MANUAL'
-        });
+          fusion.push({
+            id: entry.id,
+            date: entry.date,
+            description: entry.description,
+            type: entry.type,
+            amount: amount,
+            origin: 'MANUAL'
+          });
+        }
+      } catch (e) {
+        console.error("Erro ao processar lançamento manual:", entry);
       }
     });
 
@@ -208,10 +217,10 @@ export default function ReportsManager() {
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-primary">
               <TrendingUp size={14} className="animate-pulse" />
-              <span className="text-[10px] font-black uppercase tracking-[0.3em]">Cérebro Financeiro VisComm</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.3em]">Gestão Financeira VisComm</span>
             </div>
             <h1 className="text-4xl font-black text-white tracking-tighter uppercase leading-none">
-              Gestão de <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">Fluxo & Resultados</span>
+              Fluxo & <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">Resultados</span>
             </h1>
           </div>
 
@@ -222,22 +231,21 @@ export default function ReportsManager() {
                   type="month" 
                   value={selectedMonth} 
                   onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white text-xs font-black uppercase outline-none focus:border-primary transition-all group-hover:bg-zinc-900"
+                  className="bg-zinc-900/50 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white text-xs font-black uppercase outline-none focus:border-primary transition-all"
                 />
              </div>
-             <button onClick={exportCSV} className="p-3 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 rounded-xl transition-all shadow-xl group">
-               <Download size={20} className="group-hover:translate-y-0.5 transition-transform" />
+             <button onClick={exportCSV} className="p-3 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 rounded-xl transition-all">
+               <Download size={20} />
              </button>
              <button 
                onClick={() => setIsModalOpen(true)}
-               className="flex items-center gap-2 px-6 py-3 bg-primary text-black font-black text-[10px] uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(255,95,31,0.4)] hover:bg-white hover:scale-105 transition-all"
+               className="flex items-center gap-2 px-6 py-3 bg-primary text-black font-black text-[10px] uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(255,95,31,0.4)] hover:bg-white transition-all"
              >
-               <Plus size={16} strokeWidth={3} /> Lançar Movimentação
+               <Plus size={16} strokeWidth={3} /> Novo Lançamento
              </button>
           </div>
         </header>
 
-        {/* KPI GRID */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <KPICard label="Entradas (Mês)" value={kpis.incomes} color="text-emerald-500" icon={TrendingUp} />
           <KPICard label="Saídas (Mês)" value={kpis.expenses} color="text-red-500" icon={TrendingDown} />
@@ -246,13 +254,11 @@ export default function ReportsManager() {
           <KPICard label="Contas a Pagar" value={kpis.payables} color="text-rose-500" icon={AlertCircle} />
         </section>
 
-        {/* HISTÓRICO CONSOLIDADO */}
         <section className="bg-[#09090b] border border-zinc-800/50 rounded-3xl overflow-hidden shadow-2xl">
           <div className="p-6 border-b border-white/5 bg-zinc-900/20 flex justify-between items-center">
              <h2 className="text-sm font-black text-white uppercase tracking-[0.2em] flex items-center gap-2">
-               <TrendingUp size={16} className="text-primary" /> Histórico Consolidado
+               <Wallet2 size={16} className="text-primary" /> Histórico Consolidado
              </h2>
-             <span className="text-[9px] text-zinc-500 uppercase font-black tracking-widest">Sincronizado com Nuvem</span>
           </div>
 
           <div className="divide-y divide-white/5">
@@ -287,7 +293,7 @@ export default function ReportsManager() {
                    </div>
                    <button 
                      onClick={() => handleDeleteTransaction(t)}
-                     className="p-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-600 hover:text-red-500 hover:border-red-500/50 transition-all group-hover:opacity-100"
+                     className="p-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-600 hover:text-red-500 hover:border-red-500/50 transition-all"
                    >
                      <Trash2 size={16} />
                    </button>
@@ -295,14 +301,13 @@ export default function ReportsManager() {
               </div>
             )) : (
               <div className="py-24 text-center opacity-20">
-                 <Wallet size={48} className="mx-auto mb-4" />
-                 <p className="text-[10px] font-black uppercase tracking-[0.4em]">Fila Nominal Sem Movimentos</p>
+                 <Target size={48} className="mx-auto mb-4" />
+                 <p className="text-[10px] font-black uppercase tracking-[0.4em]">Sem movimentos no período</p>
               </div>
             )}
           </div>
         </section>
 
-        {/* MODAL DE LANÇAMENTO */}
         <AnimatePresence>
           {isModalOpen && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" onClick={() => setIsModalOpen(false)}>
