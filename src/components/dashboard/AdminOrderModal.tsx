@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { doc, setDoc, serverTimestamp, collection } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, updateDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { 
   X, Save, Plus, Trash2, Box, 
@@ -9,7 +9,7 @@ import {
   Calculator, Loader2,
   History, Calendar as CalendarIcon, Wallet, Receipt,
   CheckCircle2, AlertTriangle, RefreshCw, FileText,
-  ArrowDownLeft, ArrowRight
+  ArrowDownLeft, ArrowRight, Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
@@ -177,6 +177,35 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     toast({ title: "Recebimento Registrado", description: "Lembre-se de salvar a OS para efetivar no sistema." });
   };
 
+  // FUNÇÃO SIMULADA DE EMISSÃO DE NFe
+  const handleEmitNFe = async () => {
+    if (!order?.id || !firestore) {
+      toast({ variant: 'destructive', title: "Erro", description: "O pedido precisa estar registrado para emitir NFe." });
+      return;
+    }
+    
+    const orderRef = doc(firestore, 'orders', order.id);
+    
+    try {
+      // ESTADO 2: PROCESSANDO
+      await updateDoc(orderRef, { nfe_status: 'processing' });
+      toast({ title: "Enviando para SEFAZ", description: "Validando dados fiscais do protocolo..." });
+
+      // SIMULAÇÃO DE RESPOSTA DA SEFAZ (3 SEGUNDOS)
+      setTimeout(async () => {
+        await updateDoc(orderRef, { 
+          nfe_status: 'issued',
+          nfe_url: 'https://www.focusnfe.com.br/blog/wp-content/uploads/2018/01/modelo-de-danfe.pdf' 
+        });
+        toast({ title: "NFe Autorizada", description: "Documento fiscal emitido com sucesso." });
+      }, 3000);
+
+    } catch (err) {
+      console.error("Erro NFe:", err);
+      toast({ variant: 'destructive', title: "Erro SEFAZ", description: "Não foi possível autorizar a nota fiscal." });
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore) return;
@@ -232,7 +261,36 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
               <h2 className="text-xl font-black text-white uppercase tracking-tight">OS <span className="text-zinc-600">#{order?.id || 'NOVA'}</span></h2>
             </div>
           </div>
+          
           <div className="hidden md:flex gap-6 items-center">
+             {/* BOTÃO INTELIGENTE DE NFe */}
+             {order && (
+               <div className="flex items-center mr-4 border-r border-zinc-800 pr-6 h-10">
+                 {order.nfe_status === 'processing' ? (
+                   <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 rounded-xl cursor-wait">
+                     <Loader2 size={14} className="animate-spin" />
+                     <span className="text-[10px] font-black uppercase tracking-[0.2em]">Processando...</span>
+                   </div>
+                 ) : order.nfe_status === 'issued' ? (
+                   <button 
+                     onClick={() => window.open(order.nfe_url, '_blank')}
+                     className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl hover:bg-emerald-500 hover:text-black transition-all group shadow-lg shadow-emerald-900/10"
+                   >
+                     <Download size={14} className="group-hover:-translate-y-0.5 transition-transform" />
+                     <span className="text-[10px] font-black uppercase tracking-[0.2em]">Baixar NFe</span>
+                   </button>
+                 ) : (
+                   <button 
+                     onClick={handleEmitNFe}
+                     className="flex items-center gap-2 px-4 py-2 bg-zinc-800/50 border border-zinc-700 text-zinc-400 rounded-xl hover:bg-white hover:text-black transition-all group"
+                   >
+                     <FileText size={14} className="group-hover:rotate-12 transition-transform" />
+                     <span className="text-[10px] font-black uppercase tracking-[0.2em]">Emitir NFe</span>
+                   </button>
+                 )}
+               </div>
+             )}
+
              <div className="text-right">
                 <p className="text-[9px] text-zinc-500 uppercase font-black">Total</p>
                 <p className="text-xl font-black text-white">{totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
@@ -245,7 +303,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                 </p>
              </div>
           </div>
-          <button onClick={onClose} className="p-2 text-zinc-500 hover:text-white transition-colors bg-white/5 rounded-full"><X size={20}/></button>
+          <button onClick={onClose} className="p-2 text-zinc-500 hover:text-white transition-colors bg-white/5 rounded-full ml-4"><X size={20}/></button>
         </div>
 
         <div className="flex bg-zinc-900/30 border-b border-zinc-800">
