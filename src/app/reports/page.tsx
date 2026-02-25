@@ -139,44 +139,34 @@ export default function ReportsManager() {
     };
   }, [orders, cashflowManual, payables, selectedMonth]);
 
-  // --- FUNÇÃO DE EXCLUSÃO EXTREMAMENTE VERBOSA ---
-  const handleDeleteTransaction = async (item: any) => {
-    // 1. Verifica se o ID existe
-    if (!item || !item.id) {
-      alert("ERRO: O item não tem um ID válido! O banco não sabe o que apagar.");
-      console.log("Item defeituoso:", item);
+  // --- FUNÇÃO DE EXCLUSÃO INJETADA (VERBOSA) ---
+  const handleDeleteTransaction = async (id: string, origin: string) => {
+    alert(`Iniciando exclusão! ID: ${id} | Origem: ${origin}`); // ALARME 1
+    
+    if (origin === 'SISTEMA (OS)' || origin === 'orders') {
+      alert("⚠️ Este lançamento é automático. Cancele a baixa no pedido do cliente.");
       return;
     }
 
-    // 2. Trava de segurança para não corromper pedidos
-    if (item.origin === 'SISTEMA (OS)' || item.origin === 'orders') {
-      alert("⚠️ Este lançamento é automático de um pedido. Para removê-lo, vá na página de Pedidos e desfaça a baixa da parcela lá.");
-      return;
-    }
+    if (!window.confirm("Deseja realmente DELETAR este lançamento manual do banco de dados?")) return;
 
-    // 3. Confirmação
-    if (!window.confirm("Deseja DELETAR este lançamento manual definitivamente?")) return;
-
-    // 4. Execução com try/catch cagueta
     try {
       if (!firestore) {
-        alert("Erro crítico: Instância do Firestore não carregada.");
+        alert("Erro Crítico: Firestore não inicializado.");
         return;
       }
-
-      alert("Iniciando exclusão no Firebase do ID: " + item.id);
       
-      const docRef = doc(firestore, 'cashflow_manual', item.id);
+      const docRef = doc(firestore, 'cashflow_manual', id);
       await deleteDoc(docRef);
       
-      alert("Sucesso! O item foi apagado do banco.");
-      toast({ title: "Lançamento Removido", description: "O caixa foi atualizado com sucesso." });
+      alert("✅ Apagado com sucesso no Firebase!"); // ALARME 2
+      toast({ title: "Lançamento Removido" });
     } catch (error: any) {
-      console.error("ERRO FIREBASE:", error);
-      alert("Falha ao apagar no Firebase: " + error.message);
+      console.error("Erro Firebase:", error);
+      alert("❌ Erro ao apagar no Firebase: " + error.message);
       
       errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: `cashflow_manual/${item.id}`,
+        path: `cashflow_manual/${id}`,
         operation: 'delete'
       }));
     }
@@ -315,17 +305,18 @@ export default function ReportsManager() {
                         {t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </p>
                    </div>
-                   {/* BOTÃO DE EXCLUSÃO COM DIAGNÓSTICO ATIVO */}
+                   {/* BOTÃO DE EXCLUSÃO INJETADO (Z-INDEX FORÇADO) */}
                    <button 
                      type="button"
                      onClick={(e) => {
+                       e.preventDefault();
                        e.stopPropagation();
-                       alert(`Testando clique! ID do item: ${t.id} | Origem: ${t.origin}`);
-                       handleDeleteTransaction(t);
+                       console.log("CLIQUE REGISTRADO!", t);
+                       handleDeleteTransaction(t.id, t.origin);
                      }}
-                     className="p-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-600 hover:text-red-500 hover:border-red-500/50 transition-all active:scale-95 z-10"
+                     className="relative z-50 flex items-center justify-center p-3 ml-4 bg-red-500/10 text-red-500 rounded-lg border border-red-500/20 hover:bg-red-500 hover:text-white transition-all cursor-pointer pointer-events-auto text-[10px] font-black uppercase tracking-widest"
                    >
-                     <Trash2 size={16} />
+                     EXCLUIR
                    </button>
                 </div>
               </div>
