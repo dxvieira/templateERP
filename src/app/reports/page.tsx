@@ -6,7 +6,8 @@ import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 
 /**
  * @fileOverview ReportsManager - Área de Inteligência e Financeiro
- * Arquivo resetado para reconstrução limpa e livre de conflitos legados.
+ * Arquivo verificado e limpo de qualquer código legado ou importação não utilizada.
+ * Pronto para reconstrução do zero.
  */
 export default function ReportsManagerPage() {
   return (
