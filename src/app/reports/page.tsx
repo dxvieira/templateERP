@@ -15,6 +15,8 @@ import { ptBR } from 'date-fns/locale';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function ReportsManager() {
   const firestore = useFirestore();
@@ -66,7 +68,10 @@ export default function ReportsManager() {
 
     // 1. Processar Pedidos (Faturamento Automático)
     orders?.forEach(order => {
-      globalReceivable += Number(order.balance_due || order.balanceDue || 0);
+      const totalVal = Number(order.total_value || order.totalValue || 0);
+      const paidVal = Number(order.amount_paid || order.amountPaid || 0);
+      globalReceivable += Math.max(0, totalVal - paidVal);
+
       const installments = Array.isArray(order.installments) ? order.installments : [];
       
       installments.forEach((inst: any) => {
@@ -134,25 +139,46 @@ export default function ReportsManager() {
     };
   }, [orders, cashflowManual, payables, selectedMonth]);
 
-  // --- FUNÇÃO DE EXCLUSÃO CORRIGIDA (BLINDADA) ---
-  const handleDeleteTransaction = async (id: string, origin: string) => {
-    // Bloqueio de segurança para itens automáticos do sistema
-    if (origin === 'SISTEMA (OS)') {
+  // --- FUNÇÃO DE EXCLUSÃO EXTREMAMENTE VERBOSA ---
+  const handleDeleteTransaction = async (item: any) => {
+    // 1. Verifica se o ID existe
+    if (!item || !item.id) {
+      alert("ERRO: O item não tem um ID válido! O banco não sabe o que apagar.");
+      console.log("Item defeituoso:", item);
+      return;
+    }
+
+    // 2. Trava de segurança para não corromper pedidos
+    if (item.origin === 'SISTEMA (OS)' || item.origin === 'orders') {
       alert("⚠️ Este lançamento é automático de um pedido. Para removê-lo, vá na página de Pedidos e desfaça a baixa da parcela lá.");
       return;
     }
 
-    // Exclusão de itens manuais
-    const confirmar = window.confirm("Tem certeza que deseja apagar definitivamente este lançamento manual do caixa?");
-    if (!confirmar) return;
+    // 3. Confirmação
+    if (!window.confirm("Deseja DELETAR este lançamento manual definitivamente?")) return;
 
+    // 4. Execução com try/catch cagueta
     try {
-      // Confirmação da coleção correta e execução assíncrona
-      await deleteDoc(doc(firestore, 'cashflow_manual', id));
+      if (!firestore) {
+        alert("Erro crítico: Instância do Firestore não carregada.");
+        return;
+      }
+
+      alert("Iniciando exclusão no Firebase do ID: " + item.id);
+      
+      const docRef = doc(firestore, 'cashflow_manual', item.id);
+      await deleteDoc(docRef);
+      
+      alert("Sucesso! O item foi apagado do banco.");
       toast({ title: "Lançamento Removido", description: "O caixa foi atualizado com sucesso." });
     } catch (error: any) {
-      console.error("Erro ao excluir do banco:", error);
-      alert("Erro crítico ao excluir no banco de dados: " + (error.message || "Falha na comunicação com o Firebase"));
+      console.error("ERRO FIREBASE:", error);
+      alert("Falha ao apagar no Firebase: " + error.message);
+      
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `cashflow_manual/${item.id}`,
+        operation: 'delete'
+      }));
     }
   };
 
@@ -163,8 +189,10 @@ export default function ReportsManager() {
 
     try {
       await addDoc(collection(firestore, 'cashflow_manual'), {
-        ...formData,
+        description: formData.description,
         amount: Number(formData.amount),
+        type: formData.type,
+        date: formData.date,
         createdAt: serverTimestamp(),
         userId: user.uid
       });
@@ -259,7 +287,7 @@ export default function ReportsManager() {
 
           <div className="divide-y divide-white/5">
             {transactions.length > 0 ? transactions.map((t) => (
-              <div key={t.id} className="group flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-4">
+              <div key={t.id} className="group flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-4 relative">
                 <div className="flex items-center gap-4 flex-1">
                    <div className="flex flex-col items-center justify-center min-w-[50px] bg-zinc-950 p-2 rounded-xl border border-zinc-900">
                      <span className="text-[8px] font-black text-zinc-600 uppercase">{format(parseISO(t.date), 'MMM', { locale: ptBR })}</span>
@@ -287,11 +315,15 @@ export default function ReportsManager() {
                         {t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </p>
                    </div>
-                   {/* BOTÃO DE EXCLUSÃO CORRIGIDO */}
+                   {/* BOTÃO DE EXCLUSÃO COM DIAGNÓSTICO ATIVO */}
                    <button 
                      type="button"
-                     onClick={() => handleDeleteTransaction(t.id, t.origin)}
-                     className="p-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-600 hover:text-red-500 hover:border-red-500/50 transition-all active:scale-95"
+                     onClick={(e) => {
+                       e.stopPropagation();
+                       alert(`Testando clique! ID do item: ${t.id} | Origem: ${t.origin}`);
+                       handleDeleteTransaction(t);
+                     }}
+                     className="p-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-600 hover:text-red-500 hover:border-red-500/50 transition-all active:scale-95 z-10"
                    >
                      <Trash2 size={16} />
                    </button>
