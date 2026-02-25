@@ -32,7 +32,7 @@ export default function ReportsManager() {
     date: format(new Date(), 'yyyy-MM-dd')
   });
 
-  // --- BUSCA DE DADOS (TRI-COLEÇÃO) ---
+  // --- BUSCA DE DADOS ---
   const ordersQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collection(firestore, 'orders'));
@@ -66,10 +66,7 @@ export default function ReportsManager() {
 
     // 1. Processar Pedidos (Faturamento Automático)
     orders?.forEach(order => {
-      // Cálculo Global de Recebíveis
       globalReceivable += Number(order.balance_due || order.balanceDue || 0);
-
-      // Extrair parcelas pagas no mês selecionado - FIX: Verificação robusta de Array
       const installments = Array.isArray(order.installments) ? order.installments : [];
       
       installments.forEach((inst: any) => {
@@ -89,9 +86,7 @@ export default function ReportsManager() {
                 originalId: order.id
               });
             }
-          } catch (e) {
-            console.error("Erro ao processar data da parcela:", inst);
-          }
+          } catch (e) {}
         }
       });
     });
@@ -115,19 +110,16 @@ export default function ReportsManager() {
             origin: 'MANUAL'
           });
         }
-      } catch (e) {
-        console.error("Erro ao processar lançamento manual:", entry);
-      }
+      } catch (e) {}
     });
 
-    // 3. Processar Contas a Pagar (Apenas KPI)
+    // 3. Processar Contas a Pagar (KPI)
     payables?.forEach(payable => {
       if (payable.status !== 'paid') {
         totalPayables += Number(payable.amount) || 0;
       }
     });
 
-    // Ordenação Final
     fusion.sort((a, b) => b.date.localeCompare(a.date));
 
     return {
@@ -142,7 +134,28 @@ export default function ReportsManager() {
     };
   }, [orders, cashflowManual, payables, selectedMonth]);
 
-  // --- AÇÕES ---
+  // --- FUNÇÃO DE EXCLUSÃO CORRIGIDA (BLINDADA) ---
+  const handleDeleteTransaction = async (id: string, origin: string) => {
+    // Bloqueio de segurança para itens automáticos do sistema
+    if (origin === 'SISTEMA (OS)') {
+      alert("⚠️ Este lançamento é automático de um pedido. Para removê-lo, vá na página de Pedidos e desfaça a baixa da parcela lá.");
+      return;
+    }
+
+    // Exclusão de itens manuais
+    const confirmar = window.confirm("Tem certeza que deseja apagar definitivamente este lançamento manual do caixa?");
+    if (!confirmar) return;
+
+    try {
+      // Confirmação da coleção correta e execução assíncrona
+      await deleteDoc(doc(firestore, 'cashflow_manual', id));
+      toast({ title: "Lançamento Removido", description: "O caixa foi atualizado com sucesso." });
+    } catch (error: any) {
+      console.error("Erro ao excluir do banco:", error);
+      alert("Erro crítico ao excluir no banco de dados: " + (error.message || "Falha na comunicação com o Firebase"));
+    }
+  };
+
   const handleSaveManualEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore || !user) return;
@@ -163,23 +176,6 @@ export default function ReportsManager() {
       toast({ variant: "destructive", title: "Erro ao salvar" });
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteTransaction = async (item: any) => {
-    if (item.origin === 'SISTEMA (OS)') {
-      alert("⚠️ Esta entrada é automática de um pedido. Para removê-la, vá na página de Pedidos e desfaça o pagamento lá.");
-      return;
-    }
-
-    if (!window.confirm("Confirmar exclusão deste lançamento manual?")) return;
-
-    try {
-      await deleteDoc(doc(firestore, 'cashflow_manual', item.id));
-      toast({ title: "Lançamento Removido" });
-    } catch (error) {
-      console.error(error);
-      toast({ variant: "destructive", title: "Erro ao excluir" });
     }
   };
 
@@ -291,9 +287,11 @@ export default function ReportsManager() {
                         {t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </p>
                    </div>
+                   {/* BOTÃO DE EXCLUSÃO CORRIGIDO */}
                    <button 
-                     onClick={() => handleDeleteTransaction(t)}
-                     className="p-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-600 hover:text-red-500 hover:border-red-500/50 transition-all"
+                     type="button"
+                     onClick={() => handleDeleteTransaction(t.id, t.origin)}
+                     className="p-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-600 hover:text-red-500 hover:border-red-500/50 transition-all active:scale-95"
                    >
                      <Trash2 size={16} />
                    </button>
