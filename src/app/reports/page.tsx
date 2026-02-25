@@ -8,13 +8,22 @@ import {
   TrendingUp, TrendingDown, Wallet, Target, AlertCircle, 
   Download, Plus, Search, Trash2, Calendar, 
   Loader2, X, Wallet2, CheckCircle2, Receipt, 
-  ArrowRight, CreditCard, Box, Factory, Check
+  ArrowRight, CreditCard, Box, Factory, Check,
+  BarChart3, PieChart as PieChartIcon, ShoppingBag, Users as UsersIcon
 } from 'lucide-react';
+import { 
+  ResponsiveContainer, PieChart, Pie, Cell, 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, 
+  Tooltip, Legend 
+} from 'recharts';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+
+// Configuração de Cores para Gráficos (Neon VisComm)
+const COLORS = ['#FF5F1F', '#10B981', '#3B82F6', '#D946EF', '#EAB308'];
 
 export default function ReportsManager() {
   const firestore = useFirestore();
@@ -22,7 +31,7 @@ export default function ReportsManager() {
   const { toast } = useToast();
 
   // --- ESTADOS DE CONTROLE ---
-  const [activeTab, setActiveTab] = useState<'FLUXO' | 'CONTAS'>('FLUXO');
+  const [activeTab, setActiveTab] = useState<'FLUXO' | 'CONTAS' | 'PEDIDOS'>('FLUXO');
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [itemToDelete, setItemToDelete] = useState<any>(null);
   const [itemToPay, setItemToPay] = useState<any>(null);
@@ -32,12 +41,10 @@ export default function ReportsManager() {
   const [isPayableModalOpen, setIsPayableModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Formulário Fluxo Manual
+  // Formulários
   const [cashflowFormData, setCashflowFormData] = useState({
     description: '', amount: '', type: 'income', date: format(new Date(), 'yyyy-MM-dd'), method: 'Pix'
   });
-
-  // Formulário Contas a Pagar
   const [payableFormData, setPayableFormData] = useState({
     supplier: '', description: '', category: 'Suprimentos', amountTotal: '', installments: 1, method: 'Boleto'
   });
@@ -63,8 +70,8 @@ export default function ReportsManager() {
   const { data: cashflowManual, isLoading: cashflowLoading } = useCollection(cashflowQuery);
   const { data: payables, isLoading: payablesLoading } = useCollection(payablesQuery);
 
-  // --- MOTOR DE FUSÃO: CONSOLIDAÇÃO DE DADOS ---
-  const { transactions, kpis } = useMemo(() => {
+  // --- MOTOR DE FUSÃO FINANCEIRA ---
+  const { transactions, kpis, ordersBI } = useMemo(() => {
     const fusion: any[] = [];
     let monthIncomes = 0;
     let monthExpenses = 0;
@@ -76,11 +83,21 @@ export default function ReportsManager() {
     const endDate = endOfMonth(new Date(year, month - 1));
 
     // 1. Processar Pedidos (Faturamento Automático)
+    const filteredOrders = orders?.filter(order => {
+      const orderDate = order.createdAt?.seconds 
+        ? new Date(order.createdAt.seconds * 1000) 
+        : parseISO(order.emission_date || order.emissionDate || '');
+      
+      try {
+        return isWithinInterval(orderDate, { start: startDate, end: endDate });
+      } catch (e) { return false; }
+    }) || [];
+
     orders?.forEach(order => {
       const totalVal = Number(order.total_value || order.totalValue || 0);
       const paidVal = Number(order.amount_paid || order.amountPaid || 0);
       
-      if (order.status !== 'Entregue') {
+      if (order.status !== 'Entregue' && order.status !== 'Concluído') {
         globalReceivable += Math.max(0, totalVal - paidVal);
       }
 
@@ -98,7 +115,7 @@ export default function ReportsManager() {
                 description: `OS #${order.id.slice(-6)} - ${order.client}`,
                 type: 'income',
                 amount: amount,
-                method: inst.payment_method || inst.paymentMethod || inst.type || 'Sistema',
+                method: inst.payment_method || inst.paymentMethod || 'Sistema',
                 origin: 'SISTEMA (OS)',
                 originalId: order.id
               });
@@ -123,8 +140,8 @@ export default function ReportsManager() {
             description: entry.description,
             type: entry.type,
             amount: amount,
-            method: entry.method || entry.payment_method || 'Manual',
-            origin: entry.origin || 'MANUAL'
+            method: entry.method || 'Manual',
+            origin: 'MANUAL'
           });
         }
       } catch (e) {}
@@ -137,6 +154,24 @@ export default function ReportsManager() {
       }
     });
 
+    // 4. BI de Pedidos
+    const biStatus: Record<string, number> = {};
+    const biClients: Record<string, number> = {};
+    let biTotalValue = 0;
+    
+    filteredOrders.forEach(o => {
+      const val = Number(o.total_value || o.totalValue || 0);
+      biTotalValue += val;
+      biStatus[o.status] = (biStatus[o.status] || 0) + 1;
+      biClients[o.client] = (biClients[o.client] || 0) + val;
+    });
+
+    const statusChart = Object.entries(biStatus).map(([name, value]) => ({ name, value }));
+    const clientChart = Object.entries(biClients)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+
     fusion.sort((a, b) => b.date.localeCompare(a.date));
 
     return {
@@ -147,182 +182,92 @@ export default function ReportsManager() {
         net: monthIncomes - monthExpenses,
         receivables: globalReceivable,
         payables: totalPayables
+      },
+      ordersBI: {
+        filteredOrders,
+        totalCount: filteredOrders.length,
+        inProduction: filteredOrders.filter(o => !['Concluído', 'Entregue'].includes(o.status)).length,
+        finalized: filteredOrders.filter(o => ['Concluído', 'Entregue'].includes(o.status)).length,
+        totalValue: biTotalValue,
+        ticketMedio: filteredOrders.length > 0 ? biTotalValue / filteredOrders.length : 0,
+        statusChart,
+        clientChart
       }
     };
   }, [orders, cashflowManual, payables, selectedMonth]);
 
   // --- FUNÇÕES DE AÇÃO ---
-
   const handleExportCSV = () => {
     if (!transactions || transactions.length === 0) {
       alert("Não há dados para exportar neste mês.");
       return;
     }
-
-    let totalEntradas = 0;
-    let totalSaidas = 0;
-
+    let totalEntradas = 0; let totalSaidas = 0;
     transactions.forEach(t => {
-      const valor = Number(t.amount) || 0;
-      if (t.type === 'income') totalEntradas += valor;
-      if (t.type === 'expense') totalSaidas += valor;
+      if (t.type === 'income') totalEntradas += t.amount;
+      else totalSaidas += t.amount;
     });
-    const saldoTotal = totalEntradas - totalSaidas;
-
-    let csvContent = "\uFEFF";
-    csvContent += "DATA;DESCRIÇÃO;FORMA DE PAGAMENTO;TIPO;VALOR\n";
-
+    let csvContent = "\uFEFFDATA;DESCRIÇÃO;FORMA DE PAGAMENTO;TIPO;VALOR\n";
     transactions.forEach(t => {
-      let dataFormatada = t.date;
-      if (t.date && t.date.includes('-')) {
-        const [ano, mes, dia] = t.date.split('-');
-        dataFormatada = `${dia}/${mes}/${ano}`;
-      }
-
-      const desc = (t.description || '').replace(/\n/g, ' '); 
-      const valorStr = Number(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      const tipoStr = t.type === 'income' ? 'Entrada' : 'Saída';
-      const formaPgto = t.method || t.payment_method || '-';
-
-      csvContent += `${dataFormatada};${desc};${formaPgto};${tipoStr};R$ ${valorStr}\n`;
+      const d = t.date.split('-').reverse().join('/');
+      csvContent += `${d};${t.description.replace(/;/g, ',')};${t.method};${t.type === 'income' ? 'Entrada' : 'Saída'};R$ ${t.amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\n`;
     });
-
-    csvContent += ";;;;\n"; 
-    const saldoFinalStr = saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    csvContent += `;;;SALDO TOTAL:;R$ ${saldoFinalStr}\n`;
-
+    csvContent += `;;;SALDO TOTAL:;R$ ${(totalEntradas - totalSaidas).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `fluxo_de_caixa_${selectedMonth}_${new Date().getTime()}.csv`);
-    document.body.appendChild(link);
+    link.href = URL.createObjectURL(blob);
+    link.download = `fluxo_caixa_${selectedMonth}.csv`;
     link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleGenerateInstallments = () => {
-    const total = Number(payableFormData.amountTotal);
-    const count = Number(payableFormData.installments);
-    if (!total || count < 1) return;
-
-    const valuePerInstallment = Number((total / count).toFixed(2));
-    const list = [];
-    for (let i = 0; i < count; i++) {
-      list.push({
-        dueDate: format(addMonths(new Date(), i), 'yyyy-MM-dd'),
-        amount: i === count - 1 ? (total - (valuePerInstallment * (count - 1))) : valuePerInstallment
-      });
-    }
-    setPreviewInstallments(list);
-  };
-
-  const handleSavePayables = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!firestore || !user || previewInstallments.length === 0) return;
-    setIsSubmitting(true);
-
-    try {
-      for (const inst of previewInstallments) {
-        await addDoc(collection(firestore, 'accounts_payable'), {
-          supplier: payableFormData.supplier,
-          description: payableFormData.description,
-          category: payableFormData.category,
-          amount: Number(inst.amount),
-          dueDate: inst.dueDate,
-          status: 'pending',
-          method: payableFormData.method,
-          createdAt: serverTimestamp(),
-          userId: user.uid
-        });
-      }
-      toast({ title: "Contas Registradas", description: `${previewInstallments.length} parcelas adicionadas.` });
-      setIsPayableModalOpen(false);
-      setPreviewInstallments([]);
-    } catch (e) {
-      toast({ variant: 'destructive', title: "Erro ao salvar" });
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   const handleConfirmPayment = async () => {
     if (!itemToPay || !firestore || !user) return;
-    
     try {
-      // 1. Atualizar conta para paga
-      const contaRef = doc(firestore, 'accounts_payable', itemToPay.id);
-      await updateDoc(contaRef, { 
-        status: 'paid',
-        paidAt: serverTimestamp(),
-        paymentDate: new Date().toISOString()
+      await updateDoc(doc(firestore, 'accounts_payable', itemToPay.id), { 
+        status: 'paid', paidAt: serverTimestamp(), paymentDate: new Date().toISOString()
       });
-
-      // 2. Injetar saída no fluxo de caixa manual (mantendo o método de pagamento)
       await addDoc(collection(firestore, 'cashflow_manual'), {
-        description: `PGTO: ${itemToPay.supplier || itemToPay.description || 'Conta'}`,
-        amount: Number(itemToPay.amount),
-        type: 'expense',
-        date: format(new Date(), 'yyyy-MM-dd'),
-        method: itemToPay.method || 'Boleto',
-        origin: 'CONTAS A PAGAR',
-        createdAt: serverTimestamp(),
-        userId: user.uid
+        description: `PGTO: ${itemToPay.supplier || itemToPay.description}`,
+        amount: Number(itemToPay.amount), type: 'expense', date: format(new Date(), 'yyyy-MM-dd'),
+        method: itemToPay.method || 'Boleto', origin: 'CONTAS A PAGAR', createdAt: serverTimestamp(), userId: user.uid
       });
-
-      toast({ title: "Baixa Confirmada", description: "O valor foi debitado do fluxo de caixa." });
+      toast({ title: "Baixa Confirmada" });
       setItemToPay(null);
-    } catch (error: any) {
-      console.error("Erro ao processar pagamento:", error);
-      alert("Erro ao dar baixa: " + error.message);
-    }
+    } catch (e) { alert("Erro: " + e); }
   };
 
-  const handleConfirmDelete = async () => {
-    if (!itemToDelete || !firestore) return;
-    
-    if (itemToDelete.origin === 'SISTEMA (OS)') {
-      alert("⚠️ Esta entrada é automática. Cancele a baixa diretamente no pedido do cliente.");
-      setItemToDelete(null);
+  const handleDeleteTransaction = async (id: string, origin: string) => {
+    if (origin === 'SISTEMA (OS)') {
+      alert("⚠️ Lançamento automático. Cancele no pedido original.");
       return;
     }
-
-    const collectionName = itemToDelete.supplier ? 'accounts_payable' : 'cashflow_manual';
-    
+    if (!window.confirm("Deseja apagar este registro manual?")) return;
     try {
-      await deleteDoc(doc(firestore, collectionName, itemToDelete.id));
-      setItemToDelete(null);
+      await deleteDoc(doc(firestore, 'cashflow_manual', id));
       toast({ title: "Registro Removido" });
-    } catch (e) {
-      toast({ variant: 'destructive', title: "Erro ao excluir" });
-    }
+    } catch (e) { alert("Erro ao excluir"); }
   };
 
   const handleSaveManualEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore || !user) return;
     setIsSubmitting(true);
-
     try {
       await addDoc(collection(firestore, 'cashflow_manual'), {
-        ...cashflowFormData,
-        amount: Number(cashflowFormData.amount),
-        createdAt: serverTimestamp(),
-        userId: user.uid
+        ...cashflowFormData, amount: Number(cashflowFormData.amount), createdAt: serverTimestamp(), userId: user.uid
       });
       toast({ title: "Lançamento Efetuado" });
       setIsCashflowModalOpen(false);
-      setCashflowFormData({ ...cashflowFormData, description: '', amount: '' });
-    } catch (e) {
-      toast({ variant: 'destructive', title: "Erro ao salvar" });
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch (e) { toast({ variant: 'destructive', title: "Erro ao salvar" }); }
+    finally { setIsSubmitting(false); }
   };
 
   if (ordersLoading || cashflowLoading || payablesLoading) {
     return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>;
   }
+
+  const labelClass = "text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1 mb-1.5 block";
+  const inputClass = "w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none transition-all";
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden selection:bg-primary selection:text-black">
@@ -334,8 +279,8 @@ export default function ReportsManager() {
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-white/5 pb-8">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-primary">
-              <Wallet size={14} className="animate-pulse" />
-              <span className="text-[10px] font-black uppercase tracking-[0.3em]">Command Center Finance</span>
+              <BarChart3 size={14} className="animate-pulse" />
+              <span className="text-[10px] font-black uppercase tracking-[0.3em]">Command Center Intelligence</span>
             </div>
             <h1 className="text-4xl font-black text-white tracking-tighter uppercase leading-none">
               Gestão de <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">Resultados</span>
@@ -343,56 +288,54 @@ export default function ReportsManager() {
           </div>
 
           <div className="flex items-center gap-4 w-full md:w-auto">
-             <button 
-               onClick={handleExportCSV}
-               className="flex items-center gap-2 px-4 py-3 border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-               title="Exportar Fluxo do Mês (CSV)"
-             >
+             <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-3 border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
                <Download size={16} /> EXPORTAR CSV
              </button>
-             <div className="relative group flex-1 md:flex-initial">
+             <div className="relative group">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" size={16} />
-                <input 
-                  type="month" 
-                  value={selectedMonth} 
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="bg-zinc-900 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white text-xs font-black uppercase outline-none focus:border-primary transition-all"
-                />
+                <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white text-xs font-black uppercase outline-none focus:border-primary transition-all" />
              </div>
-             <button 
-               onClick={() => activeTab === 'FLUXO' ? setIsCashflowModalOpen(true) : setIsPayableModalOpen(true)}
-               className="flex items-center gap-2 px-6 py-3 bg-primary text-black font-black text-[10px] uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(255,95,31,0.4)] hover:bg-white transition-all"
-             >
-               <Plus size={16} strokeWidth={3} /> {activeTab === 'FLUXO' ? 'Novo Lançamento' : 'Nova Conta'}
-             </button>
+             {activeTab !== 'PEDIDOS' && (
+               <button onClick={() => activeTab === 'FLUXO' ? setIsCashflowModalOpen(true) : setIsPayableModalOpen(true)} className="flex items-center gap-2 px-6 py-3 bg-primary text-black font-black text-[10px] uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(255,95,31,0.4)] hover:bg-white transition-all">
+                 <Plus size={16} strokeWidth={3} /> {activeTab === 'FLUXO' ? 'Lançamento' : 'Nova Conta'}
+               </button>
+             )}
           </div>
         </header>
 
+        {/* KPIs DINÂMICOS */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <KPICard label="Entradas" value={kpis.incomes} color="text-emerald-500" icon={TrendingUp} />
-          <KPICard label="Saídas" value={kpis.expenses} color="text-red-500" icon={TrendingDown} />
-          <KPICard label="Líquido" value={kpis.net} color="text-primary" icon={Wallet} glow />
-          <KPICard label="A Receber (OS)" value={kpis.receivables} color="text-yellow-500" icon={Target} />
-          <KPICard label="Contas a Pagar" value={kpis.payables} color="text-rose-500" icon={AlertCircle} />
+          {activeTab === 'PEDIDOS' ? (
+            <>
+              <KPICard label="Total de Pedidos" value={ordersBI.totalCount} isCurrency={false} color="text-white" icon={ShoppingBag} />
+              <KPICard label="Em Produção" value={ordersBI.inProduction} isCurrency={false} color="text-yellow-500" icon={Factory} />
+              <KPICard label="Finalizados" value={ordersBI.finalized} isCurrency={false} color="text-emerald-500" icon={CheckCircle2} />
+              <KPICard label="Valor em OS" value={ordersBI.totalValue} color="text-primary" icon={Wallet} glow />
+              <KPICard label="Ticket Médio" value={ordersBI.ticketMedio} color="text-cyan-400" icon={TrendingUp} />
+            </>
+          ) : (
+            <>
+              <KPICard label="Entradas" value={kpis.incomes} color="text-emerald-500" icon={TrendingUp} />
+              <KPICard label="Saídas" value={kpis.expenses} color="text-red-500" icon={TrendingDown} />
+              <KPICard label="Líquido" value={kpis.net} color="text-primary" icon={Wallet} glow />
+              <KPICard label="A Receber (OS)" value={kpis.receivables} color="text-yellow-500" icon={Target} />
+              <KPICard label="Contas a Pagar" value={kpis.payables} color="text-rose-500" icon={AlertCircle} />
+            </>
+          )}
         </section>
 
+        {/* ABAS TÁTICAS */}
         <div className="flex gap-2 p-1 bg-zinc-900/50 rounded-2xl w-fit border border-zinc-800">
-           <button 
-             onClick={() => setActiveTab('FLUXO')}
-             className={cn("px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", activeTab === 'FLUXO' ? "bg-primary text-black" : "text-zinc-500 hover:text-white")}
-           >
-             Fluxo de Caixa
-           </button>
-           <button 
-             onClick={() => setActiveTab('CONTAS')}
-             className={cn("px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", activeTab === 'CONTAS' ? "bg-primary text-black" : "text-zinc-500 hover:text-white")}
-           >
-             Contas a Pagar
-           </button>
+           {['FLUXO', 'CONTAS', 'PEDIDOS'].map((tab) => (
+             <button key={tab} onClick={() => setActiveTab(tab as any)} className={cn("px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", activeTab === tab ? "bg-primary text-black" : "text-zinc-500 hover:text-white")}>
+               {tab === 'FLUXO' ? 'Fluxo de Caixa' : tab === 'CONTAS' ? 'Contas a Pagar' : 'Análise de Pedidos'}
+             </button>
+           ))}
         </div>
 
+        {/* CONTEÚDO DAS ABAS */}
         <div className="bg-[#09090b] border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
-          {activeTab === 'FLUXO' ? (
+          {activeTab === 'FLUXO' && (
             <div className="divide-y divide-white/5">
               {transactions.length > 0 ? transactions.map((t) => (
                 <div key={t.id} className="group flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-4">
@@ -409,22 +352,18 @@ export default function ReportsManager() {
                         </div>
                      </div>
                   </div>
-                  <div className="flex items-center justify-between md:justify-end gap-8">
+                  <div className="flex items-center gap-8">
                      <p className={cn("text-lg font-black font-mono tracking-tighter", t.type === 'income' ? "text-emerald-500" : "text-red-500")}>
                        {t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                      </p>
-                     <button 
-                       type="button"
-                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setItemToDelete(t); }} 
-                       className="relative z-50 p-3 bg-red-500/10 text-red-500 hover:bg-red-500/80 hover:text-white rounded-xl transition-all border border-red-500/20 pointer-events-auto cursor-pointer"
-                     >
-                       <Trash2 size={16}/>
-                     </button>
+                     <button onClick={() => handleDeleteTransaction(t.id, t.origin)} className="p-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all border border-red-500/20"><Trash2 size={16}/></button>
                   </div>
                 </div>
               )) : <EmptyState icon={Target} text="Sem movimentos no período" />}
             </div>
-          ) : (
+          )}
+
+          {activeTab === 'CONTAS' && (
             <div className="divide-y divide-white/5">
               {payables?.length > 0 ? payables.map((p) => (
                 <div key={p.id} className="group flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-4">
@@ -438,69 +377,123 @@ export default function ReportsManager() {
                         <p className="text-[10px] text-zinc-500 uppercase tracking-widest">{p.description} • {p.category}</p>
                      </div>
                   </div>
-                  <div className="flex items-center justify-between md:justify-end gap-8">
+                  <div className="flex items-center gap-8">
                      <div className="text-right">
-                        <p className="text-lg font-black font-mono tracking-tighter text-white">
-                          {p.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </p>
+                        <p className="text-lg font-black font-mono tracking-tighter text-white">{p.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                         <span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded-full border", p.status === 'paid' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-yellow-500/10 text-yellow-500 border-yellow-500/20")}>{p.status === 'paid' ? 'Liquidado' : 'Pendente'}</span>
                      </div>
                      <div className="flex gap-2">
                         {p.status !== 'paid' && (
-                          <button 
-                            type="button"
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setItemToPay(p); }} 
-                            className="relative z-50 p-3 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black rounded-xl transition-all border border-emerald-500/20 pointer-events-auto cursor-pointer"
-                          >
-                            <Check size={18} strokeWidth={3} />
-                          </button>
+                          <button onClick={() => setItemToPay(p)} className="p-3 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black rounded-xl transition-all border border-emerald-500/20"><Check size={18} strokeWidth={3} /></button>
                         )}
-                        <button 
-                          type="button"
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setItemToDelete(p); }} 
-                          className="relative z-50 p-3 bg-zinc-900 text-zinc-600 hover:text-red-500 rounded-xl transition-all border border-zinc-800 pointer-events-auto cursor-pointer"
-                        >
-                          <Trash2 size={18}/>
-                        </button>
+                        <button onClick={() => setItemToDelete(p)} className="p-3 bg-zinc-900 text-zinc-600 hover:text-red-500 rounded-xl transition-all border border-zinc-800"><Trash2 size={18}/></button>
                      </div>
                   </div>
                 </div>
               )) : <EmptyState icon={Receipt} text="Sem contas pendentes" />}
             </div>
           )}
+
+          {activeTab === 'PEDIDOS' && (
+            <div className="p-6 space-y-10">
+              {/* GRID DE GRÁFICOS BI */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* GRÁFICO DE STATUS */}
+                <div className="bg-zinc-950/50 border border-zinc-800 p-6 rounded-3xl">
+                  <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-6 flex items-center gap-2">
+                    <PieChartIcon size={14}/> Distribuição de Produção
+                  </h3>
+                  <div className="h-[250px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={ordersBI.statusChart} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                          {ordersBI.statusChart.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0.5)" strokeWidth={2} />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={{ backgroundColor: '#09090b', border: '1px solid #27272a', borderRadius: '12px', fontSize: '10px' }} />
+                        <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold' }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* GRÁFICO DE FATURAMENTO POR CLIENTE */}
+                <div className="bg-zinc-950/50 border border-zinc-800 p-6 rounded-3xl">
+                  <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-6 flex items-center gap-2">
+                    <UsersIcon size={14}/> Top 5 Clientes (Faturamento)
+                  </h3>
+                  <div className="h-[250px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={ordersBI.clientChart} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#18181b" horizontal={false} />
+                        <XAxis type="number" hide />
+                        <YAxis dataKey="name" type="category" width={100} axisLine={false} tickLine={false} style={{ fontSize: '9px', fontWeight: 'bold', fill: '#71717a', textTransform: 'uppercase' }} />
+                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#09090b', border: '1px solid #27272a', borderRadius: '12px' }} formatter={(value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />
+                        <Bar dataKey="value" fill="#FF5F1F" radius={[0, 4, 4, 0]} barSize={20} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+
+              {/* LISTA ANALÍTICA DO MÊS */}
+              <div className="space-y-4">
+                <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em] border-b border-white/5 pb-2">Registros de OS do Período</h3>
+                <div className="divide-y divide-white/5 bg-zinc-950/20 rounded-2xl border border-zinc-800">
+                  {ordersBI.filteredOrders.length > 0 ? ordersBI.filteredOrders.map((o) => (
+                    <div key={o.id} className="flex items-center justify-between p-4 hover:bg-white/5 transition-all">
+                      <div className="flex items-center gap-4">
+                        <span className="text-[9px] font-mono text-zinc-600 bg-zinc-900 px-2 py-1 rounded border border-zinc-800">#{o.id.slice(-6)}</span>
+                        <div>
+                          <p className="text-sm font-bold text-white uppercase">{o.client}</p>
+                          <p className="text-[9px] text-zinc-500 uppercase font-black tracking-widest">{o.seller || 'Vendedor'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        <span className={cn("text-[8px] font-black uppercase px-2 py-1 rounded-full border", 
+                          o.status === 'Concluído' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : 
+                          o.status === 'Arte' ? "bg-purple-500/10 text-purple-500 border-purple-500/20" : "bg-zinc-800 text-zinc-400"
+                        )}>
+                          {o.status}
+                        </span>
+                        <p className="text-sm font-black font-mono text-white">{(Number(o.total_value || o.totalValue) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                      </div>
+                    </div>
+                  )) : <EmptyState icon={ShoppingBag} text="Sem pedidos registrados no período" />}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* MODAL CONFIRMAR EXCLUSÃO */}
+        {/* MODAIS (REUTILIZADOS) */}
         <AnimatePresence>
           {itemToDelete && (
             <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
-              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-[#0c0c0e] border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl text-center">
-                <div className="w-20 h-20 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6 border border-red-500/20 mx-auto animate-pulse"><Trash2 size={32} /></div>
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-[#0c0c0e] border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl text-center">
+                <div className="w-20 h-20 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6 border border-red-500/20 mx-auto"><Trash2 size={32} /></div>
                 <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-3">Confirmar Exclusão</h3>
-                <p className="text-zinc-400 text-sm uppercase tracking-widest leading-relaxed mb-8">Apagar definitivamente <br /><strong className="text-white">"{itemToDelete.description || itemToDelete.supplier}"</strong>?</p>
+                <p className="text-zinc-400 text-sm uppercase tracking-widest mb-8">Apagar "{itemToDelete.description || itemToDelete.supplier}"?</p>
                 <div className="flex gap-4">
-                  <button onClick={() => setItemToDelete(null)} className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-400 font-black uppercase text-[10px] tracking-widest hover:bg-zinc-800/50 transition-all">Cancelar</button>
-                  <button onClick={handleConfirmDelete} className="flex-1 py-4 rounded-xl bg-red-500 text-white font-black uppercase text-[10px] tracking-widest hover:bg-red-600 shadow-[0_0_25px_rgba(239,68,68,0.4)] transition-all">Sim, Excluir</button>
+                  <button onClick={() => setItemToDelete(null)} className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-400 font-black uppercase text-[10px] tracking-widest">Cancelar</button>
+                  <button onClick={async () => { try { await deleteDoc(doc(firestore, 'accounts_payable', itemToDelete.id)); setItemToDelete(null); toast({title: "Removido"}); } catch(e){ alert(e); } }} className="flex-1 py-4 rounded-xl bg-red-500 text-white font-black uppercase text-[10px] tracking-widest shadow-[0_0_25px_rgba(239,68,68,0.4)]">Sim, Excluir</button>
                 </div>
               </motion.div>
             </div>
           )}
         </AnimatePresence>
 
-        {/* MODAL CONFIRMAR PAGAMENTO */}
         <AnimatePresence>
           {itemToPay && (
             <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
-              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-[#0c0c0e] border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl text-center">
-                <div className="w-20 h-20 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mb-6 border border-emerald-500/20 mx-auto"><span className="text-4xl">💰</span></div>
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-[#0c0c0e] border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl text-center">
+                <div className="w-20 h-20 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mb-6 border border-emerald-500/20 mx-auto text-4xl">💰</div>
                 <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-3">Confirmar Pagamento</h3>
-                <p className="text-zinc-400 text-sm uppercase tracking-widest leading-relaxed mb-8">
-                  Liquidar <strong className="text-white">"{itemToPay.description || itemToPay.supplier}"</strong> no valor de <strong className="text-emerald-400">R$ {Number(itemToPay.amount).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>? <br/><br/>
-                  Isso lançará uma saída automática no seu Fluxo de Caixa.
-                </p>
+                <p className="text-zinc-400 text-sm uppercase tracking-widest mb-8">Liquidar <strong className="text-white">R$ {Number(itemToPay.amount).toLocaleString('pt-BR')}</strong>?</p>
                 <div className="flex gap-4">
-                  <button onClick={() => setItemToPay(null)} className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-400 font-black uppercase text-[10px] tracking-widest hover:bg-zinc-800/50 transition-all">Cancelar</button>
-                  <button onClick={handleConfirmPayment} className="flex-1 py-4 rounded-xl bg-emerald-500 text-white font-black uppercase text-[10px] tracking-widest hover:bg-emerald-600 shadow-[0_0_25px_rgba(16,185,129,0.4)] transition-all">Confirmar Baixa</button>
+                  <button onClick={() => setItemToPay(null)} className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-400 font-black uppercase text-[10px] tracking-widest">Cancelar</button>
+                  <button onClick={handleConfirmPayment} className="flex-1 py-4 rounded-xl bg-emerald-500 text-white font-black uppercase text-[10px] tracking-widest shadow-[0_0_25px_rgba(16,185,129,0.4)]">Confirmar Baixa</button>
                 </div>
               </motion.div>
             </div>
@@ -511,7 +504,7 @@ export default function ReportsManager() {
         <AnimatePresence>
           {isCashflowModalOpen && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" onClick={() => setIsCashflowModalOpen(false)}>
-              <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-[#09090b] border border-zinc-800 rounded-[2.5rem] shadow-2xl overflow-hidden">
+              <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-[#09090b] border border-zinc-800 rounded-[2.5rem] shadow-2xl overflow-hidden">
                 <div className="p-8 border-b border-white/5 bg-zinc-900/30 flex justify-between items-center">
                   <h3 className="text-xl font-black text-white uppercase tracking-tighter">Novo Lançamento</h3>
                   <button onClick={() => setIsCashflowModalOpen(false)} className="p-2 text-zinc-500 hover:text-white transition-colors bg-white/5 rounded-full"><X size={20}/></button>
@@ -535,11 +528,7 @@ export default function ReportsManager() {
                     <div className="space-y-2">
                       <label className={labelClass}>Forma de Pgto</label>
                       <select value={cashflowFormData.method} onChange={e => setCashflowFormData({...cashflowFormData, method: e.target.value})} className={inputClass}>
-                        <option value="Pix">Pix</option>
-                        <option value="Dinheiro">Dinheiro</option>
-                        <option value="Cartão">Cartão</option>
-                        <option value="Boleto">Boleto</option>
-                        <option value="Transferência">Transferência</option>
+                        {['Pix', 'Dinheiro', 'Cartão', 'Boleto', 'Transferência'].map(m => <option key={m} value={m}>{m}</option>)}
                       </select>
                     </div>
                     <div className="space-y-2">
@@ -550,8 +539,8 @@ export default function ReportsManager() {
                       </div>
                     </div>
                   </div>
-                  <button disabled={isSubmitting} className="w-full py-5 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_5px_25px_-5px_rgba(255,95,31,0.5)] active:scale-95 transition-all flex items-center justify-center gap-2">
-                    {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : "Efetivar Lançamento"}
+                  <button disabled={isSubmitting} className="w-full py-5 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_5px_25px_-5px_rgba(255,95,31,0.5)] transition-all">
+                    {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={20} /> : "Efetivar Lançamento"}
                   </button>
                 </form>
               </motion.div>
@@ -563,70 +552,64 @@ export default function ReportsManager() {
         <AnimatePresence>
           {isPayableModalOpen && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" onClick={() => setIsPayableModalOpen(false)}>
-              <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl bg-[#09090b] border border-zinc-800 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="p-8 border-b border-white/5 bg-zinc-900/30 flex justify-between items-center shrink-0">
-                  <div>
-                    <span className="text-primary text-[9px] font-black uppercase tracking-[0.3em]">Gerador de Faturas</span>
-                    <h3 className="text-xl font-black text-white uppercase tracking-tighter">Registrar Compromissos</h3>
-                  </div>
+              <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl bg-[#09090b] border border-zinc-800 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="p-8 border-b border-white/5 bg-zinc-900/30 flex justify-between items-center">
+                  <h3 className="text-xl font-black text-white uppercase tracking-tighter">Registrar Compromissos</h3>
                   <button onClick={() => setIsPayableModalOpen(false)} className="p-2 text-zinc-500 hover:text-white bg-white/5 rounded-full"><X size={20}/></button>
                 </div>
-
-                <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <div className="space-y-2">
-                      <label className={labelClass}>Fornecedor / Nome</label>
-                      <input required value={payableFormData.supplier} onChange={e => setPayableFormData({...payableFormData, supplier: e.target.value})} className={inputClass} placeholder="Ex: Fornecedor de Chapas" />
+                <div className="p-8 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className={labelClass}>Fornecedor</label>
+                      <input required value={payableFormData.supplier} onChange={e => setPayableFormData({...payableFormData, supplier: e.target.value})} className={inputClass} />
                     </div>
-                    <div className="space-y-2">
-                      <label className={labelClass}>Descrição da Despesa</label>
-                      <input value={payableFormData.description} onChange={e => setPayableFormData({...payableFormData, description: e.target.value})} className={inputClass} placeholder="Ex: Compra de Acrílicos" />
+                    <div>
+                      <label className={labelClass}>Descrição</label>
+                      <input value={payableFormData.description} onChange={e => setPayableFormData({...payableFormData, description: e.target.value})} className={inputClass} />
                     </div>
-                    <div className="space-y-2">
-                      <label className={labelClass}>Forma de Pagamento</label>
-                      <select value={payableFormData.method} onChange={e => setPayableFormData({...payableFormData, method: e.target.value})} className={inputClass}>
-                        <option value="Boleto">Boleto</option>
-                        <option value="Cartão">Cartão</option>
-                        <option value="Pix">Pix</option>
-                        <option value="Dinheiro">Dinheiro</option>
-                        <option value="Transferência">Transferência</option>
-                      </select>
+                    <div>
+                      <label className={labelClass}>Valor Total</label>
+                      <input type="number" value={payableFormData.amountTotal} onChange={e => setPayableFormData({...payableFormData, amountTotal: e.target.value})} className={inputClass} />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className={labelClass}>Valor Total (R$)</label>
-                        <input type="number" step="0.01" value={payableFormData.amountTotal} onChange={e => setPayableFormData({...payableFormData, amountTotal: e.target.value})} className={inputClass} />
-                      </div>
-                      <div className="space-y-2">
-                        <label className={labelClass}>Nº Parcelas</label>
-                        <div className="flex gap-2">
-                          <input type="number" min={1} value={payableFormData.installments} onChange={e => setPayableFormData({...payableFormData, installments: Number(e.target.value)})} className={inputClass} />
-                          <button onClick={handleGenerateInstallments} className="bg-white text-black px-4 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-primary transition-all">Gerar</button>
-                        </div>
+                    <div>
+                      <label className={labelClass}>Parcelas</label>
+                      <div className="flex gap-2">
+                        <input type="number" min={1} value={payableFormData.installments} onChange={e => setPayableFormData({...payableFormData, installments: Number(e.target.value)})} className={inputClass} />
+                        <button onClick={() => {
+                          const total = Number(payableFormData.amountTotal);
+                          const count = Number(payableFormData.installments);
+                          const v = Number((total / count).toFixed(2));
+                          const list = [];
+                          for(let i=0; i<count; i++) list.push({ dueDate: format(addMonths(new Date(), i), 'yyyy-MM-dd'), amount: i === count - 1 ? (total - (v * (count - 1))) : v });
+                          setPreviewInstallments(list);
+                        }} className="bg-white text-black px-4 rounded-xl font-black uppercase text-[10px]">Gerar</button>
                       </div>
                     </div>
                   </div>
-
                   {previewInstallments.length > 0 && (
-                    <div className="space-y-4">
-                      <h4 className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] border-b border-white/5 pb-2">Ajuste de Cronograma</h4>
+                    <div className="space-y-3 pt-4">
                       {previewInstallments.map((inst, idx) => (
-                        <div key={idx} className="bg-zinc-900/50 border border-zinc-800 p-4 rounded-2xl flex items-center gap-4">
-                           <span className="text-[10px] font-black text-zinc-600">#{idx+1}</span>
-                           <div className="flex-1 grid grid-cols-2 gap-4">
-                              <input type="date" value={inst.dueDate} onChange={e => { const n = [...previewInstallments]; n[idx].dueDate = e.target.value; setPreviewInstallments(n); }} className={inputClass} />
-                              <input type="number" step="0.01" value={inst.amount} onChange={e => { const n = [...previewInstallments]; n[idx].amount = e.target.value; setPreviewInstallments(n); }} className={inputClass} />
-                           </div>
+                        <div key={idx} className="bg-zinc-900/50 border border-zinc-800 p-4 rounded-2xl grid grid-cols-2 gap-4">
+                          <input type="date" value={inst.dueDate} onChange={e => { const n = [...previewInstallments]; n[idx].dueDate = e.target.value; setPreviewInstallments(n); }} className={inputClass} />
+                          <input type="number" value={inst.amount} onChange={e => { const n = [...previewInstallments]; n[idx].amount = Number(e.target.value); setPreviewInstallments(n); }} className={inputClass} />
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-
-                <div className="p-8 border-t border-white/5 bg-zinc-900/30 shrink-0">
-                  <button onClick={handleSavePayables} disabled={isSubmitting || previewInstallments.length === 0} className="w-full py-5 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_5px_25px_-5px_rgba(255,95,31,0.5)] active:scale-95 transition-all flex items-center justify-center gap-2">
-                    {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <><Receipt size={20} /> Salvar Pauta de Pagamentos</>}
-                  </button>
+                <div className="p-8 border-t border-white/5">
+                  <button onClick={async () => {
+                    setIsSubmitting(true);
+                    try {
+                      for(const inst of previewInstallments) {
+                        await addDoc(collection(firestore, 'accounts_payable'), {
+                          supplier: payableFormData.supplier, description: payableFormData.description,
+                          amount: Number(inst.amount), dueDate: inst.dueDate, status: 'pending', userId: user.uid
+                        });
+                      }
+                      setIsPayableModalOpen(false); setPreviewInstallments([]); toast({title: "Salvo"});
+                    } catch(e) { alert(e); } finally { setIsSubmitting(false); }
+                  }} disabled={isSubmitting} className="w-full py-5 bg-primary text-black font-black uppercase tracking-widest rounded-2xl">Salvar Pauta</button>
                 </div>
               </motion.div>
             </div>
@@ -637,14 +620,16 @@ export default function ReportsManager() {
   );
 }
 
-function KPICard({ label, value, color, icon: Icon, glow }: any) {
+function KPICard({ label, value, color, icon: Icon, glow, isCurrency = true }: any) {
   return (
     <div className={cn("relative bg-[#09090b] border border-zinc-800 p-5 rounded-2xl overflow-hidden transition-all duration-500 hover:border-zinc-700 group", glow && "border-primary/30 shadow-[0_0_30px_-10px_rgba(255,95,31,0.15)]")}>
       <div className="flex justify-between items-start mb-2">
         <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">{label}</span>
         <Icon size={14} className={cn(color, "opacity-40 group-hover:opacity-100 transition-opacity")} />
       </div>
-      <p className={cn("text-xl font-black font-mono tracking-tighter truncate", color)}>{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+      <p className={cn("text-xl font-black font-mono tracking-tighter truncate", color)}>
+        {isCurrency ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : value}
+      </p>
       {glow && <div className="absolute -bottom-4 -right-4 w-12 h-12 bg-primary/20 blur-2xl rounded-full" />}
     </div>
   );
@@ -658,6 +643,3 @@ function EmptyState({ icon: Icon, text }: any) {
     </div>
   );
 }
-
-const labelClass = "text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1 mb-1.5 block";
-const inputClass = "w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none transition-all";
