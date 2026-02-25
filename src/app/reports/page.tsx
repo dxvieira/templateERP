@@ -35,13 +35,16 @@ import {
   Receipt,
   Search,
   ChevronRight,
-  ArrowUpRight
+  ArrowUpRight,
+  AlertTriangle
 } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { cn } from '@/lib/utils';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 // --- COMPONENTES AUXILIARES ---
 
@@ -69,11 +72,16 @@ function ReportsContent() {
   const { toast } = useToast();
   
   // --- ESTADOS ---
-  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [selectedMonth, setSelectedMonth] = useState('');
   const [activeTab, setActiveTab] = useState<'cashflow' | 'payable'>('cashflow');
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [isPayableModalOpen, setIsPayableModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Evitar erro de hidratação definindo a data inicial após a montagem
+  useEffect(() => {
+    setSelectedMonth(format(new Date(), 'yyyy-MM'));
+  }, []);
 
   // Form states
   const [entryForm, setEntryForm] = useState({ description: '', amount: 0, type: 'income', date: format(new Date(), 'yyyy-MM-dd'), method: 'Caixa Interno' });
@@ -101,6 +109,7 @@ function ReportsContent() {
 
   // --- CÁLCULOS DINÂMICOS ---
   const metrics = useMemo(() => {
+    if (!selectedMonth) return { entradas: 0, saidas: 0, saldo: 0, aReceberGlobal: 0, contasPagarGlobal: 0 };
     const start = startOfMonth(parseISO(`${selectedMonth}-01`));
     const end = endOfMonth(start);
 
@@ -113,7 +122,6 @@ function ReportsContent() {
     orders?.forEach(order => {
       const installments = Array.isArray(order.installments) ? order.installments : [];
       
-      // Entradas no mês selecionado
       installments.forEach((inst: any) => {
         if (inst.status === 'paid' && inst.paid_date) {
           try {
@@ -125,7 +133,6 @@ function ReportsContent() {
         }
       });
 
-      // Global A Receber
       const total = Number(order.total_value || order.totalValue) || 0;
       const paid = Number(order.amount_paid || order.amountPaid) || 0;
       if (total > paid) {
@@ -151,140 +158,161 @@ function ReportsContent() {
       }
     });
 
-    return {
-      entradas,
-      saidas,
-      saldo: entradas - saidas,
-      aReceberGlobal,
-      contasPagarGlobal
-    };
+    return { entradas, saidas, saldo: entradas - saidas, aReceberGlobal, contasPagarGlobal };
   }, [orders, cashflowManual, payables, selectedMonth]);
 
   const unifiedTransactions = useMemo(() => {
+    if (!selectedMonth) return [];
     const start = startOfMonth(parseISO(`${selectedMonth}-01`));
     const end = endOfMonth(start);
     const list: any[] = [];
 
-    // Parcelas de Pedidos
     orders?.forEach(order => {
       const insts = Array.isArray(order.installments) ? order.installments : [];
       insts.forEach((inst: any) => {
         if (inst.status === 'paid' && inst.paid_date) {
-          const pDate = parseISO(inst.paid_date);
-          if (isWithinInterval(pDate, { start, end })) {
-            list.push({
-              id: `order-${order.id}-${inst.uid}`,
-              date: inst.paid_date,
-              description: `Pedido #${order.id.slice(-6)} - ${order.client} (${inst.id})`,
-              amount: inst.amount,
-              type: 'income',
-              origin: 'Sistema (OS)',
-              method: inst.payment_method || 'N/A',
-              isAutomatic: true
-            });
-          }
+          try {
+            const pDate = parseISO(inst.paid_date);
+            if (isWithinInterval(pDate, { start, end })) {
+              list.push({
+                id: `order-${order.id}-${inst.uid}`,
+                date: inst.paid_date,
+                description: `Pedido #${order.id.slice(-6)} - ${order.client} (${inst.id})`,
+                amount: inst.amount,
+                type: 'income',
+                origin: 'Sistema (OS)',
+                method: inst.payment_method || 'N/A',
+                isAutomatic: true
+              });
+            }
+          } catch (e) {}
         }
       });
     });
 
-    // Lançamentos Manuais
     cashflowManual?.forEach(entry => {
-      const entryDate = parseISO(entry.date);
-      if (isWithinInterval(entryDate, { start, end })) {
-        list.push({
-          ...entry,
-          origin: 'Manual',
-          isAutomatic: false
-        });
-      }
+      try {
+        const entryDate = parseISO(entry.date);
+        if (isWithinInterval(entryDate, { start, end })) {
+          list.push({
+            ...entry,
+            origin: 'Manual',
+            isAutomatic: false
+          });
+        }
+      } catch (e) {}
     });
 
     return list.sort((a, b) => b.date.localeCompare(a.date));
   }, [orders, cashflowManual, selectedMonth]);
 
-  // --- AÇÕES ---
+  // --- AÇÕES DE MUTATION (NON-BLOCKING) ---
+
+  const handleDeleteTransaction = useCallback((item: any) => {
+    if (item.isAutomatic) {
+      alert("⚠️ Lançamentos automáticos de OS devem ser removidos diretamente no pedido do cliente.");
+      return;
+    }
+    if (!window.confirm(`Deseja remover "${item.description}" permanentemente?`)) return;
+    if (!firestore || !item.id) return;
+
+    const docRef = doc(firestore, 'cashflow_manual', item.id);
+    
+    // Non-blocking delete
+    deleteDoc(docRef)
+      .then(() => toast({ title: "Lançamento Removido" }))
+      .catch(async (err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: docRef.path,
+          operation: 'delete'
+        }));
+      });
+  }, [firestore, toast]);
+
+  const handleDeletePayable = useCallback((payableId: string) => {
+    if (!window.confirm("Deseja remover este compromisso permanentemente?")) return;
+    if (!firestore) return;
+
+    const docRef = doc(firestore, 'accounts_payable', payableId);
+    
+    // Non-blocking delete
+    deleteDoc(docRef)
+      .then(() => toast({ title: "Conta Removida" }))
+      .catch(async (err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: docRef.path,
+          operation: 'delete'
+        }));
+      });
+  }, [firestore, toast]);
 
   const handleSaveEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore) return;
     setLoading(true);
-    try {
-      await addDoc(collection(firestore, 'cashflow_manual'), {
-        ...entryForm,
-        createdAt: serverTimestamp()
-      });
-      toast({ title: "Lançamento Concluído" });
-      setIsEntryModalOpen(false);
-    } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao salvar" });
-    } finally {
-      setLoading(false);
-    }
+    const payload = { ...entryForm, createdAt: serverTimestamp() };
+    addDoc(collection(firestore, 'cashflow_manual'), payload)
+      .then(() => {
+        toast({ title: "Lançamento Concluído" });
+        setIsEntryModalOpen(false);
+      })
+      .catch(async (err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: 'cashflow_manual',
+          operation: 'create',
+          requestResourceData: payload
+        }));
+      })
+      .finally(() => setLoading(false));
   };
 
   const handleSavePayable = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore) return;
     setLoading(true);
-    try {
-      await addDoc(collection(firestore, 'accounts_payable'), {
-        ...payableForm,
-        status: 'pending',
-        createdAt: serverTimestamp()
-      });
-      toast({ title: "Conta Registrada" });
-      setIsPayableModalOpen(false);
-    } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao salvar" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteTransaction = async (item: any) => {
-    if (item.isAutomatic) {
-      alert("⚠️ Lançamentos automáticos de OS devem ser removidos diretamente no pedido do cliente para manter a integridade fiscal.");
-      return;
-    }
-    if (!window.confirm("Deseja remover este lançamento manual?")) return;
-    if (!firestore) return;
-    try {
-      await deleteDoc(doc(firestore, 'cashflow_manual', item.id));
-      toast({ title: "Lançamento Removido" });
-    } catch (e) {
-      toast({ variant: "destructive", title: "Erro ao excluir" });
-    }
+    const payload = { ...payableForm, status: 'pending', createdAt: serverTimestamp() };
+    addDoc(collection(firestore, 'accounts_payable'), payload)
+      .then(() => {
+        toast({ title: "Conta Registrada" });
+        setIsPayableModalOpen(false);
+      })
+      .catch(async (err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: 'accounts_payable',
+          operation: 'create',
+          requestResourceData: payload
+        }));
+      })
+      .finally(() => setLoading(false));
   };
 
   const handlePayAccount = async (account: any) => {
     if (!firestore || !window.confirm(`Confirmar pagamento de ${account.amount.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}?`)) return;
     setLoading(true);
-    try {
-      const today = format(new Date(), 'yyyy-MM-dd');
-      
-      // 1. Atualizar status da conta
-      await updateDoc(doc(firestore, 'accounts_payable', account.id), {
-        status: 'paid',
-        paidDate: today
-      });
-
-      // 2. Criar saída no fluxo de caixa
-      await addDoc(collection(firestore, 'cashflow_manual'), {
-        description: `Pagamento: ${account.supplier} - ${account.description}`,
-        amount: account.amount,
-        type: 'expense',
-        date: today,
-        method: 'Saída Bancária',
-        origin: 'Pagamento de Conta',
-        createdAt: serverTimestamp()
-      });
-
-      toast({ title: "Conta Liquidada e Baixada no Caixa" });
-    } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao processar pagamento" });
-    } finally {
-      setLoading(false);
-    }
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const accountRef = doc(firestore, 'accounts_payable', account.id);
+    
+    updateDoc(accountRef, { status: 'paid', paidDate: today })
+      .then(() => {
+        // Criar saída automática
+        addDoc(collection(firestore, 'cashflow_manual'), {
+          description: `Pagamento: ${account.supplier} - ${account.description}`,
+          amount: account.amount,
+          type: 'expense',
+          date: today,
+          method: 'Saída Bancária',
+          origin: 'Pagamento de Conta',
+          createdAt: serverTimestamp()
+        });
+        toast({ title: "Conta Liquidada" });
+      })
+      .catch(async (err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: accountRef.path,
+          operation: 'update'
+        }));
+      })
+      .finally(() => setLoading(false));
   };
 
   const exportCSV = () => {
@@ -315,7 +343,6 @@ function ReportsContent() {
       <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-8 mt-16 md:mt-0 pb-24 relative">
         <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full" />
         
-        {/* HEADER TÁTICO */}
         <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 border-b border-white/5 pb-8 relative z-10">
           <div className="space-y-1">
              <div className="flex items-center gap-2 mb-2">
@@ -346,7 +373,6 @@ function ReportsContent() {
           </div>
         </header>
 
-        {/* DASHBOARD DE KPIs */}
         <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 relative z-10">
           <KPICard title="Entradas" value={metrics.entradas} icon={TrendingUp} color="#4ade80" subtext="No mês selecionado" />
           <KPICard title="Saídas" value={metrics.saidas} icon={TrendingDown} color="#ef4444" subtext="No mês selecionado" />
@@ -355,39 +381,25 @@ function ReportsContent() {
           <KPICard title="Contas a Pagar" value={metrics.contasPagarGlobal} icon={AlertCircle} color="#f43f5e" subtext="Dívida aberta" />
         </section>
 
-        {/* NAVEGAÇÃO DE ABAS */}
         <nav className="flex items-center gap-1 p-1 bg-[#0c0c0e] border border-zinc-800 w-fit rounded-2xl relative z-10">
           <button 
             onClick={() => setActiveTab('cashflow')}
-            className={cn(
-              "px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
-              activeTab === 'cashflow' ? "bg-primary text-black shadow-lg" : "text-zinc-500 hover:text-white"
-            )}
+            className={cn("px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", activeTab === 'cashflow' ? "bg-primary text-black shadow-lg" : "text-zinc-500 hover:text-white")}
           >
             Fluxo de Caixa
           </button>
           <button 
             onClick={() => setActiveTab('payable')}
-            className={cn(
-              "px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
-              activeTab === 'payable' ? "bg-primary text-black shadow-lg" : "text-zinc-500 hover:text-white"
-            )}
+            className={cn("px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", activeTab === 'payable' ? "bg-primary text-black shadow-lg" : "text-zinc-500 hover:text-white")}
           >
             Contas a Pagar
           </button>
         </nav>
 
-        {/* CONTEÚDO DAS ABAS */}
         <div className="relative z-10">
           <AnimatePresence mode='wait'>
             {activeTab === 'cashflow' ? (
-              <motion.section 
-                key="cashflow" 
-                initial={{ opacity: 0, y: 10 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-6"
-              >
+              <motion.section key="cashflow" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                 <div className="flex justify-between items-center">
                    <h3 className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.4em] flex items-center gap-2">
                      <ArrowRightLeft size={14} /> Histórico Consolidado
@@ -425,21 +437,16 @@ function ReportsContent() {
                              </div>
 
                              <div className="flex items-center gap-10 w-full md:w-auto justify-between md:justify-end">
-                                <div className={cn(
-                                  "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border",
-                                  item.type === 'income' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"
-                                )}>
+                                <div className={cn("px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border", item.type === 'income' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20")}>
                                   {item.type === 'income' ? 'Entrada' : 'Saída'}
                                 </div>
-                                <span className={cn(
-                                  "text-lg font-black tracking-tighter",
-                                  item.type === 'income' ? "text-white" : "text-zinc-400"
-                                )}>
+                                <span className={cn("text-lg font-black tracking-tighter", item.type === 'income' ? "text-white" : "text-zinc-400")}>
                                   {item.type === 'income' ? '+' : '-'} {Number(item.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                 </span>
                                 <button 
                                   onClick={() => handleDeleteTransaction(item)}
-                                  className="p-2 text-zinc-700 hover:text-red-500 transition-colors"
+                                  className="p-2 text-zinc-600 hover:text-red-500 transition-all hover:bg-red-500/10 rounded-lg"
+                                  title="Remover Registro"
                                 >
                                   <Trash2 size={18} />
                                 </button>
@@ -451,13 +458,7 @@ function ReportsContent() {
                 </div>
               </motion.section>
             ) : (
-              <motion.section 
-                key="payable" 
-                initial={{ opacity: 0, y: 10 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-6"
-              >
+              <motion.section key="payable" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                 <div className="flex justify-between items-center">
                    <h3 className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.4em] flex items-center gap-2">
                      <Receipt size={14} /> Pauta de Pagamentos
@@ -485,11 +486,7 @@ function ReportsContent() {
                           return (
                             <div key={p.id} className="group flex flex-col md:flex-row items-center justify-between p-5 border-b border-zinc-800/50 hover:bg-zinc-900/40 transition-all gap-4">
                                <div className="flex items-center gap-6 w-full md:w-auto">
-                                  <div className={cn(
-                                    "text-center min-w-[60px] p-2 rounded-xl border transition-colors",
-                                    isPaid ? "bg-emerald-500/10 border-emerald-500/20" : 
-                                    isLate ? "bg-red-500/10 border-red-500/20" : "bg-zinc-900 border-zinc-800"
-                                  )}>
+                                  <div className={cn("text-center min-w-[60px] p-2 rounded-xl border transition-colors", isPaid ? "bg-emerald-500/10 border-emerald-500/20" : isLate ? "bg-red-500/10 border-red-500/20" : "bg-zinc-900 border-zinc-800")}>
                                      <span className="text-[10px] font-black text-zinc-500 uppercase block">{format(parseISO(p.dueDate), 'MMM', { locale: ptBR })}</span>
                                      <span className={cn("text-xl font-black", isPaid ? "text-emerald-500" : isLate ? "text-red-500" : "text-white")}>{format(parseISO(p.dueDate), 'dd')}</span>
                                   </div>
@@ -513,8 +510,9 @@ function ReportsContent() {
                                        </button>
                                      )}
                                      <button 
-                                      onClick={() => deleteDoc(doc(firestore!, 'accounts_payable', p.id))}
-                                      className="p-2 text-zinc-700 hover:text-red-500 transition-colors"
+                                      onClick={() => handleDeletePayable(p.id)}
+                                      className="p-2 text-zinc-600 hover:text-red-500 transition-all hover:bg-red-500/10 rounded-lg"
+                                      title="Excluir Conta"
                                      >
                                        <Trash2 size={18} />
                                      </button>
@@ -531,7 +529,7 @@ function ReportsContent() {
           </AnimatePresence>
         </div>
 
-        {/* MODAL: NOVO LANÇAMENTO MANUAL */}
+        {/* MODAIS */}
         <AnimatePresence>
            {isEntryModalOpen && (
              <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" onClick={() => setIsEntryModalOpen(false)}>
@@ -576,7 +574,6 @@ function ReportsContent() {
            )}
         </AnimatePresence>
 
-        {/* MODAL: NOVA CONTA A PAGAR */}
         <AnimatePresence>
            {isPayableModalOpen && (
              <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" onClick={() => setIsPayableModalOpen(false)}>
