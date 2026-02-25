@@ -151,6 +151,58 @@ export default function ReportsManager() {
 
   // --- FUNÇÕES DE AÇÃO ---
 
+  const handleExportCSV = () => {
+    if (!transactions || transactions.length === 0) {
+      alert("Não há dados para exportar neste mês.");
+      return;
+    }
+
+    // 1. Calcula o Saldo Total
+    let totalEntradas = 0;
+    let totalSaidas = 0;
+
+    transactions.forEach(t => {
+      const valor = Number(t.amount) || 0;
+      if (t.type === 'income') totalEntradas += valor;
+      if (t.type === 'expense') totalSaidas += valor;
+    });
+    const saldoTotal = totalEntradas - totalSaidas;
+
+    // 2. Monta o Cabeçalho (O \uFEFF garante os acentos no Excel)
+    let csvContent = "\uFEFF";
+    csvContent += "DATA;DESCRIÇÃO;ORIGEM;TIPO;VALOR\n";
+
+    // 3. Monta as Linhas
+    transactions.forEach(t => {
+      let dataFormatada = t.date;
+      if (t.date && t.date.includes('-')) {
+        const [ano, mes, dia] = t.date.split('-');
+        dataFormatada = `${dia}/${mes}/${ano}`;
+      }
+
+      const desc = (t.description || '').replace(/\n/g, ' '); 
+      const valorStr = Number(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const tipoStr = t.type === 'income' ? 'Entrada' : 'Saída';
+
+      csvContent += `${dataFormatada};${desc};${t.origin || '-'};${tipoStr};R$ ${valorStr}\n`;
+    });
+
+    // 4. Linha Final de Saldo
+    csvContent += ";;;;\n"; // Linha em branco para separar
+    const saldoFinalStr = saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    csvContent += `;;;SALDO TOTAL:;R$ ${saldoFinalStr}\n`;
+
+    // 5. Gera o Download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `fluxo_de_caixa_${selectedMonth}_${new Date().getTime()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleGenerateInstallments = () => {
     const total = Number(payableFormData.amountTotal);
     const count = Number(payableFormData.installments);
@@ -292,6 +344,13 @@ export default function ReportsManager() {
           </div>
 
           <div className="flex items-center gap-4 w-full md:w-auto">
+             <button 
+               onClick={handleExportCSV}
+               className="flex items-center gap-2 px-4 py-3 border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+               title="Exportar Fluxo do Mês (CSV)"
+             >
+               <Download size={16} /> EXPORTAR CSV
+             </button>
              <div className="relative group flex-1 md:flex-initial">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" size={16} />
                 <input 
@@ -358,7 +417,7 @@ export default function ReportsManager() {
                      <button 
                        type="button"
                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setItemToDelete(t); }} 
-                       className="relative z-50 p-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all border border-red-500/20 pointer-events-auto cursor-pointer"
+                       className="relative z-50 p-3 bg-red-500/10 text-red-500 hover:bg-red-500/80 hover:text-white rounded-xl transition-all border border-red-500/20 pointer-events-auto cursor-pointer"
                      >
                        <Trash2 size={16}/>
                      </button>
