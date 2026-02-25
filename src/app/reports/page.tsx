@@ -34,7 +34,7 @@ export default function ReportsManager() {
 
   // Formulário Fluxo Manual
   const [cashflowFormData, setCashflowFormData] = useState({
-    description: '', amount: '', type: 'income', date: format(new Date(), 'yyyy-MM-dd')
+    description: '', amount: '', type: 'income', date: format(new Date(), 'yyyy-MM-dd'), method: 'Pix'
   });
 
   // Formulário Contas a Pagar
@@ -98,6 +98,7 @@ export default function ReportsManager() {
                 description: `OS #${order.id.slice(-6)} - ${order.client}`,
                 type: 'income',
                 amount: amount,
+                method: inst.payment_method || inst.paymentMethod || inst.type || 'Sistema',
                 origin: 'SISTEMA (OS)',
                 originalId: order.id
               });
@@ -122,7 +123,8 @@ export default function ReportsManager() {
             description: entry.description,
             type: entry.type,
             amount: amount,
-            origin: 'MANUAL'
+            method: entry.method || entry.payment_method || 'Manual',
+            origin: entry.origin || 'MANUAL'
           });
         }
       } catch (e) {}
@@ -157,7 +159,6 @@ export default function ReportsManager() {
       return;
     }
 
-    // 1. Calcula o Saldo Total
     let totalEntradas = 0;
     let totalSaidas = 0;
 
@@ -168,11 +169,9 @@ export default function ReportsManager() {
     });
     const saldoTotal = totalEntradas - totalSaidas;
 
-    // 2. Monta o Cabeçalho (O \uFEFF garante os acentos no Excel)
     let csvContent = "\uFEFF";
-    csvContent += "DATA;DESCRIÇÃO;ORIGEM;TIPO;VALOR\n";
+    csvContent += "DATA;DESCRIÇÃO;FORMA DE PAGAMENTO;TIPO;VALOR\n";
 
-    // 3. Monta as Linhas
     transactions.forEach(t => {
       let dataFormatada = t.date;
       if (t.date && t.date.includes('-')) {
@@ -183,16 +182,15 @@ export default function ReportsManager() {
       const desc = (t.description || '').replace(/\n/g, ' '); 
       const valorStr = Number(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const tipoStr = t.type === 'income' ? 'Entrada' : 'Saída';
+      const formaPgto = t.method || t.payment_method || '-';
 
-      csvContent += `${dataFormatada};${desc};${t.origin || '-'};${tipoStr};R$ ${valorStr}\n`;
+      csvContent += `${dataFormatada};${desc};${formaPgto};${tipoStr};R$ ${valorStr}\n`;
     });
 
-    // 4. Linha Final de Saldo
-    csvContent += ";;;;\n"; // Linha em branco para separar
+    csvContent += ";;;;\n"; 
     const saldoFinalStr = saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     csvContent += `;;;SALDO TOTAL:;R$ ${saldoFinalStr}\n`;
 
-    // 5. Gera o Download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -260,12 +258,13 @@ export default function ReportsManager() {
         paymentDate: new Date().toISOString()
       });
 
-      // 2. Injetar saída no fluxo de caixa manual
+      // 2. Injetar saída no fluxo de caixa manual (mantendo o método de pagamento)
       await addDoc(collection(firestore, 'cashflow_manual'), {
         description: `PGTO: ${itemToPay.supplier || itemToPay.description || 'Conta'}`,
         amount: Number(itemToPay.amount),
         type: 'expense',
         date: format(new Date(), 'yyyy-MM-dd'),
+        method: itemToPay.method || 'Boleto',
         origin: 'CONTAS A PAGAR',
         createdAt: serverTimestamp(),
         userId: user.uid
@@ -405,7 +404,7 @@ export default function ReportsManager() {
                      <div className="min-w-0">
                         <p className="text-sm font-bold text-white uppercase truncate">{t.description}</p>
                         <div className="flex items-center gap-3 mt-1">
-                           <span className="text-[8px] font-black uppercase text-zinc-600 tracking-widest bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">{t.origin}</span>
+                           <span className="text-[8px] font-black uppercase text-zinc-600 tracking-widest bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">{t.method}</span>
                            <span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded-full border", t.type === 'income' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20")}>{t.type === 'income' ? 'Entrada' : 'Saída'}</span>
                         </div>
                      </div>
@@ -532,11 +531,23 @@ export default function ReportsManager() {
                       <input type="date" required value={cashflowFormData.date} onChange={e => setCashflowFormData({...cashflowFormData, date: e.target.value})} className={inputClass} />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className={labelClass}>Fluxo</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button type="button" onClick={() => setCashflowFormData({...cashflowFormData, type: 'income'})} className={cn("py-4 rounded-2xl border-2 font-black uppercase text-[10px] tracking-widest transition-all", cashflowFormData.type === 'income' ? "border-emerald-500 bg-emerald-500/10 text-emerald-500" : "border-zinc-800 text-zinc-500")}>Entrada</button>
-                      <button type="button" onClick={() => setCashflowFormData({...cashflowFormData, type: 'expense'})} className={cn("py-4 rounded-2xl border-2 font-black uppercase text-[10px] tracking-widest transition-all", cashflowFormData.type === 'expense' ? "border-red-500 bg-red-500/10 text-red-500" : "border-zinc-800 text-zinc-500")}>Saída</button>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className={labelClass}>Forma de Pgto</label>
+                      <select value={cashflowFormData.method} onChange={e => setCashflowFormData({...cashflowFormData, method: e.target.value})} className={inputClass}>
+                        <option value="Pix">Pix</option>
+                        <option value="Dinheiro">Dinheiro</option>
+                        <option value="Cartão">Cartão</option>
+                        <option value="Boleto">Boleto</option>
+                        <option value="Transferência">Transferência</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className={labelClass}>Fluxo</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button type="button" onClick={() => setCashflowFormData({...cashflowFormData, type: 'income'})} className={cn("py-2.5 rounded-xl border-2 font-black uppercase text-[8px] tracking-widest transition-all", cashflowFormData.type === 'income' ? "border-emerald-500 bg-emerald-500/10 text-emerald-500" : "border-zinc-800 text-zinc-500")}>Entrada</button>
+                        <button type="button" onClick={() => setCashflowFormData({...cashflowFormData, type: 'expense'})} className={cn("py-2.5 rounded-xl border-2 font-black uppercase text-[8px] tracking-widest transition-all", cashflowFormData.type === 'expense' ? "border-red-500 bg-red-500/10 text-red-500" : "border-zinc-800 text-zinc-500")}>Saída</button>
+                      </div>
                     </div>
                   </div>
                   <button disabled={isSubmitting} className="w-full py-5 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_5px_25px_-5px_rgba(255,95,31,0.5)] active:scale-95 transition-all flex items-center justify-center gap-2">
@@ -572,14 +583,26 @@ export default function ReportsManager() {
                       <input value={payableFormData.description} onChange={e => setPayableFormData({...payableFormData, description: e.target.value})} className={inputClass} placeholder="Ex: Compra de Acrílicos" />
                     </div>
                     <div className="space-y-2">
-                      <label className={labelClass}>Valor Total (R$)</label>
-                      <input type="number" step="0.01" value={payableFormData.amountTotal} onChange={e => setPayableFormData({...payableFormData, amountTotal: e.target.value})} className={inputClass} />
+                      <label className={labelClass}>Forma de Pagamento</label>
+                      <select value={payableFormData.method} onChange={e => setPayableFormData({...payableFormData, method: e.target.value})} className={inputClass}>
+                        <option value="Boleto">Boleto</option>
+                        <option value="Cartão">Cartão</option>
+                        <option value="Pix">Pix</option>
+                        <option value="Dinheiro">Dinheiro</option>
+                        <option value="Transferência">Transferência</option>
+                      </select>
                     </div>
-                    <div className="space-y-2">
-                      <label className={labelClass}>Nº de Parcelas</label>
-                      <div className="flex gap-2">
-                        <input type="number" min={1} value={payableFormData.installments} onChange={e => setPayableFormData({...payableFormData, installments: Number(e.target.value)})} className={inputClass} />
-                        <button onClick={handleGenerateInstallments} className="bg-white text-black px-4 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-primary transition-all">Gerar</button>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className={labelClass}>Valor Total (R$)</label>
+                        <input type="number" step="0.01" value={payableFormData.amountTotal} onChange={e => setPayableFormData({...payableFormData, amountTotal: e.target.value})} className={inputClass} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className={labelClass}>Nº Parcelas</label>
+                        <div className="flex gap-2">
+                          <input type="number" min={1} value={payableFormData.installments} onChange={e => setPayableFormData({...payableFormData, installments: Number(e.target.value)})} className={inputClass} />
+                          <button onClick={handleGenerateInstallments} className="bg-white text-black px-4 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-primary transition-all">Gerar</button>
+                        </div>
                       </div>
                     </div>
                   </div>
