@@ -4,9 +4,9 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  BarChart3, Wallet, TrendingUp, TrendingDown, Plus, Trash2, Loader2, 
-  X, RefreshCw, Download, ArrowLeft, ArrowRight,
-  Package, Edit, Info, Clock, CheckCircle2, AlertTriangle, Calendar as CalendarIcon, ArrowDownLeft,
+  BarChart3, Wallet, TrendingUp, Plus, Trash2, Loader2, 
+  X, RefreshCw, ArrowLeft, ArrowRight,
+  Package, Edit, Clock, CheckCircle2, AlertTriangle, Calendar as CalendarIcon,
   DollarSign
 } from 'lucide-react';
 import { startOfMonth, endOfMonth, format, isWithinInterval, parseISO, addMonths, subMonths, isBefore, isSameDay, isValid } from 'date-fns';
@@ -30,19 +30,7 @@ export default function ReportsManagerPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(''); 
   
-  // --- ESTADOS DE LANÇAMENTO (LIVRO-CAIXA) ---
-  const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
-  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
-  const [entryForm, setEntryForm] = useState({
-    description: '', 
-    amount: '', 
-    type: 'income' as 'income' | 'expense', 
-    date: '', 
-    account: 'Caixa Interno', 
-    method: 'Dinheiro/Pix'
-  });
-
-  // --- ESTADOS DE CONTAS A PAGAR (GERADOR DE PARCELAS) ---
+  // --- ESTADOS DE CONTAS A PAGAR ---
   const [isPayableModalOpen, setIsPayableModalOpen] = useState(false);
   const [editingPayableId, setEditingPayableId] = useState<string | null>(null);
   const [payableForm, setPayableForm] = useState({
@@ -58,7 +46,6 @@ export default function ReportsManagerPage() {
     setIsMounted(true);
     const now = new Date();
     setSelectedMonth(format(now, 'yyyy-MM'));
-    setEntryForm(prev => ({ ...prev, date: format(now, 'yyyy-MM-dd') }));
   }, []);
 
   // --- QUERIES ---
@@ -67,18 +54,12 @@ export default function ReportsManagerPage() {
     return query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
   }, [firestore, user]);
 
-  const manualCashflowQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return query(collection(firestore, 'cashflow_manual'), orderBy('date', 'desc'));
-  }, [firestore, user]);
-
   const accountsPayableQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collection(firestore, 'accounts_payable'), orderBy('dueDate', 'asc'));
   }, [firestore, user]);
 
   const { data: orders, isLoading: loadingOrders } = useCollection(ordersQuery);
-  const { data: manualEntries, isLoading: loadingManual } = useCollection(manualCashflowQuery);
   const { data: payables, isLoading: loadingPayables } = useCollection(accountsPayableQuery);
 
   // --- LÓGICA DE DATAS ---
@@ -121,105 +102,25 @@ export default function ReportsManagerPage() {
     });
   }, [orders, dateRange, selectedMonth]);
 
-  // --- LIVRO-CAIXA ---
-  const transactions = useMemo(() => {
-    if (!orders || !manualEntries || !selectedMonth) return [];
-    const result: any[] = [];
-
-    orders.forEach(order => {
-      const installments = Array.isArray(order.installments) ? order.installments : [];
-      installments.forEach(inst => {
-        if (inst.status === 'paid' && inst.paid_date) {
-          try {
-            const paidDate = parseISO(inst.paid_date);
-            if (isWithinInterval(paidDate, { start: dateRange.start, end: dateRange.end })) {
-              result.push({
-                id: inst.uid || `${order.id}-${inst.id}`,
-                date: inst.paid_date,
-                description: `Recebimento OS #${order.id.slice(-6)} - ${order.client}`,
-                type: 'income',
-                method: inst.type || 'Cartão',
-                account: inst.payment_method || 'Indefinido',
-                amount: Number(inst.amount) || 0,
-                isAuto: true
-              });
-            }
-          } catch (e) {}
-        }
-      });
-    });
-
-    manualEntries.forEach(entry => {
-      if (entry.date) {
-        try {
-          const entryDate = parseISO(entry.date);
-          if (isWithinInterval(entryDate, { start: dateRange.start, end: dateRange.end })) {
-            result.push({ ...entry, isAuto: false });
-          }
-        } catch (e) {}
-      }
-    });
-
-    return result.sort((a, b) => b.date.localeCompare(a.date));
-  }, [orders, manualEntries, dateRange, selectedMonth]);
-
   // --- CÁLCULO DOS KPIs ---
   const kpiMetrics = useMemo(() => {
-    const income = transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-    const expense = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-    const pending = sortedOrders.reduce((acc, o) => {
+    // Valor recebido apenas de ordens do período
+    const incomeFromOrders = sortedOrders.reduce((acc, o) => acc + (Number(o.amount_paid || o.amountPaid || 0)), 0);
+    
+    // Valor pendente de ordens
+    const pendingFromOrders = sortedOrders.reduce((acc, o) => {
       const total = Number(o.total_value || o.totalValue || 0);
       const paid = Number(o.amount_paid || o.amountPaid || 0);
       return acc + Math.max(0, total - paid);
     }, 0);
+
+    // Contas a pagar pendentes (Total geral pendente)
     const payableTotal = (payables || [])
       .filter(p => p.status === 'pending')
       .reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
 
-    return { income, expense, balance: income - expense, pending, payableTotal };
-  }, [transactions, sortedOrders, payables]);
-
-  // --- CONCENTRAÇÃO DE CAPITAL ---
-  const accountsSummary = useMemo(() => {
-    const accounts: Record<string, any> = {
-      'CAIXA INTERNO': { label: 'CAIXA INTERNO', value: 0, color: '#10b981', type: 'Dinheiro', icon: '💵' },
-      'SICOOB LINDOIA': { label: 'SICOOB LINDÓIA', value: 0, color: '#0ea5e9', type: 'Banco', icon: '🏦' },
-      'SICOOB SERRA NEGRA': { label: 'SICOOB SERRA NEGRA', value: 0, color: '#3b82f6', type: 'Banco', icon: '🏦' },
-      'PAGBANK': { label: 'PAGBANK', value: 0, color: '#eab308', type: 'Máquina', icon: '💳' },
-      'SIPAG': { label: 'SIPAG / SICOOB', value: 0, color: '#f97316', type: 'Máquina', icon: '💳' },
-    };
-    let totalEmCaixa = 0;
-    transactions.forEach(tx => {
-      if (tx.type === 'income') {
-        const method = String(tx.account || '').toUpperCase();
-        let targetKey = 'CAIXA INTERNO';
-        if (method.includes('PAGBANK')) targetKey = 'PAGBANK';
-        else if (method.includes('SIPAG')) targetKey = 'SIPAG';
-        else if (method.includes('LINDÓIA') || method.includes('LINDOIA')) targetKey = 'SICOOB LINDOIA';
-        else if (method.includes('SERRA NEGRA')) targetKey = 'SICOOB SERRA NEGRA';
-        if (accounts[targetKey]) {
-          accounts[targetKey].value += tx.amount;
-          totalEmCaixa += tx.amount;
-        }
-      }
-    });
-    return { items: Object.values(accounts).sort((a, b) => b.value - a.value), total: totalEmCaixa };
-  }, [transactions]);
-
-  // --- LÓGICA DE EXCLUSÃO (BLINDADA) ---
-  const handleDeleteTransaction = useCallback(async (id: string) => {
-    if (!firestore || !id) return;
-    if (!window.confirm("Deseja realmente excluir este lançamento? Esta ação é irreversível e afetará seu saldo atual.")) return;
-
-    try {
-      const docRef = doc(firestore, 'cashflow_manual', id);
-      await deleteDoc(docRef);
-      toast({ title: "Registro Removido", description: "O item foi excluído do banco de dados." });
-    } catch (error: any) {
-      console.error("Erro ao excluir do fluxo de caixa:", error);
-      alert("Erro ao excluir: " + error.message);
-    }
-  }, [firestore, toast]);
+    return { incomeFromOrders, pendingFromOrders, payableTotal };
+  }, [sortedOrders, payables]);
 
   const handleDeletePayable = useCallback(async (id: string) => {
     if (!firestore || !id) return;
@@ -228,53 +129,18 @@ export default function ReportsManagerPage() {
     try {
       const docRef = doc(firestore, 'accounts_payable', id);
       await deleteDoc(docRef);
-      toast({ title: "Boleto Removido", description: "O registro foi deletado com sucesso." });
+      toast({ title: "Boleto Removido" });
     } catch (error: any) {
       console.error("Erro ao excluir conta a pagar:", error);
       alert("Erro ao excluir: " + error.message);
     }
   }, [firestore, toast]);
 
-  // --- LANÇAMENTOS E PAGAMENTOS ---
-  const handleSaveEntry = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!firestore || !user) return;
-    const payload = {
-      ...entryForm,
-      amount: Number(entryForm.amount),
-      updatedAt: serverTimestamp(),
-      ...(editingEntryId ? {} : { createdAt: serverTimestamp() })
-    };
-    const docRef = editingEntryId ? doc(firestore, 'cashflow_manual', editingEntryId) : doc(collection(firestore, 'cashflow_manual'));
-    setDoc(docRef, { ...payload, id: docRef.id }, { merge: true })
-      .then(() => {
-        toast({ title: editingEntryId ? "Lançamento Atualizado" : "Lançamento Registrado" });
-        setIsEntryModalOpen(false);
-        setEditingEntryId(null);
-        setEntryForm({
-          description: '', amount: '', type: 'income', date: format(new Date(), 'yyyy-MM-dd'), account: 'Caixa Interno', method: 'Dinheiro/Pix'
-        });
-      })
-      .catch(err => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: 'cashflow_manual', operation: editingEntryId ? 'update' : 'create', requestResourceData: payload
-        }));
-      });
-  };
-
   const handlePayAccount = async (payable: any) => {
     if (!firestore || !user) return;
     const payableRef = doc(firestore, 'accounts_payable', payable.id);
-    const cashflowRef = doc(collection(firestore, 'cashflow_manual'));
-    const cashflowPayload = {
-      id: cashflowRef.id,
-      description: `PGTO: ${payable.description} ${payable.supplier ? `(${payable.supplier})` : ''}`,
-      amount: Number(payable.amount), type: 'expense', date: format(new Date(), 'yyyy-MM-dd'),
-      account: 'Caixa Interno', method: 'Boleto', createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-    };
     try {
       await setDoc(payableRef, { status: 'paid', updatedAt: serverTimestamp() }, { merge: true });
-      await setDoc(cashflowRef, cashflowPayload);
       toast({ title: "Pagamento Confirmado" });
     } catch (err) {
       errorEmitter.emit('permission-error', new FirestorePermissionError({ path: 'accounts_payable/pay', operation: 'update' }));
@@ -342,7 +208,7 @@ export default function ReportsManagerPage() {
     setSelectedMonth(format(next, 'yyyy-MM'));
   };
 
-  if (!isMounted || loadingOrders || loadingManual || loadingPayables) {
+  if (!isMounted || loadingOrders || loadingPayables) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -369,24 +235,20 @@ export default function ReportsManagerPage() {
             </h1>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
-            <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-              <button onClick={() => handleMonthNav('prev')} className="p-3 hover:bg-white/5 text-zinc-500 hover:text-white transition-colors border-r border-zinc-800"><ArrowLeft size={16}/></button>
-              <span className="px-6 py-2 text-xs font-black uppercase text-white tracking-widest min-w-[140px] text-center">
-                {selectedMonth ? format(parseISO(`${selectedMonth}-01`), 'MMMM yyyy') : '--'}
-              </span>
-              <button onClick={() => handleMonthNav('next')} className="p-3 hover:bg-white/5 text-zinc-500 hover:text-white transition-colors border-l border-zinc-800"><ArrowRight size={16}/></button>
-            </div>
+          <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+            <button onClick={() => handleMonthNav('prev')} className="p-3 hover:bg-white/5 text-zinc-500 hover:text-white transition-colors border-r border-zinc-800"><ArrowLeft size={16}/></button>
+            <span className="px-6 py-2 text-xs font-black uppercase text-white tracking-widest min-w-[140px] text-center">
+              {selectedMonth ? format(parseISO(`${selectedMonth}-01`), 'MMMM yyyy') : '--'}
+            </span>
+            <button onClick={() => handleMonthNav('next')} className="p-3 hover:bg-white/5 text-zinc-500 hover:text-white transition-colors border-l border-zinc-800"><ArrowRight size={16}/></button>
           </div>
         </header>
 
         {/* --- KPI GRID --- */}
-        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {[
-            { label: 'Receitas', val: kpiMetrics.income, color: '#4ade80', icon: TrendingUp },
-            { label: 'Despesas', val: kpiMetrics.expense, color: '#ef4444', icon: TrendingDown },
-            { label: 'Saldo Caixa', val: kpiMetrics.balance, color: '#FF5F1F', icon: Wallet },
-            { label: 'A Receber', val: kpiMetrics.pending, color: '#eab308', icon: Clock },
+            { label: 'Recebido (OS)', val: kpiMetrics.incomeFromOrders, color: '#4ade80', icon: TrendingUp },
+            { label: 'A Receber (OS)', val: kpiMetrics.pendingFromOrders, color: '#eab308', icon: Clock },
             { label: 'Contas a Pagar', val: kpiMetrics.payableTotal, color: '#ef4444', icon: AlertTriangle }
           ].map((kpi, i) => (
             <motion.div key={i} whileHover={{ y: -4 }} className="group relative bg-[#09090b] border border-zinc-800 rounded-3xl p-6 transition-all duration-300" style={{ borderBottomColor: `${kpi.color}40` }}>
@@ -402,7 +264,6 @@ export default function ReportsManagerPage() {
         <Tabs defaultValue="operacional" className="w-full">
           <TabsList className="bg-zinc-900/50 border border-zinc-800 mb-8 p-1">
             <TabsTrigger value="operacional" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-6 h-10">Monitor Operacional</TabsTrigger>
-            <TabsTrigger value="financeiro" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-6 h-10">Fluxo de Caixa</TabsTrigger>
             <TabsTrigger value="payable" className="data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-[10px] tracking-widest px-6 h-10">Contas a Pagar</TabsTrigger>
           </TabsList>
 
@@ -444,64 +305,6 @@ export default function ReportsManagerPage() {
             </div>
           </TabsContent>
 
-          {/* --- NOVO DESIGN: FLUXO DE CAIXA --- */}
-          <TabsContent value="financeiro" className="space-y-8">
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-               <div><h2 className="text-xl font-black text-white uppercase tracking-tight">Livro-Caixa Consolidado</h2><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Controle cronológico de entradas e saídas</p></div>
-               <div className="flex gap-3">
-                  <Button onClick={() => { setEditingEntryId(null); setIsEntryModalOpen(true); }} className="h-12 bg-primary text-black font-black uppercase text-[10px] tracking-widest px-6 rounded-2xl shadow-lg hover:bg-white transition-all"><Plus size={18} className="mr-2" /> Novo Lançamento</Button>
-               </div>
-            </div>
-
-            <div className="bg-[#0c0c0e] border border-zinc-800/50 rounded-2xl overflow-hidden shadow-2xl">
-               <div className="flex-1 overflow-y-auto custom-scrollbar max-h-[600px]">
-                  {transactions.length === 0 ? (
-                    <div className="p-20 text-center text-zinc-600 uppercase font-black text-[10px] tracking-[0.3em]"><Package size={40} className="mx-auto mb-4 opacity-10" /> Vazio Nominal</div>
-                  ) : (
-                    transactions.map((tx) => (
-                      <div key={tx.id} className="group flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border-b border-zinc-800/50 hover:bg-zinc-900/40 transition-colors duration-200 gap-4">
-                        <div className="flex items-center gap-4 min-w-0 flex-1">
-                           <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border", tx.type === 'income' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400')}>
-                              {tx.type === 'income' ? <TrendingUp size={18}/> : <TrendingDown size={18}/>}
-                           </div>
-                           <div className="min-w-0">
-                              <div className="flex items-center gap-2 mb-0.5">
-                                 <span className="text-zinc-100 font-bold text-sm uppercase truncate">{tx.description}</span>
-                                 {tx.isAuto && <span className="bg-zinc-800 text-zinc-500 text-[8px] px-1.5 py-0.5 rounded uppercase font-black border border-white/5">Auto</span>}
-                              </div>
-                              <div className="flex items-center gap-3 text-xs text-zinc-500 font-medium">
-                                 <span className="font-mono">{tx.date ? format(parseISO(tx.date), 'dd/MM/yyyy') : '--/--/--'}</span>
-                                 <span className="uppercase tracking-widest text-[9px] opacity-60">• {tx.account}</span>
-                              </div>
-                           </div>
-                        </div>
-
-                        <div className="flex items-center gap-6 self-end sm:self-auto">
-                           <div className="text-right">
-                              <span className={cn("text-lg font-black font-mono tracking-tighter", tx.type === 'income' ? 'text-emerald-400' : 'text-red-400')}>
-                                 {tx.type === 'income' ? '+' : '-'} {tx.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                              </span>
-                              <div className="text-[9px] text-zinc-600 uppercase font-black tracking-widest">{tx.method}</div>
-                           </div>
-                           <div className="flex gap-1">
-                              {!tx.isAuto ? (
-                                <>
-                                  <button onClick={() => { setEditingEntryId(tx.id); setEntryForm({...tx, amount: String(tx.amount)}); setIsEntryModalOpen(true); }} className="p-2 text-zinc-600 hover:text-white hover:bg-white/5 rounded-lg transition-all"><Edit size={16}/></button>
-                                  <button onClick={() => handleDeleteTransaction(tx.id)} className="p-2 text-zinc-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg cursor-pointer transition-all"><Trash2 size={16}/></button>
-                                </>
-                              ) : (
-                                <button onClick={() => toast({ title: "Segurança", description: "Estorne no pedido original." })} className="p-2 text-zinc-800 cursor-not-allowed"><Info size={16}/></button>
-                              )}
-                           </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-               </div>
-            </div>
-          </TabsContent>
-
-          {/* --- NOVO DESIGN: CONTAS A PAGAR --- */}
           <TabsContent value="payable" className="space-y-8">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
                <div><h2 className="text-xl font-black text-white uppercase tracking-tight">Pauta de Pagamentos</h2><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Gestão de boletos e fornecedores</p></div>
@@ -569,33 +372,6 @@ export default function ReportsManagerPage() {
             </div>
           </TabsContent>
         </Tabs>
-
-        {/* MODAL LANÇAMENTO MANUAL */}
-        <AnimatePresence>
-          {isEntryModalOpen && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm" onClick={() => { setIsEntryModalOpen(false); setEditingEntryId(null); }}>
-              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} className="bg-[#09090b] w-full max-w-md border border-zinc-800 rounded-3xl p-8 shadow-2xl">
-                <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-8">{editingEntryId ? 'Editar Lançamento' : 'Novo Lançamento Manual'}</h2>
-                <form onSubmit={handleSaveEntry} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-900 rounded-xl border border-zinc-800 mb-4">
-                     <button type="button" onClick={() => setEntryForm({...entryForm, type: 'income'})} className={cn("py-2 rounded-lg text-[10px] font-black uppercase transition-all", entryForm.type === 'income' ? "bg-emerald-500 text-black" : "text-zinc-500")}>Entrada</button>
-                     <button type="button" onClick={() => setEntryForm({...entryForm, type: 'expense'})} className={cn("py-2 rounded-lg text-[10px] font-black uppercase transition-all", entryForm.type === 'expense' ? "bg-red-500 text-white" : "text-zinc-500")}>Saída</button>
-                  </div>
-                  <div><label className={labelClass}>Descrição</label><input required value={entryForm.description} onChange={e => setEntryForm({...entryForm, description: e.target.value})} className={inputClass} /></div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><label className={labelClass}>Valor (R$)</label><input required type="number" step="0.01" value={entryForm.amount} onChange={e => setEntryForm({...entryForm, amount: e.target.value})} className={inputClass} /></div>
-                    <div><label className={labelClass}>Data</label><input required type="date" value={entryForm.date} onChange={e => setEntryForm({...entryForm, date: e.target.value})} className={inputClass} /></div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><label className={labelClass}>Modalidade</label><select value={entryForm.method} onChange={e => setEntryForm({...entryForm, method: e.target.value})} className={inputClass}>{['Dinheiro/Pix', 'Cartão', 'Boleto', 'Outros'].map(m => <option key={m} value={m}>{m}</option>)}</select></div>
-                    <div><label className={labelClass}>Conta</label><select value={entryForm.account} onChange={e => setEntryForm({...entryForm, account: e.target.value})} className={inputClass}>{['Caixa Interno', 'SICOOB - Lindóia', 'SICOOB - Serra Negra', 'Máquina PAGBANK', 'Máquina SIPAG'].map(a => <option key={a} value={a}>{a}</option>)}</select></div>
-                  </div>
-                  <div className="flex gap-3 pt-4"><button type="button" onClick={() => setIsEntryModalOpen(false)} className="flex-1 text-[10px] font-black uppercase text-zinc-500">Cancelar</button><Button type="submit" className="flex-[2] h-14 bg-primary text-black font-black uppercase rounded-2xl">{editingEntryId ? 'Atualizar' : 'Confirmar'}</Button></div>
-                </form>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
 
         {/* MODAL CONTAS A PAGAR */}
         <AnimatePresence>
