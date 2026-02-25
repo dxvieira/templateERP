@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -148,7 +147,7 @@ export default function ReportsManager() {
       return;
     }
 
-    if (!window.confirm("Deseja realmente DELETAR este lançamento manual do banco de dados?")) return;
+    if (!window.confirm("Deseja realmente DELETAR este lançamento do banco de dados?")) return;
 
     try {
       if (!firestore) {
@@ -311,7 +310,7 @@ export default function ReportsManager() {
                      onClick={(e) => {
                        e.preventDefault();
                        e.stopPropagation();
-                       console.log("CLIQUE REGISTRADO!", t);
+                       alert("O BOTÃO ESTÁ VIVO!");
                        handleDeleteTransaction(t.id, t.origin);
                      }}
                      className="relative z-50 flex items-center justify-center p-3 ml-4 bg-red-500/10 text-red-500 rounded-lg border border-red-500/20 hover:bg-red-500 hover:text-white transition-all cursor-pointer pointer-events-auto text-[10px] font-black uppercase tracking-widest"
