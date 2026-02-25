@@ -77,12 +77,10 @@ function ReportsContent() {
   const [isPayableModalOpen, setIsPayableModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Evitar erro de hidratação definindo a data inicial após a montagem
   useEffect(() => {
     setSelectedMonth(format(new Date(), 'yyyy-MM'));
   }, []);
 
-  // Form states
   const [entryForm, setEntryForm] = useState({ description: '', amount: 0, type: 'income', date: format(new Date(), 'yyyy-MM-dd'), method: 'Caixa Interno' });
   const [payableForm, setPayableForm] = useState({ description: '', supplier: '', amount: 0, category: 'Suprimentos', dueDate: format(new Date(), 'yyyy-MM-dd') });
 
@@ -117,10 +115,8 @@ function ReportsContent() {
     let aReceberGlobal = 0;
     let contasPagarGlobal = 0;
 
-    // 1. Processar Pedidos (Entradas Automáticas)
     orders?.forEach(order => {
       const installments = Array.isArray(order.installments) ? order.installments : [];
-      
       installments.forEach((inst: any) => {
         if (inst.status === 'paid' && inst.paid_date) {
           try {
@@ -131,15 +127,11 @@ function ReportsContent() {
           } catch (e) {}
         }
       });
-
       const total = Number(order.total_value || order.totalValue) || 0;
       const paid = Number(order.amount_paid || order.amountPaid) || 0;
-      if (total > paid) {
-        aReceberGlobal += (total - paid);
-      }
+      if (total > paid) aReceberGlobal += (total - paid);
     });
 
-    // 2. Processar Fluxo Manual
     cashflowManual?.forEach(entry => {
       try {
         const entryDate = parseISO(entry.date);
@@ -150,11 +142,8 @@ function ReportsContent() {
       } catch (e) {}
     });
 
-    // 3. Processar Contas a Pagar
     payables?.forEach(p => {
-      if (p.status !== 'paid') {
-        contasPagarGlobal += Number(p.amount) || 0;
-      }
+      if (p.status !== 'paid') contasPagarGlobal += Number(p.amount) || 0;
     });
 
     return { entradas, saidas, saldo: entradas - saidas, aReceberGlobal, contasPagarGlobal };
@@ -180,8 +169,7 @@ function ReportsContent() {
                 amount: inst.amount,
                 type: 'income',
                 origin: 'Sistema (OS)',
-                method: inst.payment_method || 'N/A',
-                isAutomatic: true
+                method: inst.payment_method || 'N/A'
               });
             }
           } catch (e) {}
@@ -193,11 +181,7 @@ function ReportsContent() {
       try {
         const entryDate = parseISO(entry.date);
         if (isWithinInterval(entryDate, { start, end })) {
-          list.push({
-            ...entry,
-            origin: 'Manual',
-            isAutomatic: false
-          });
+          list.push({ ...entry, origin: 'Manual' });
         }
       } catch (e) {}
     });
@@ -205,46 +189,42 @@ function ReportsContent() {
     return list.sort((a, b) => b.date.localeCompare(a.date));
   }, [orders, cashflowManual, selectedMonth]);
 
-  // --- AÇÕES DE EXCLUSÃO (BLINDADAS) ---
+  // --- AÇÕES CRUD BLINDADAS (ASYNC/AWAIT) ---
 
   const handleDeleteCashflowItem = async (id: string, origin: string) => {
-    // Trava de segurança para não corromper pedidos
     if (origin === 'Sistema (OS)' || origin === 'orders') {
       alert("⚠️ Esta entrada é automática de um pedido. Para removê-la, vá na página de Pedidos e desfaça o pagamento lá.");
       return;
     }
     
-    // Exclusão livre para lançamentos manuais / saídas
-    if (window.confirm("Tem certeza que deseja apagar definitivamente este lançamento do caixa?")) {
-      try {
-        if (!firestore) return;
-        await deleteDoc(doc(firestore, 'cashflow_manual', id));
-        toast({ title: "Lançamento Removido" });
-      } catch (error: any) {
-        console.error("Erro ao excluir do fluxo de caixa:", error);
-        alert("Erro ao excluir do banco de dados: " + (error.message || "Erro desconhecido"));
-        
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: `cashflow_manual/${id}`,
-          operation: 'delete'
-        }));
-      }
+    const confirmacao = window.confirm("Tem certeza que deseja apagar definitivamente este lançamento do caixa?");
+    if (!confirmacao) return;
+
+    try {
+      if (!firestore) throw new Error("Banco de dados não inicializado.");
+      await deleteDoc(doc(firestore, 'cashflow_manual', id));
+      toast({ title: "Lançamento Removido" });
+    } catch (error: any) {
+      console.error("Erro ao excluir do fluxo de caixa:", error);
+      alert("Erro ao excluir do banco de dados: " + (error.message || "Erro desconhecido"));
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `cashflow_manual/${id}`,
+        operation: 'delete'
+      }));
     }
   };
 
   const handleDeletePayable = async (id: string) => {
     const confirmacao = window.confirm("⚠️ Tem certeza que deseja excluir esta conta da pauta de pagamentos? Esta ação não pode ser desfeita.");
-    
     if (!confirmacao) return;
 
     try {
-      if (!firestore) return;
+      if (!firestore) throw new Error("Banco de dados não inicializado.");
       await deleteDoc(doc(firestore, 'accounts_payable', id));
       toast({ title: "Conta Removida" });
     } catch (error: any) {
       console.error("Erro ao excluir a conta:", error);
       alert("Ocorreu um erro ao tentar excluir: " + (error.message || "Erro desconhecido"));
-      
       errorEmitter.emit('permission-error', new FirestorePermissionError({
         path: `accounts_payable/${id}`,
         operation: 'delete'
@@ -252,26 +232,60 @@ function ReportsContent() {
     }
   };
 
-  // --- OUTRAS AÇÕES DE MUTATION ---
+  const handlePayAccount = async (account: any) => {
+    const confirmacao = window.confirm(`Confirmar pagamento de ${account.amount.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}?`);
+    if (!confirmacao || !firestore) return;
+
+    setLoading(true);
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const accountRef = doc(firestore, 'accounts_payable', account.id);
+      
+      // 1. Atualizar status da conta
+      await updateDoc(accountRef, { 
+        status: 'paid', 
+        paidDate: today,
+        updatedAt: serverTimestamp() 
+      });
+
+      // 2. Criar saída automática no caixa
+      await addDoc(collection(firestore, 'cashflow_manual'), {
+        description: `Pagamento: ${account.supplier} - ${account.description}`,
+        amount: account.amount,
+        type: 'expense',
+        date: today,
+        method: 'Saída Bancária',
+        origin: 'Pagamento de Conta',
+        createdAt: serverTimestamp()
+      });
+
+      toast({ title: "Conta Liquidada e Lançada no Fluxo" });
+    } catch (error: any) {
+      console.error("Erro ao processar baixa:", error);
+      alert("Falha ao processar baixa: " + (error.message || "Erro desconhecido"));
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `accounts_payable/${account.id}`,
+        operation: 'update'
+      }));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSaveEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore) return;
     setLoading(true);
     const payload = { ...entryForm, createdAt: serverTimestamp() };
-    addDoc(collection(firestore, 'cashflow_manual'), payload)
-      .then(() => {
-        toast({ title: "Lançamento Concluído" });
-        setIsEntryModalOpen(false);
-      })
-      .catch(async (err) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: 'cashflow_manual',
-          operation: 'create',
-          requestResourceData: payload
-        }));
-      })
-      .finally(() => setLoading(false));
+    try {
+      await addDoc(collection(firestore, 'cashflow_manual'), payload);
+      toast({ title: "Lançamento Concluído" });
+      setIsEntryModalOpen(false);
+    } catch (err: any) {
+      alert("Erro ao gravar lançamento: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSavePayable = async (e: React.FormEvent) => {
@@ -279,48 +293,15 @@ function ReportsContent() {
     if (!firestore) return;
     setLoading(true);
     const payload = { ...payableForm, status: 'pending', createdAt: serverTimestamp() };
-    addDoc(collection(firestore, 'accounts_payable'), payload)
-      .then(() => {
-        toast({ title: "Conta Registrada" });
-        setIsPayableModalOpen(false);
-      })
-      .catch(async (err) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: 'accounts_payable',
-          operation: 'create',
-          requestResourceData: payload
-        }));
-      })
-      .finally(() => setLoading(false));
-  };
-
-  const handlePayAccount = async (account: any) => {
-    if (!firestore || !window.confirm(`Confirmar pagamento de ${account.amount.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}?`)) return;
-    setLoading(true);
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const accountRef = doc(firestore, 'accounts_payable', account.id);
-    
-    updateDoc(accountRef, { status: 'paid', paidDate: today })
-      .then(() => {
-        // Criar saída automática
-        addDoc(collection(firestore, 'cashflow_manual'), {
-          description: `Pagamento: ${account.supplier} - ${account.description}`,
-          amount: account.amount,
-          type: 'expense',
-          date: today,
-          method: 'Saída Bancária',
-          origin: 'Pagamento de Conta',
-          createdAt: serverTimestamp()
-        });
-        toast({ title: "Conta Liquidada" });
-      })
-      .catch(async (err) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: accountRef.path,
-          operation: 'update'
-        }));
-      })
-      .finally(() => setLoading(false));
+    try {
+      await addDoc(collection(firestore, 'accounts_payable'), payload);
+      toast({ title: "Conta Registrada" });
+      setIsPayableModalOpen(false);
+    } catch (err: any) {
+      alert("Erro ao salvar conta: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const exportCSV = () => {
@@ -332,22 +313,18 @@ function ReportsContent() {
       t.type === 'income' ? 'ENTRADA' : 'SAÍDA',
       t.amount.toString().replace('.', ',')
     ]);
-
     const csvContent = [headers, ...rows].map(e => e.join(';')).join('\n');
     const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `fluxo_caixa_${selectedMonth}.csv`);
-    document.body.appendChild(link);
+    link.href = url;
+    link.download = `fluxo_caixa_${selectedMonth}.csv`;
     link.click();
-    document.body.removeChild(link);
   };
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col md:flex-row overflow-x-hidden selection:bg-primary selection:text-black">
       <DashboardSidebar />
-      
       <main className="flex-1 md:ml-64 p-4 md:p-8 space-y-8 mt-16 md:mt-0 pb-24 relative">
         <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full" />
         
@@ -365,17 +342,9 @@ function ReportsContent() {
           <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
              <div className="relative group flex-1 lg:flex-none">
                 <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-primary" size={18} />
-                <input 
-                  type="month" 
-                  value={selectedMonth} 
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="bg-[#0c0c0e] border border-zinc-800 rounded-2xl py-3 pl-12 pr-4 text-white text-sm outline-none focus:border-primary transition-all uppercase font-bold"
-                />
+                <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-[#0c0c0e] border border-zinc-800 rounded-2xl py-3 pl-12 pr-4 text-white text-sm outline-none focus:border-primary transition-all uppercase font-bold" />
              </div>
-             <button 
-              onClick={exportCSV}
-              className="px-6 h-[46px] rounded-2xl border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900 transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
-             >
+             <button onClick={exportCSV} className="px-6 h-[46px] rounded-2xl border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-900 transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
                <Download size={16} /> Exportar CSV
              </button>
           </div>
@@ -390,18 +359,8 @@ function ReportsContent() {
         </section>
 
         <nav className="flex items-center gap-1 p-1 bg-[#0c0c0e] border border-zinc-800 w-fit rounded-2xl relative z-10">
-          <button 
-            onClick={() => setActiveTab('cashflow')}
-            className={cn("px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", activeTab === 'cashflow' ? "bg-primary text-black shadow-lg" : "text-zinc-500 hover:text-white")}
-          >
-            Fluxo de Caixa
-          </button>
-          <button 
-            onClick={() => setActiveTab('payable')}
-            className={cn("px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", activeTab === 'payable' ? "bg-primary text-black shadow-lg" : "text-zinc-500 hover:text-white")}
-          >
-            Contas a Pagar
-          </button>
+          <button onClick={() => setActiveTab('cashflow')} className={cn("px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", activeTab === 'cashflow' ? "bg-primary text-black shadow-lg" : "text-zinc-500 hover:text-white")}>Fluxo de Caixa</button>
+          <button onClick={() => setActiveTab('payable')} className={cn("px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", activeTab === 'payable' ? "bg-primary text-black shadow-lg" : "text-zinc-500 hover:text-white")}>Contas a Pagar</button>
         </nav>
 
         <div className="relative z-10">
@@ -412,10 +371,7 @@ function ReportsContent() {
                    <h3 className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.4em] flex items-center gap-2">
                      <ArrowRightLeft size={14} /> Histórico Consolidado
                    </h3>
-                   <button 
-                    onClick={() => setIsEntryModalOpen(true)}
-                    className="bg-zinc-900 border border-zinc-800 text-white hover:text-primary hover:border-primary/50 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
-                   >
+                   <button onClick={() => setIsEntryModalOpen(true)} className="bg-zinc-900 border border-zinc-800 text-white hover:text-primary hover:border-primary/50 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2">
                      <Plus size={16} /> Novo Lançamento
                    </button>
                 </div>
@@ -451,11 +407,7 @@ function ReportsContent() {
                                 <span className={cn("text-lg font-black tracking-tighter", item.type === 'income' ? "text-white" : "text-zinc-400")}>
                                   {item.type === 'income' ? '+' : '-'} {Number(item.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                 </span>
-                                <button 
-                                  onClick={() => handleDeleteCashflowItem(item.id, item.origin)}
-                                  className="p-2 text-zinc-600 hover:text-red-500 transition-all hover:bg-red-500/10 rounded-lg"
-                                  title="Remover Registro"
-                                >
+                                <button onClick={() => handleDeleteCashflowItem(item.id, item.origin)} className="p-2 text-zinc-600 hover:text-red-500 transition-all hover:bg-red-500/10 rounded-lg">
                                   <Trash2 size={18} />
                                 </button>
                              </div>
@@ -471,10 +423,7 @@ function ReportsContent() {
                    <h3 className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.4em] flex items-center gap-2">
                      <Receipt size={14} /> Pauta de Pagamentos
                    </h3>
-                   <button 
-                    onClick={() => setIsPayableModalOpen(true)}
-                    className="bg-zinc-900 border border-zinc-800 text-white hover:text-primary hover:border-primary/50 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
-                   >
+                   <button onClick={() => setIsPayableModalOpen(true)} className="bg-zinc-900 border border-zinc-800 text-white hover:text-primary hover:border-primary/50 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2">
                      <Plus size={16} /> Nova Conta
                    </button>
                 </div>
@@ -490,7 +439,6 @@ function ReportsContent() {
                         {payables?.map((p) => {
                           const isPaid = p.status === 'paid';
                           const isLate = !isPaid && parseISO(p.dueDate) < new Date();
-
                           return (
                             <div key={p.id} className="group flex flex-col md:flex-row items-center justify-between p-5 border-b border-zinc-800/50 hover:bg-zinc-900/40 transition-all gap-4">
                                <div className="flex items-center gap-6 w-full md:w-auto">
@@ -505,23 +453,14 @@ function ReportsContent() {
                                </div>
 
                                <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end">
-                                  <span className="text-lg font-black tracking-tighter text-white">
-                                    {Number(p.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                  </span>
+                                  <span className="text-lg font-black tracking-tighter text-white">{Number(p.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                                   <div className="flex items-center gap-2">
                                      {!isPaid && (
-                                       <button 
-                                        onClick={() => handlePayAccount(p)}
-                                        className="p-2 bg-primary/10 text-primary border border-primary/20 rounded-xl hover:bg-primary hover:text-black transition-all flex items-center gap-2 text-[10px] font-black uppercase"
-                                       >
+                                       <button onClick={() => handlePayAccount(p)} className="p-2 bg-primary/10 text-primary border border-primary/20 rounded-xl hover:bg-primary hover:text-black transition-all flex items-center gap-2 text-[10px] font-black uppercase">
                                          <CheckCircle2 size={16} /> Baixar
                                        </button>
                                      )}
-                                     <button 
-                                      onClick={() => handleDeletePayable(p.id)}
-                                      className="p-2 text-zinc-600 hover:text-red-500 transition-all hover:bg-red-500/10 rounded-lg"
-                                      title="Excluir Conta"
-                                     >
+                                     <button onClick={() => handleDeletePayable(p.id)} className="p-2 text-zinc-600 hover:text-red-500 transition-all hover:bg-red-500/10 rounded-lg">
                                        <Trash2 size={18} />
                                      </button>
                                   </div>
