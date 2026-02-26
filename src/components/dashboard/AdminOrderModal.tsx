@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { doc, setDoc, serverTimestamp, collection, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, updateDoc, getDoc, query, where, getDocs } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { 
   X, Save, Plus, Trash2, Box, 
@@ -72,26 +72,45 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   const [baixaInstallmentUid, setBaixaInstallmentUid] = useState<string | null>(null);
   const [baixaData, setBaixaData] = useState({ method: PAYMENT_METHODS[0], date: new Date().toISOString().split('T')[0] });
 
-  // BUSCA DADOS COMPLETOS DO CLIENTE PARA A OP
+  // BUSCA DADOS COMPLETOS DO CLIENTE PARA A OP (ALGORITMO AVANÇADO)
   useEffect(() => {
     const fetchCustomerData = async () => {
-      const clientId = order?.clientId || order?.customerId || order?.clienteId;
-      if (!clientId || !firestore) {
-        setFullCustomerData(null);
-        return;
-      }
+      if (!order || !firestore) return;
       
       try {
-        const clientRef = doc(firestore, 'clients', clientId);
-        const clientSnap = await getDoc(clientRef);
-        if (clientSnap.exists()) {
-          setFullCustomerData(clientSnap.data());
-        } else {
-          setFullCustomerData(null);
+        const clientsRef = collection(firestore, 'clients');
+        
+        // TENTATIVA 1: Busca direta pelo ID (Mais rápido e preciso)
+        const clientId = order.clientId || order.customerId || order.clienteId || order.id_cliente;
+        if (clientId) {
+          const clientSnap = await getDoc(doc(firestore, 'clients', clientId));
+          if (clientSnap.exists()) {
+            setFullCustomerData(clientSnap.data());
+            return; // Encontrado via ID
+          }
+        }
+        
+        // TENTATIVA 2: Busca por nome (Caso a OS tenha apenas a string do nome salva)
+        const clientName = order.client || order.customerName || order.cliente;
+        if (clientName) {
+          // Tenta buscar pela key 'name'
+          const qName = query(clientsRef, where('name', '==', clientName));
+          const snapName = await getDocs(qName);
+          
+          if (!snapName.empty) {
+            setFullCustomerData(snapName.docs[0].data());
+            return;
+          }
+          
+          // Tenta buscar pela key 'company' (Razão Social)
+          const qCompany = query(clientsRef, where('company', '==', clientName));
+          const snapCompany = await getDocs(qCompany);
+          if (!snapCompany.empty) {
+            setFullCustomerData(snapCompany.docs[0].data());
+          }
         }
       } catch (error) {
         console.error("Erro ao buscar dados completos do cliente:", error);
-        setFullCustomerData(null);
       }
     };
     
@@ -622,23 +641,34 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </div>
         </div>
 
-        {/* DADOS DO CLIENTE E DATAS */}
+        {/* DADOS DO CLIENTE E DATAS (MAPEAMENTO INTELIGENTE) */}
         <div className="grid grid-cols-4 gap-4 mb-4">
           <div className="col-span-3 border-2 border-black p-3 rounded-lg">
             <h2 className="font-bold text-[9px] uppercase text-gray-500 mb-1 tracking-wider">Dados do Parceiro / Cliente</h2>
             <p className="font-black text-lg uppercase leading-tight">
-              {fullCustomerData?.name || fullCustomerData?.company || client || 'Nome não informado'}
+              {fullCustomerData?.name || fullCustomerData?.company || fullCustomerData?.nome || client || 'Nome não informado'}
             </p>
             
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-xs">
-              <p className="flex gap-1 items-center"><FileBadge size={10} /> <strong>Doc:</strong> {fullCustomerData?.cpfCnpj || fullCustomerData?.cnpj || '_________________'}</p>
-              <p className="flex gap-1 items-center"><Phone size={10} /> <strong>Tel:</strong> {fullCustomerData?.mobile || fullCustomerData?.landline || '_________________'}</p>
+              <p className="flex gap-1 items-center">
+                <FileBadge size={10} /> 
+                <strong>Doc:</strong> {
+                  fullCustomerData?.cpfCnpj || fullCustomerData?.cnpj || fullCustomerData?.cpf || fullCustomerData?.documento || fullCustomerData?.document || '_________________'
+                }
+              </p>
+              <p className="flex gap-1 items-center">
+                <Phone size={10} /> 
+                <strong>Tel:</strong> {
+                  fullCustomerData?.mobile || fullCustomerData?.landline || fullCustomerData?.telefone || fullCustomerData?.phone || order?.customerPhone || '_________________'
+                }
+              </p>
               <p className="col-span-2 flex gap-1 items-start">
                 <MapPin size={10} className="mt-0.5 shrink-0" /> 
                 <span>
-                  <strong>Endereço:</strong> {fullCustomerData?.street ? 
-                    `${fullCustomerData.street}${fullCustomerData.number ? ', ' + fullCustomerData.number : ''} ${fullCustomerData.neighborhood ? ' - ' + fullCustomerData.neighborhood : ''}` 
-                    : '______________________________________________________________'
+                  <strong>Endereço:</strong> {
+                    (fullCustomerData?.address || fullCustomerData?.street || fullCustomerData?.endereco || fullCustomerData?.rua) ? 
+                    `${fullCustomerData?.street || fullCustomerData?.address || fullCustomerData?.endereco}, ${fullCustomerData?.number || fullCustomerData?.numero || 'S/N'} ${fullCustomerData?.complemento ? '(' + fullCustomerData.complemento + ')' : ''} - ${fullCustomerData?.neighborhood || fullCustomerData?.bairro || ''} ${fullCustomerData?.city || fullCustomerData?.cidade || ''}` 
+                    : (order?.customerAddress || order?.endereco || '______________________________________________________________')
                   }
                 </span>
               </p>
