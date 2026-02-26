@@ -175,16 +175,26 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     toast({ title: "Recebimento Registrado", description: "Lembre-se de salvar a OS para efetivar no sistema." });
   };
 
+  // FUNÇÃO DEFINITIVA DE EMISSÃO NFe
   const handleEmitNFe = async () => {
-    if (!order?.id || !firestore) return;
+    if (!order || !order.id || !firestore) return;
     
     const confirmar = window.confirm("Deseja enviar este pedido para emissão na Focus NFe?");
     if (!confirmar) return;
 
     try {
       const orderRef = doc(firestore, 'orders', order.id);
+      
+      // O Front-end sinaliza que o processo começou (Amarelo)
       await updateDoc(orderRef, { nfe_status: 'processing' });
-      toast({ title: "Solicitação Enviada", description: "O pedido foi colocado na fila de faturamento Focus NFe." });
+      
+      toast({ 
+        title: "Solicitação Enviada", 
+        description: "O pedido foi colocado na fila de faturamento Focus NFe." 
+      });
+      
+      // TODO: [INTEGRAÇÃO FOCUS NFE]
+      // O backend (Cloud Functions) monitora esta mudança e assume a partir daqui.
     } catch (error: any) {
       console.error("Erro ao iniciar emissão de NFe:", error);
       alert("Erro no banco de dados: " + error.message);
@@ -250,6 +260,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           <div className="hidden md:flex gap-6 items-center">
              {order && (
                <div className="flex items-center mr-4 border-r border-zinc-800 pr-6 h-10">
+                 {/* BOTÃO INTELIGENTE DE NFe */}
                  {(!order.nfe_status || order.nfe_status === 'pending') && (
                    <button 
                      onClick={handleEmitNFe}
@@ -270,23 +281,21 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
                  {order.nfe_status === 'issued' && (
                    <div className="flex items-center gap-2">
-                     {/* BOTÃO DO PDF (DANFE) - VERDE ESMERALDA */}
                      <button
                        onClick={() => window.open(order.nfe_pdf_url || order.nfe_url, '_blank')}
                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500 hover:text-white transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)]"
                        title="Baixar DANFE (PDF)"
                      >
-                       <FileText size={14} />
+                       <Download size={14} />
                        <span className="text-[9px] font-black uppercase tracking-widest">PDF</span>
                      </button>
 
-                     {/* BOTÃO DO XML (CONTABILIDADE) - AZUL CYAN */}
                      <button
                        onClick={() => window.open(order.nfe_xml_url, '_blank')}
                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500 hover:text-white transition-all"
-                       title="Baixar XML (Para Contabilidade)"
+                       title="Baixar XML"
                      >
-                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                       <FileText size={14} />
                        <span className="text-[9px] font-black uppercase tracking-widest">XML</span>
                      </button>
                    </div>
