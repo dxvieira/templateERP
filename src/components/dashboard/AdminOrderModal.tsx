@@ -9,7 +9,7 @@ import {
   Calculator, Loader2,
   History, Calendar as CalendarIcon, Wallet, Receipt,
   CheckCircle2, AlertTriangle, RefreshCw, FileText,
-  ArrowDownLeft, ArrowRight, Download
+  ArrowDownLeft, ArrowRight, Download, Printer
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
@@ -185,21 +185,31 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   const handleEmitNFe = async () => {
     if (!order || !order.id || !firestore) return;
     
-    const confirmar = window.confirm("Deseja enviar este pedido para emissão na Focus NFe?");
+    const confirmar = window.confirm("Deseja simular a emissão desta Nota Fiscal?");
     if (!confirmar) return;
 
     try {
       const orderRef = doc(firestore, 'orders', order.id);
       
-      // O Front-end sinaliza que o processo começou (Amarelo)
+      // 1. Muda para processando (Botão Amarelo)
       await updateDoc(orderRef, { nfe_status: 'processing' });
       
+      // 2. Simula o tempo de latência da SEFAZ (3 segundos)
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // 3. Conclui a emissão (Botão Verde e Azul) e injeta arquivos de teste
+      await updateDoc(orderRef, {
+        nfe_status: 'issued',
+        nfe_pdf_url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+        nfe_xml_url: 'https://www.w3schools.com/xml/note.xml' 
+      });
+      
       toast({ 
-        title: "Solicitação Enviada", 
-        description: "O pedido foi colocado na fila de faturamento Focus NFe." 
+        title: "Nota Emitida", 
+        description: "A simulação de faturamento foi concluída com sucesso." 
       });
     } catch (error: any) {
-      console.error("Erro ao iniciar emissão de NFe:", error);
+      console.error("Erro ao simular emissão de NFe:", error);
       alert("Erro no banco de dados: " + error.message);
     }
   };
@@ -249,7 +259,8 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-md p-2 md:p-4">
-      <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }} className="bg-[#09090b] w-full max-w-5xl border border-zinc-800 rounded-3xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden">
+      {/* MODAL VISÍVEL NO SISTEMA */}
+      <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }} className="bg-[#09090b] w-full max-w-5xl border border-zinc-800 rounded-3xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden print:hidden">
         
         <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-zinc-900/50">
           <div className="flex items-center gap-4">
@@ -260,9 +271,16 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
             </div>
           </div>
           
-          <div className="hidden md:flex gap-6 items-center">
+          <div className="hidden md:flex gap-4 items-center">
+             <button
+               onClick={() => window.print()}
+               className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl bg-zinc-800 text-zinc-300 hover:bg-white hover:text-black transition-all"
+             >
+               <Printer size={14} /> IMPRIMIR OP
+             </button>
+
              {order && (
-               <div className="flex items-center mr-4 border-r border-zinc-800 pr-6 h-10">
+               <div className="flex items-center mr-4 border-r border-zinc-800 pr-6 h-10 gap-2">
                  {(!order.nfe_status || order.nfe_status === 'pending') && (
                    <button 
                      onClick={handleEmitNFe}
@@ -555,6 +573,123 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
            </button>
         </div>
       </motion.div>
+
+      {/* ========================================== */}
+      {/* LAYOUT DE IMPRESSÃO - ORDEM DE PRODUÇÃO    */}
+      {/* ========================================== */}
+      <div className="hidden print:block fixed inset-0 z-[99999] bg-white text-black p-10 font-sans w-full h-full overflow-y-auto">
+        
+        {/* CABEÇALHO DA OP */}
+        <div className="flex justify-between items-center border-b-4 border-black pb-6 mb-8">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-black rounded-xl flex items-center justify-center text-white">
+              <Printer size={32} />
+            </div>
+            <div>
+              <h1 className="text-3xl font-black uppercase tracking-tighter leading-none">VisComm</h1>
+              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-600 mt-1">Impacto Comunicação Visual</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <h2 className="text-4xl font-black uppercase tracking-widest">Ordem de Produção</h2>
+            <div className="mt-2 bg-black text-white px-4 py-1 inline-block text-xl font-bold rounded">
+              OS #{order?.id || '000000'}
+            </div>
+          </div>
+        </div>
+
+        {/* DADOS DO CLIENTE E DATAS */}
+        <div className="grid grid-cols-2 gap-8 mb-8 border-b border-zinc-200 pb-8">
+          <div className="space-y-4">
+            <div>
+              <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1">Cliente / Parceiro</label>
+              <p className="text-xl font-black uppercase">{client || 'NÃO INFORMADO'}</p>
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block mb-1">Vendedor / Consultor</label>
+              <p className="text-lg font-bold uppercase text-zinc-800">{seller || 'GERAL'}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-100">
+              <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Data Emissão</label>
+              <p className="text-lg font-black">{emissionDate ? format(parseISO(emissionDate), 'dd/MM/yyyy') : '--/--/----'}</p>
+            </div>
+            <div className="bg-black text-white p-4 rounded-xl border border-black">
+              <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Prazo de Entrega</label>
+              <p className="text-lg font-black">{deliveryDate ? format(parseISO(deliveryDate), 'dd/MM/yyyy') : 'IMEDIATO'}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* FICHA TÉCNICA - ITENS */}
+        <div className="mb-10">
+          <h3 className="text-xs font-black uppercase tracking-[0.4em] text-zinc-400 mb-4 flex items-center gap-2">
+            <Box size={14} className="text-black" /> Descrição dos Serviços
+          </h3>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-black text-white">
+                <th className="p-3 text-left text-[10px] font-black uppercase tracking-widest rounded-tl-xl">Qtd</th>
+                <th className="p-3 text-left text-[10px] font-black uppercase tracking-widest">Cód</th>
+                <th className="p-3 text-left text-[10px] font-black uppercase tracking-widest">Descrição Detalhada do Material</th>
+                <th className="p-3 text-center text-[10px] font-black uppercase tracking-widest rounded-tr-xl">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y-2 divide-zinc-100 border-x-2 border-b-2 border-zinc-100">
+              {items.map((item, idx) => (
+                <tr key={idx} className="hover:bg-zinc-50 transition-colors">
+                  <td className="p-4 font-black text-xl border-r border-zinc-100">{item.quantity || 0}</td>
+                  <td className="p-4 font-mono text-xs text-zinc-400 border-r border-zinc-100">{item.productCode || '--'}</td>
+                  <td className="p-4 text-sm font-bold uppercase leading-relaxed">{item.desc || 'Item de produção padrão'}</td>
+                  <td className="p-4 border-l border-zinc-100 w-24">
+                    <div className="w-8 h-8 border-2 border-zinc-200 rounded-lg mx-auto" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* OBSERVAÇÕES TÉCNICAS */}
+        <div className="grid grid-cols-3 gap-8 mb-12">
+          <div className="col-span-2">
+            <h3 className="text-xs font-black uppercase tracking-[0.4em] text-zinc-400 mb-3">Observações Adicionais</h3>
+            <div className="min-h-[120px] p-4 bg-zinc-50 border-2 border-dashed border-zinc-200 rounded-2xl text-sm leading-relaxed text-zinc-700 italic">
+              {observations || 'Nenhuma nota técnica específica para esta ordem de serviço.'}
+            </div>
+          </div>
+          <div className="space-y-4">
+            <h3 className="text-xs font-black uppercase tracking-[0.4em] text-zinc-400 mb-3">Produção / Etapa</h3>
+            <div className="space-y-2">
+              {['Arte Final', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação'].map(stage => (
+                <div key={stage} className="flex items-center gap-3">
+                  <div className="w-5 h-5 border-2 border-zinc-300 rounded" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600">{stage}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* RODAPÉ E ASSINATURAS */}
+        <div className="mt-auto pt-12 border-t-2 border-zinc-100">
+          <div className="grid grid-cols-2 gap-12 text-center">
+            <div className="space-y-2">
+              <div className="h-[1px] bg-black w-full" />
+              <p className="text-[10px] font-black uppercase tracking-[0.2em]">Responsável Produção</p>
+            </div>
+            <div className="space-y-2">
+              <div className="h-[1px] bg-black w-full" />
+              <p className="text-[10px] font-black uppercase tracking-[0.2em]">Conferência de Qualidade</p>
+            </div>
+          </div>
+          <div className="flex justify-between items-end mt-12 opacity-30">
+            <div className="text-[8px] font-bold uppercase tracking-[0.5em]">Sistema VisComm Command Center</div>
+            <div className="text-[8px] font-mono">GERADO EM: {new Date().toLocaleString()}</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
