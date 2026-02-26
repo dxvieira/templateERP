@@ -4,11 +4,12 @@ import React, { useState, useMemo } from 'react';
 import { collection, query, orderBy, doc, deleteDoc, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { 
   TrendingUp, TrendingDown, Wallet, Target, AlertCircle, 
   Download, Plus, Search, Trash2, Calendar, 
   Loader2, X, Wallet2, CheckCircle2, Receipt, 
-  ArrowRight, CreditCard, Box, Factory, Check,
+  ArrowDownLeft, ArrowRight, CreditCard, Box, Factory, Check,
   BarChart3, PieChart as PieChartIcon, ShoppingBag, Users as UsersIcon,
   ChevronDown, ChevronUp, Layers
 } from 'lucide-react';
@@ -30,12 +31,14 @@ export default function ReportsManager() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  const router = useRouter();
 
   // --- ESTADOS DE CONTROLE ---
   const [activeTab, setActiveTab] = useState<'FLUXO' | 'CONTAS' | 'PEDIDOS'>('FLUXO');
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [itemToDelete, setItemToDelete] = useState<any>(null);
   const [itemToPay, setItemToPay] = useState<any>(null);
+  const [itemToEdit, setItemToEdit] = useState<any>(null);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   
   // Modais
@@ -143,7 +146,7 @@ export default function ReportsManager() {
             type: entry.type,
             amount: amount,
             method: entry.method || 'Manual',
-            origin: 'MANUAL'
+            origin: entry.origin || 'MANUAL'
           });
         }
       } catch (e) {}
@@ -226,6 +229,14 @@ export default function ReportsManager() {
     setExpandedGroups(prev => ({ ...prev, [gid]: !prev[gid] }));
   };
 
+  const handleRowClick = (item: any) => {
+    if (item.origin === 'SISTEMA (OS)') {
+      router.push(`/orders?edit=${item.originalId}`);
+    } else {
+      setItemToEdit({ ...item });
+    }
+  };
+
   const handleExportCSV = () => {
     if (!transactions || transactions.length === 0) {
       alert("Não há dados para exportar neste mês.");
@@ -239,7 +250,8 @@ export default function ReportsManager() {
     let csvContent = "\uFEFFDATA;DESCRIÇÃO;FORMA DE PAGAMENTO;TIPO;VALOR\n";
     transactions.forEach(t => {
       const d = (t.date || '').split('-').reverse().join('/');
-      csvContent += `${d};${(t.description || '').replace(/;/g, ',')};${t.method || '-'};${t.type === 'income' ? 'Entrada' : 'Saída'};R$ ${t.amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\n`;
+      const valorStr = Number(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      csvContent += `${d};${(t.description || '').replace(/;/g, ',')};${t.method || '-'};${t.type === 'income' ? 'Entrada' : 'Saída'};R$ ${valorStr}\n`;
     });
     csvContent += `;;;SALDO TOTAL:;R$ ${(totalEntradas - totalSaidas).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -290,6 +302,27 @@ export default function ReportsManager() {
       setIsCashflowModalOpen(false);
     } catch (e) { toast({ variant: 'destructive', title: "Erro ao salvar" }); }
     finally { setIsSubmitting(false); }
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!itemToEdit || !itemToEdit.id || !firestore) return;
+    setIsSubmitting(true);
+    try {
+      const docRef = doc(firestore, 'cashflow_manual', itemToEdit.id);
+      await updateDoc(docRef, {
+        description: itemToEdit.description,
+        amount: Number(itemToEdit.amount),
+        date: itemToEdit.date,
+        method: itemToEdit.method
+      });
+      toast({ title: "Lançamento Atualizado" });
+      setItemToEdit(null);
+    } catch (e: any) {
+      alert("Erro ao salvar: " + e.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (ordersLoading || cashflowLoading || payablesLoading) {
@@ -368,14 +401,21 @@ export default function ReportsManager() {
           {activeTab === 'FLUXO' && (
             <div className="divide-y divide-white/5">
               {transactions.length > 0 ? transactions.map((t) => (
-                <div key={t.id} className="group flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-4">
+                <div 
+                  key={t.id} 
+                  onClick={() => handleRowClick(t)}
+                  className="group flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-4 cursor-pointer"
+                >
                   <div className="flex items-center gap-4 flex-1">
                      <div className="flex flex-col items-center justify-center min-w-[50px] bg-zinc-950 p-2 rounded-xl border border-zinc-900">
                        <span className="text-[8px] font-black text-zinc-600 uppercase">{t.date ? format(parseISO(t.date), 'MMM', { locale: ptBR }) : '-'}</span>
                        <span className="text-lg font-black text-white leading-none">{t.date ? format(parseISO(t.date), 'dd') : '-'}</span>
                      </div>
                      <div className="min-w-0">
-                        <p className="text-sm font-bold text-white uppercase truncate">{t.description}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-white uppercase truncate group-hover:text-primary transition-colors">{t.description}</p>
+                          {t.origin === 'SISTEMA (OS)' && <ArrowRight size={12} className="text-zinc-700 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />}
+                        </div>
                         <div className="flex items-center gap-3 mt-1">
                            <span className="text-[8px] font-black uppercase text-zinc-600 tracking-widest bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">{t.method}</span>
                            <span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded-full border", t.type === 'income' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20")}>{t.type === 'income' ? 'Entrada' : 'Saída'}</span>
@@ -620,6 +660,47 @@ export default function ReportsManager() {
                   <button onClick={() => setItemToPay(null)} className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-400 font-black uppercase text-[10px] tracking-widest">Cancelar</button>
                   <button onClick={handleConfirmPayment} className="flex-1 py-4 rounded-xl bg-emerald-500 text-white font-black uppercase text-[10px] tracking-widest shadow-[0_0_25px_rgba(16,185,129,0.4)]">Efetivar Baixa</button>
                 </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {itemToEdit && (
+            <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" onClick={() => setItemToEdit(null)}>
+              <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-[#09090b] border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden">
+                <div className="p-6 border-b border-white/5 bg-zinc-900/30 flex justify-between items-center">
+                  <h3 className="text-lg font-black text-white uppercase tracking-tighter">Editar Lançamento</h3>
+                  <button onClick={() => setItemToEdit(null)} className="p-2 text-zinc-500 hover:text-white bg-white/5 rounded-full"><X size={20}/></button>
+                </div>
+                <form onSubmit={handleSaveEdit} className="p-6 space-y-6 bg-[#050505]">
+                  <div className="space-y-2">
+                    <label className={labelClass}>Descrição</label>
+                    <input required value={itemToEdit.description || ''} onChange={e => setItemToEdit({...itemToEdit, description: e.target.value})} className={inputClass} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className={labelClass}>Valor (R$)</label>
+                      <input type="number" step="0.01" required value={itemToEdit.amount || ''} onChange={e => setItemToEdit({...itemToEdit, amount: e.target.value})} className={inputClass} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className={labelClass}>Data</label>
+                      <input type="date" required value={itemToEdit.date || ''} onChange={e => setItemToEdit({...itemToEdit, date: e.target.value})} className={inputClass} />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className={labelClass}>Forma de Pgto</label>
+                    <select value={itemToEdit.method || ''} onChange={e => setItemToEdit({...itemToEdit, method: e.target.value})} className={inputClass}>
+                      {['Pix', 'Dinheiro', 'Cartão', 'Boleto', 'Transferência'].map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button type="button" onClick={() => setItemToEdit(null)} className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-900">Cancelar</button>
+                    <button type="submit" disabled={isSubmitting} className="flex-1 py-4 bg-primary text-black font-black uppercase tracking-widest text-[10px] rounded-xl shadow-[0_5px_20px_-5px_rgba(255,95,31,0.4)]">
+                      {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={16} /> : "Salvar Alterações"}
+                    </button>
+                  </div>
+                </form>
               </motion.div>
             </div>
           )}
