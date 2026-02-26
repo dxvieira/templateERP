@@ -1,4 +1,3 @@
-
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -15,11 +14,10 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'picsum.photos' },
     ],
   },
-  // Configuração experimental correta para Next.js 15 se necessário
   experimental: {
     serverActions: {
       allowedOrigins: [
-        '6000-firebase-studio-1770637200745.cluster-gizzoza7hzhfyxzo5d76y3flkw.cloudworkstations.dev',
+        'localhost:9002',
         '*.cloudworkstations.dev'
       ]
     }

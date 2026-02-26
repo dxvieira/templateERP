@@ -172,7 +172,7 @@ export default function ReportsManager() {
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
 
-    fusion.sort((a, b) => b.date.localeCompare(a.date));
+    fusion.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
     return {
       transactions: fusion,
@@ -209,8 +209,8 @@ export default function ReportsManager() {
     });
     let csvContent = "\uFEFFDATA;DESCRIÇÃO;FORMA DE PAGAMENTO;TIPO;VALOR\n";
     transactions.forEach(t => {
-      const d = t.date.split('-').reverse().join('/');
-      csvContent += `${d};${t.description.replace(/;/g, ',')};${t.method};${t.type === 'income' ? 'Entrada' : 'Saída'};R$ ${t.amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\n`;
+      const d = (t.date || '').split('-').reverse().join('/');
+      csvContent += `${d};${(t.description || '').replace(/;/g, ',')};${t.method || '-'};${t.type === 'income' ? 'Entrada' : 'Saída'};R$ ${t.amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\n`;
     });
     csvContent += `;;;SALDO TOTAL:;R$ ${(totalEntradas - totalSaidas).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -347,8 +347,8 @@ export default function ReportsManager() {
                 <div key={t.id} className="group flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-4">
                   <div className="flex items-center gap-4 flex-1">
                      <div className="flex flex-col items-center justify-center min-w-[50px] bg-zinc-950 p-2 rounded-xl border border-zinc-900">
-                       <span className="text-[8px] font-black text-zinc-600 uppercase">{format(parseISO(t.date), 'MMM', { locale: ptBR })}</span>
-                       <span className="text-lg font-black text-white leading-none">{format(parseISO(t.date), 'dd')}</span>
+                       <span className="text-[8px] font-black text-zinc-600 uppercase">{t.date ? format(parseISO(t.date), 'MMM', { locale: ptBR }) : '-'}</span>
+                       <span className="text-lg font-black text-white leading-none">{t.date ? format(parseISO(t.date), 'dd') : '-'}</span>
                      </div>
                      <div className="min-w-0">
                         <p className="text-sm font-bold text-white uppercase truncate">{t.description}</p>
@@ -388,8 +388,8 @@ export default function ReportsManager() {
                 <div key={p.id} className="group flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-4">
                   <div className="flex items-center gap-4 flex-1">
                      <div className={cn("flex flex-col items-center justify-center min-w-[50px] p-2 rounded-xl border", p.status === 'paid' ? "bg-emerald-500/10 border-emerald-500/20" : "bg-zinc-950 border-zinc-900")}>
-                       <span className="text-[8px] font-black text-zinc-600 uppercase">{format(parseISO(p.dueDate), 'MMM', { locale: ptBR })}</span>
-                       <span className={cn("text-lg font-black leading-none", p.status === 'paid' ? "text-emerald-500" : "text-white")}>{format(parseISO(p.dueDate), 'dd')}</span>
+                       <span className="text-[8px] font-black text-zinc-600 uppercase">{p.dueDate ? format(parseISO(p.dueDate), 'MMM', { locale: ptBR }) : '-'}</span>
+                       <span className={cn("text-lg font-black leading-none", p.status === 'paid' ? "text-emerald-500" : "text-white")}>{p.dueDate ? format(parseISO(p.dueDate), 'dd') : '-'}</span>
                      </div>
                      <div className="min-w-0">
                         <p className="text-sm font-bold text-white uppercase truncate">{p.supplier}</p>
@@ -670,7 +670,7 @@ function KPICard({ label, value, color, icon: Icon, glow, isCurrency = true }: a
         <Icon size={14} className={cn(color, "opacity-40 group-hover:opacity-100 transition-opacity")} />
       </div>
       <p className={cn("text-xl font-black font-mono tracking-tighter truncate", color)}>
-        {isCurrency ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : value}
+        {isCurrency ? (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : (value || 0)}
       </p>
       {glow && <div className="absolute -bottom-4 -right-4 w-12 h-12 bg-primary/20 blur-2xl rounded-full" />}
     </div>

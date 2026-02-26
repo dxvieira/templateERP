@@ -5,6 +5,7 @@ import { useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { format } from 'date-fns';
 
 /**
  * Hook centralizador de Ordens de Serviço com Performance Optimizada.

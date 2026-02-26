@@ -28,6 +28,13 @@ const PAYMENT_METHODS = [
 
 const INSTALLMENT_TYPES = ["Boleto", "Cartão", "Dinheiro/Pix"];
 
+const generateUid = () => {
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2, 15);
+};
+
 interface AdminOrderModalProps {
   order?: any | null;
   isOpen: boolean;
@@ -117,7 +124,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       const dueDate = format(addMonths(start, i), 'yyyy-MM-dd');
       newInstallments.push({
         id: `${i + 1}/${genConfig.count}`,
-        uid: crypto.randomUUID(),
+        uid: generateUid(),
         amount: i === genConfig.count - 1 ? (genConfig.total - (valuePerInstallment * (genConfig.count - 1))) : valuePerInstallment,
         due_date: dueDate,
         status: parseISO(dueDate) < new Date() ? 'overdue' : 'pending',
@@ -175,7 +182,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     toast({ title: "Recebimento Registrado", description: "Lembre-se de salvar a OS para efetivar no sistema." });
   };
 
-  // FUNÇÃO DEFINITIVA DE EMISSÃO NFe
   const handleEmitNFe = async () => {
     if (!order || !order.id || !firestore) return;
     
@@ -192,9 +198,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
         title: "Solicitação Enviada", 
         description: "O pedido foi colocado na fila de faturamento Focus NFe." 
       });
-      
-      // TODO: [INTEGRAÇÃO FOCUS NFE]
-      // O backend (Cloud Functions) monitora esta mudança e assume a partir daqui.
     } catch (error: any) {
       console.error("Erro ao iniciar emissão de NFe:", error);
       alert("Erro no banco de dados: " + error.message);
@@ -260,7 +263,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           <div className="hidden md:flex gap-6 items-center">
              {order && (
                <div className="flex items-center mr-4 border-r border-zinc-800 pr-6 h-10">
-                 {/* BOTÃO INTELIGENTE DE NFe */}
                  {(!order.nfe_status || order.nfe_status === 'pending') && (
                    <button 
                      onClick={handleEmitNFe}
