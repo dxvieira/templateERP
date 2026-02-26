@@ -53,12 +53,17 @@ export const DashboardSidebar = memo(() => {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 h-14 md:hidden bg-[#0A0A0A]/80 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <header className="fixed top-0 left-0 right-0 z-50 h-14 md:hidden bg-[#0A0A0A]/80 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between print:hidden">
+        <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shadow-[0_0_10px_rgba(255,95,31,0.5)]">
             <ClipboardList className="text-black w-4 h-4" />
           </div>
-          <span className="text-xs font-black tracking-tighter text-white uppercase whitespace-nowrap">VisComm</span>
+          <span 
+            className="text-xl text-white tracking-tighter leading-none" 
+            style={{ fontFamily: 'Impact, Arial Black, sans-serif', transform: 'scaleY(1.05)' }}
+          >
+            IMPACTO
+          </span>
         </div>
         
         <Button
@@ -79,17 +84,24 @@ export const DashboardSidebar = memo(() => {
       )}
 
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-60 glass border-r border-white/5 transition-transform duration-300 ease-in-out md:translate-x-0 will-change-transform shadow-2xl",
+        "fixed inset-y-0 left-0 z-50 w-60 glass border-r border-white/5 transition-transform duration-300 ease-in-out md:translate-x-0 will-change-transform shadow-2xl print:hidden",
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="flex flex-col h-full p-5">
-          <div className="mb-6 hidden md:flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-[0_0_15px_rgba(255,95,31,0.5)]">
-              <ClipboardList className="text-black w-5 h-5" />
+          <div className="mb-8 hidden md:flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-[0_0_15px_rgba(255,95,31,0.5)] shrink-0">
+              <ClipboardList className="text-black w-6 h-6" />
             </div>
-            <div className="min-w-0">
-              <h1 className="text-lg font-bold tracking-tighter text-white uppercase truncate leading-none">VISCOMM</h1>
-              <p className="text-[7px] text-muted-foreground uppercase tracking-[0.2em] truncate mt-0.5">Terminal de Comando</p>
+            <div className="flex flex-col min-w-0">
+              <span 
+                className="text-2xl text-white tracking-tighter leading-none" 
+                style={{ fontFamily: 'Impact, Arial Black, sans-serif', transform: 'scaleY(1.05)' }}
+              >
+                IMPACTO
+              </span>
+              <span className="text-[10px] font-bold tracking-[0.2em] text-zinc-500 uppercase mt-0.5 whitespace-nowrap">
+                Comunicação Visual
+              </span>
             </div>
           </div>
 
@@ -128,7 +140,7 @@ export const DashboardSidebar = memo(() => {
           </button>
 
           <div className="pt-4 flex flex-col items-center gap-1 opacity-30">
-            <p className="text-[7px] uppercase tracking-[0.4em] text-white font-black whitespace-nowrap">SISTEMA VISCOMM</p>
+            <p className="text-[7px] uppercase tracking-[0.4em] text-white font-black whitespace-nowrap">SISTEMA IMPACTO</p>
             <p className="text-[6px] uppercase tracking-[0.1em] text-muted-foreground font-mono">Build 2025.02.09</p>
           </div>
         </div>

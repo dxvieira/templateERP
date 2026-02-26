@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect } from 'react';
@@ -50,9 +49,16 @@ export default function LoginPage() {
           <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-[0_0_30px_rgba(255,95,31,0.6)]">
             <ClipboardList className="text-black w-10 h-10" />
           </div>
-          <div className="text-center">
-            <h1 className="text-4xl font-black tracking-tighter text-white uppercase">VISCOMM</h1>
-            <p className="text-xs text-muted-foreground uppercase tracking-[0.4em] font-medium">Terminal de Comando v1.2</p>
+          <div className="text-center flex flex-col items-center">
+            <h1 
+              className="text-5xl text-white tracking-tighter leading-none" 
+              style={{ fontFamily: 'Impact, Arial Black, sans-serif', transform: 'scaleY(1.05)' }}
+            >
+              IMPACTO
+            </h1>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-[0.4em] font-bold mt-2">
+              Comunicação Visual
+            </p>
           </div>
         </div>
 
@@ -60,7 +66,7 @@ export default function LoginPage() {
           <CardHeader className="text-center space-y-2 pb-8 pt-10">
             <CardTitle className="text-xl font-bold text-white uppercase tracking-tight">Acesso Restrito</CardTitle>
             <CardDescription className="text-[10px] text-muted-foreground uppercase tracking-[0.2em]">
-              Autenticação segura via console VisComm
+              Autenticação segura via console Impacto
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 pb-12 px-8">
@@ -83,7 +89,7 @@ export default function LoginPage() {
               </div>
 
               <p className="text-[9px] text-center text-muted-foreground uppercase tracking-widest leading-relaxed opacity-60">
-                Ao acessar, você concorda com os protocolos de segurança e monitoramento do terminal VisComm.
+                Ao acessar, você concorda com os protocolos de segurança e monitoramento do terminal Impacto.
               </p>
             </div>
           </CardContent>
