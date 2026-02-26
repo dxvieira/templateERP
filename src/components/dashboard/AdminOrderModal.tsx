@@ -687,7 +687,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </div>
         </div>
 
-        {/* FICHA TÉCNICA - ITENS OTIMIZADOS */}
+        {/* FICHA TÉCNICA - ITENS ULTRA-COMPACTOS */}
         <div className="mb-6">
           <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 mb-2 flex items-center gap-2">
             <Box size={12} className="text-black" /> Descrição dos Serviços e Materiais
@@ -698,24 +698,24 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                 <th className="p-2 text-left text-[9px] font-black uppercase tracking-widest rounded-tl">Qtd</th>
                 <th className="p-2 text-left text-[9px] font-black uppercase tracking-widest">Cód</th>
                 <th className="p-2 text-left text-[9px] font-black uppercase tracking-widest">Especificação Técnica</th>
-                <th className="p-2 text-center text-[9px] font-black uppercase tracking-widest rounded-tr">Conferência</th>
+                <th className="p-2 text-center text-[9px] font-black uppercase tracking-widest rounded-tr">Conf.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 border-x border-b border-gray-300">
               {items && items.length > 0 ? (
                 items.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50 border-b border-gray-300">
-                    <td className="py-1.5 px-3 font-black text-lg border-r border-gray-200 w-16 text-center">{item.quantity || 0}</td>
-                    <td className="py-1.5 px-3 font-mono text-[10px] text-gray-400 border-r border-gray-200 w-16 text-center">{item.productCode || '--'}</td>
-                    <td className="py-1.5 px-3 text-sm font-bold uppercase leading-tight border-r border-gray-200">{item.desc || 'Item de produção padrão'}</td>
-                    <td className="py-1.5 px-3 w-20">
-                      <div className="w-5 h-5 border-2 border-gray-200 rounded-sm mx-auto" />
+                  <tr key={idx} className="border-b border-gray-300 leading-none">
+                    <td className="py-0.5 px-2 text-center font-black text-sm border-r border-gray-300 w-12">{item.quantity || 0}</td>
+                    <td className="py-0.5 px-2 text-center text-gray-400 border-r border-gray-300 w-12 text-[10px] font-mono">{item.productCode || '--'}</td>
+                    <td className="py-0.5 px-2 font-bold uppercase text-xs border-r border-gray-300 leading-tight">{item.desc || 'Item de produção'}</td>
+                    <td className="py-0.5 px-2 w-16">
+                      <div className="w-4 h-4 border-[1.5px] border-gray-400 rounded-sm mx-auto"></div>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={4} className="py-4 px-3 text-center text-gray-400 italic">Nenhum item detalhado na OS...</td>
+                  <td colSpan={4} className="py-2 px-3 text-center text-gray-400 italic text-xs">Nenhum item detalhado na OS...</td>
                 </tr>
               )}
             </tbody>
