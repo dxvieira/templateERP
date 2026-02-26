@@ -3,8 +3,8 @@ import { FirebaseClientProvider } from '@/firebase';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'VisComm Command Center',
-  description: 'Visual Communication ERP Command Center',
+  title: 'PRODUÇÃO IMPACTO',
+  description: 'Sistema de gestão para Comunicação Visual',
 };
 
 export default function RootLayout({
