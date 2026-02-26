@@ -282,7 +282,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       items, 
       total_value: totalValue,
       amount_paid: amountPaid, 
-      balance_due: balanceDue, 
+      balance_due: balance_due, 
       installments,
       updatedAt: serverTimestamp(),
       ...(order ? {} : { createdAt: serverTimestamp(), id: docRef.id })
@@ -716,33 +716,42 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </table>
         </div>
 
-        {/* OBSERVAÇÕES TÉCNICAS E FLUXO */}
-        <div className="grid grid-cols-3 gap-6 mb-8">
-          <div className="col-span-2">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 mb-2">Notas de Produção</h3>
-            <div className="min-h-[100px] p-3 bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl text-xs leading-relaxed text-gray-700 italic">
-              {observations || 'Nenhuma nota técnica específica anexada a este protocolo.'}
+        {/* ========================================== */}
+        {/* NOTAS E FLUXO DE PRODUÇÃO                  */}
+        {/* ========================================== */}
+        <div className="grid grid-cols-12 gap-8 mt-8">
+          
+          {/* COLUNA ESQUERDA: NOTAS DE PRODUÇÃO (Mais Estreita: 5 colunas) */}
+          <div className="col-span-5 flex flex-col">
+            <h2 className="font-bold text-xs uppercase text-gray-500 mb-3 tracking-wider">Notas de Produção</h2>
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 flex-1 min-h-[150px]">
+              <p className="text-gray-500 italic text-sm">
+                {order.notes || order.observations || order.observacoes || order.productionNotes || 'Nenhuma nota técnica específica anexada a este protocolo.'}
+              </p>
             </div>
           </div>
-          <div className="col-span-1">
+
+          {/* COLUNA DIREITA: FLUXO / ETAPA (Mais Larga: 7 colunas) */}
+          <div className="col-span-7">
             <h2 className="font-bold text-xs uppercase text-gray-500 mb-3 tracking-wider text-right">Fluxo / Etapa</h2>
             
             <div className="flex flex-col gap-4">
               {['ARTE FINAL', 'IMPRESSÃO', 'SERRALHERIA', 'ACABAMENTO', 'INSTALAÇÃO'].map((etapa) => (
                 <div key={etapa} className="flex flex-col">
-                  {/* Linha 1: Checkbox e Título da Etapa */}
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-gray-500 rounded-sm"></div>
-                    <span className="font-bold text-xs text-gray-800 tracking-wide">{etapa}</span>
+                  {/* Linha 1: Checkbox (um pouco maior) e Título da Etapa */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-5 h-5 border-2 border-gray-500 rounded-sm"></div>
+                    <span className="font-bold text-sm text-gray-800 tracking-wide">{etapa}</span>
                   </div>
                   
-                  {/* Linha 2: Campos de Assinatura e Data (Mais Espaçados para Caligrafia) */}
-                  <div className="flex items-end gap-1 pl-6 mt-2">
+                  {/* Linha 2: Campos de Assinatura e Data */}
+                  <div className="flex items-end gap-1 pl-8 mt-2">
                     <span className="text-[10px] text-gray-500 font-bold uppercase mb-0.5">Resp:</span>
-                    <div className="border-b border-gray-600 flex-1 h-5 min-w-[120px]"></div>
+                    <div className="border-b border-gray-600 flex-1 h-5 min-w-[100px]"></div>
                     
-                    <span className="text-[10px] text-gray-500 font-bold uppercase ml-3 mb-0.5">Data:</span>
-                    <div className="border-b border-gray-600 w-16 h-5"></div>
+                    <span className="text-[10px] text-gray-500 font-bold uppercase ml-4 mb-0.5">Data:</span>
+                    {/* LARGURA DA DATA AUMENTADA PARA W-28 */}
+                    <div className="border-b border-gray-600 w-28 h-5"></div> 
                   </div>
                 </div>
               ))}
