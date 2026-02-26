@@ -27,6 +27,19 @@ import { cn } from '@/lib/utils';
 // Configuração de Cores para Gráficos (Neon VisComm)
 const COLORS = ['#FF5F1F', '#10B981', '#3B82F6', '#D946EF', '#EAB308'];
 
+// MAPEAR CORES EXATAS COM O REATOR DE PRODUÇÃO
+const PRODUCTION_COLORS: Record<string, string> = {
+  'ARTE': '#d946ef',         // Fuchsia/Rosa (Arte Final)
+  'ARTE FINAL': '#d946ef',   // Fallback
+  'IMPRESSÃO': '#3b82f6',    // Azul
+  'SERRALHERIA': '#eab308',  // Amarelo
+  'ACABAMENTO': '#f97316',   // Laranja (Vibrante)
+  'INSTALAÇÃO': '#a855f7',   // Roxo/Lilás
+  'CONCLUÍDO': '#10b981',    // Verde Esmeralda (Sucesso)
+  'ENTREGUE': '#10b981',     // Verde Esmeralda (Sucesso)
+  'DEFAULT': '#64748b'       // Slate/Cinza
+};
+
 export default function ReportsManager() {
   const firestore = useFirestore();
   const { user } = useUser();
@@ -84,7 +97,7 @@ export default function ReportsManager() {
     let globalReceivable = 0;
     let totalPayables = 0;
 
-    const [year, month] = selectedMonth.split('-').map(Number);
+    const [year, month] = (selectedMonth || '').split('-').map(Number);
     const startDate = startOfMonth(new Date(year, month - 1));
     const endDate = endOfMonth(new Date(year, month - 1));
 
@@ -615,10 +628,27 @@ export default function ReportsManager() {
                   <div className="h-[250px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={ordersBI.statusChart} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                          {ordersBI.statusChart.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="rgba(0,0,0,0.5)" strokeWidth={2} />
-                          ))}
+                        <Pie 
+                          data={ordersBI.statusChart} 
+                          cx="50%" 
+                          cy="50%" 
+                          innerRadius={60} 
+                          outerRadius={80} 
+                          paddingAngle={5} 
+                          dataKey="value"
+                        >
+                          {ordersBI.statusChart.map((entry, index) => {
+                            const statusName = entry.name ? String(entry.name).toUpperCase() : '';
+                            const sliceColor = PRODUCTION_COLORS[statusName] || PRODUCTION_COLORS['DEFAULT'];
+                            return (
+                              <Cell 
+                                key={`cell-${index}`} 
+                                fill={sliceColor} 
+                                stroke="rgba(0,0,0,0.5)" 
+                                strokeWidth={2} 
+                              />
+                            );
+                          })}
                         </Pie>
                         <Tooltip contentStyle={{ backgroundColor: '#09090b', border: '1px solid #27272a', borderRadius: '12px', fontSize: '10px' }} />
                         <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold' }} />
