@@ -716,7 +716,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </table>
         </div>
 
-        {/* OBSERVAÇÕES TÉCNICAS */}
+        {/* OBSERVAÇÕES TÉCNICAS E FLUXO */}
         <div className="grid grid-cols-3 gap-6 mb-8">
           <div className="col-span-2">
             <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 mb-2">Notas de Produção</h3>
@@ -724,13 +724,26 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
               {observations || 'Nenhuma nota técnica específica anexada a este protocolo.'}
             </div>
           </div>
-          <div className="space-y-3">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 mb-2 text-center">Fluxo / Etapa</h3>
-            <div className="space-y-1.5 px-4">
-              {['Arte Final', 'Impressão', 'Serralheria', 'Acabamento', 'Instalação'].map(stage => (
-                <div key={stage} className="flex items-center gap-2">
-                  <div className="w-4 h-4 border border-gray-400 rounded" />
-                  <span className="text-[9px] font-bold uppercase text-gray-600">{stage}</span>
+          <div className="col-span-1">
+            <h2 className="font-bold text-[10px] uppercase text-gray-400 mb-3 tracking-[0.3em] text-right">Fluxo / Etapa</h2>
+            
+            <div className="flex flex-col gap-3">
+              {['ARTE FINAL', 'IMPRESSÃO', 'SERRALHERIA', 'ACABAMENTO', 'INSTALAÇÃO'].map((etapa) => (
+                <div key={etapa} className="flex flex-col">
+                  {/* Linha 1: Checkbox e Título da Etapa */}
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-4 h-4 border-2 border-gray-500 rounded-sm"></div>
+                    <span className="font-bold text-xs text-gray-800 tracking-wide">{etapa}</span>
+                  </div>
+                  
+                  {/* Linha 2: Campos de Assinatura e Data (Recuados) */}
+                  <div className="flex items-end gap-2 pl-6">
+                    <span className="text-[10px] text-gray-500 font-bold uppercase">Resp:</span>
+                    <div className="border-b border-gray-400 flex-1 h-3"></div>
+                    
+                    <span className="text-[10px] text-gray-500 font-bold uppercase ml-1">Data:</span>
+                    <div className="border-b border-gray-400 w-16 h-3"></div>
+                  </div>
                 </div>
               ))}
             </div>
