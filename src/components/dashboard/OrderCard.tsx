@@ -25,6 +25,9 @@ interface OrderCardProps {
   onClick?: (order: Order) => void;
 }
 
+/**
+ * Card de Pedido - Refatorado para elevação sutil e design tático.
+ */
 export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
   const isDone = useMemo(() => ['Concluído', 'Entregue'].includes(order.status), [order.status]);
   
@@ -75,26 +78,26 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
     <div 
       onClick={() => onClick?.(order)}
       className={cn(
-        "group relative w-full cursor-pointer bg-[#09090b] border border-zinc-800 rounded-xl overflow-hidden transition-all duration-300 ease-out",
-        "hover:border-zinc-700 hover:bg-zinc-900/50 active:scale-[0.99]",
+        "group relative w-full cursor-pointer bg-[#0c0c0e] border border-zinc-800 rounded-xl overflow-hidden p-5 transition-all duration-300 ease-out",
+        "hover:border-zinc-700 hover:shadow-lg hover:-translate-y-0.5",
         isDone ? "opacity-80" : ""
       )}
     >
       <div 
         className="absolute inset-0 border border-transparent rounded-xl pointer-events-none transition-opacity duration-300 opacity-0 group-hover:opacity-100"
-        style={{ borderColor: `${statusConfig.color}40`, boxShadow: `inset 0 0 20px ${statusConfig.color}10` }}
+        style={{ borderColor: `${statusConfig.color}20` }}
       />
 
-      <div className="flex items-stretch h-full">
+      <div className="flex items-stretch h-full gap-4">
         <div 
-          className="w-1.5 shrink-0 transition-all duration-500 group-hover:w-2"
+          className="w-1 shrink-0 transition-all duration-500 rounded-full"
           style={{ 
             backgroundColor: statusConfig.color, 
-            boxShadow: !isDone ? `0 0 15px ${statusConfig.color}60` : 'none' 
+            boxShadow: !isDone ? `0 0 15px ${statusConfig.color}40` : 'none' 
           }}
         />
 
-        <div className="flex-1 p-3 flex flex-col justify-between gap-3">
+        <div className="flex-1 flex flex-col justify-between gap-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="min-w-0 space-y-1">
               <div className="flex items-center gap-2">
@@ -134,8 +137,7 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
             </div>
           </div>
 
-          {/* ADVANCED FINANCE BAR */}
-          <div className="pt-2 border-t border-white/5 space-y-1.5">
+          <div className="pt-3 border-t border-white/5 space-y-2">
             <div className="flex justify-between items-end">
               <div className="flex flex-col gap-0.5">
                  <div className="flex items-center gap-1.5">

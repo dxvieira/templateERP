@@ -9,26 +9,17 @@ interface WeeklyTargetCardProps {
   pendingCount: number;
 }
 
+/**
+ * Card de Meta Semanal - Refatorado para preenchimento vertical e alinhamento central.
+ */
 export function WeeklyTargetCard({ pendingCount }: WeeklyTargetCardProps) {
   const router = useRouter();
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: 0.3 }}
-      className="
-        group relative h-full min-h-[260px] flex flex-col justify-between
-        bg-[#09090b] border border-zinc-800 rounded-2xl p-6 overflow-hidden
-        transition-all duration-500
-        hover:border-yellow-500/80 
-        hover:shadow-[0_0_40px_-15px_rgba(234,179,8,0.3)]
-        hover:-translate-y-0.5
-      "
-    >
+    <div className="h-full flex flex-col justify-between">
       <div className="absolute top-[-20%] right-[-20%] w-[80%] h-[80%] bg-yellow-500/5 blur-[60px] rounded-full pointer-events-none group-hover:bg-yellow-500/15" />
 
-      <div>
+      <div className="relative z-10">
         <div className="flex items-center gap-2 mb-3">
           <div className="p-1.5 rounded-full bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">
              <Target size={16} />
@@ -42,26 +33,19 @@ export function WeeklyTargetCard({ pendingCount }: WeeklyTargetCardProps) {
         </h2>
       </div>
 
-      <div className="flex items-center gap-3 my-3">
-         <span className="text-6xl font-black text-white tracking-tighter group-hover:text-yellow-400 transition-colors">
+      <div className="flex flex-row items-baseline gap-2 my-auto relative z-10">
+         <span className="text-7xl font-black text-white tracking-tighter group-hover:text-yellow-400 transition-colors">
            {pendingCount}
          </span>
-         <div className="flex flex-col justify-center">
-            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Pedidos</span>
-            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Pendentes</span>
+         <div className="flex flex-col">
+            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider leading-none">Pedidos</span>
+            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider leading-none">Pendentes</span>
          </div>
       </div>
 
       <button 
         onClick={() => router.push('/goals')}
-        className="
-          w-full py-3.5 rounded-lg flex items-center justify-center gap-2
-          bg-zinc-900 border border-zinc-800 
-          text-white font-bold uppercase tracking-widest text-[10px]
-          transition-all duration-300
-          group-hover:bg-yellow-500 group-hover:text-black group-hover:border-yellow-400
-          relative z-10
-        "
+        className="w-full mt-4 py-3 bg-zinc-800/30 hover:bg-zinc-800 text-zinc-300 font-medium rounded-xl border border-zinc-700/50 transition-all relative z-10 flex items-center justify-center gap-2"
       >
         Acessar Missão <ArrowUpRight size={14} />
       </button>
@@ -69,6 +53,6 @@ export function WeeklyTargetCard({ pendingCount }: WeeklyTargetCardProps) {
       <div className="absolute top-6 right-6 text-zinc-800 group-hover:text-yellow-500/15 transition-colors rotate-12">
         <Rocket size={40} />
       </div>
-    </motion.div>
+    </div>
   );
 }
