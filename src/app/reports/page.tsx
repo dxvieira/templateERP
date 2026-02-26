@@ -528,7 +528,15 @@ export default function ReportsManager() {
                       >
                         <div className="divide-y divide-white/5 pl-8 md:pl-16">
                           {group.installments.sort((a: any, b: any) => a.installmentNumber - b.installmentNumber).map((p: any) => (
-                            <div key={p.id} className="flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-white/5 transition-all gap-4">
+                            <div 
+                              key={p.id} 
+                              className={cn(
+                                "flex flex-col md:flex-row md:items-center justify-between p-4 transition-all gap-4 border-l-4",
+                                p.status === 'paid' 
+                                  ? "bg-emerald-500/10 border-emerald-500" 
+                                  : "bg-zinc-900/30 hover:bg-white/5 border-transparent"
+                              )}
+                            >
                               <div className="flex items-center gap-4">
                                 <div className="text-[9px] font-black text-zinc-600 bg-zinc-900/50 px-2 py-1 rounded border border-zinc-800">
                                   {p.installmentNumber || 1}/{p.totalInstallments || 1}
@@ -539,13 +547,18 @@ export default function ReportsManager() {
                                     <span className={cn("text-[10px] font-bold", p.status === 'paid' ? "text-emerald-500" : "text-white")}>
                                       {p.dueDate ? format(parseISO(p.dueDate), 'dd/MM/yyyy') : '-'}
                                     </span>
+                                    {p.status === 'paid' && (
+                                      <span className="px-1.5 py-0.5 text-[8px] font-black bg-emerald-500 text-black rounded uppercase tracking-tighter shadow-[0_0_10px_rgba(16,185,129,0.3)]">
+                                        PAGO
+                                      </span>
+                                    )}
                                   </div>
                                   <span className="text-[8px] text-zinc-600 font-black uppercase tracking-[0.2em]">{p.method} • {p.category}</span>
                                 </div>
                               </div>
 
                               <div className="flex items-center gap-6">
-                                <p className="text-sm font-black font-mono text-white">
+                                <p className={cn("text-sm font-black font-mono", p.status === 'paid' ? "text-emerald-400" : "text-white")}>
                                   {Number(p.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                 </p>
                                 <div className="flex gap-2">
@@ -794,7 +807,7 @@ export default function ReportsManager() {
                     <button 
                       type="submit"
                       disabled={isSubmitting}
-                      className="flex-1 py-4 bg-primary text-black font-black uppercase tracking-widest text-[10px] rounded-xl shadow-[0_5px_20px_-5px_rgba(255,95,31,0.4)]"
+                      className="flex-1 py-4 bg-primary text-black font-black uppercase tracking-widest text-[10px] rounded-xl shadow-[0_0_25px_rgba(255,95,31,0.4)]"
                     >
                       {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={16} /> : "Salvar Alterações"}
                     </button>
