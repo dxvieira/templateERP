@@ -11,7 +11,7 @@ import {
   Loader2, X, Wallet2, CheckCircle2, Receipt, 
   ArrowDownLeft, ArrowRight, CreditCard, Box, Factory, Check,
   BarChart3, PieChart as PieChartIcon, ShoppingBag, Users as UsersIcon,
-  ChevronDown, ChevronUp, Layers
+  ChevronDown, ChevronUp, Layers, Pencil
 } from 'lucide-react';
 import { 
   ResponsiveContainer, PieChart, Pie, Cell, 
@@ -39,6 +39,7 @@ export default function ReportsManager() {
   const [itemToDelete, setItemToDelete] = useState<any>(null);
   const [itemToPay, setItemToPay] = useState<any>(null);
   const [itemToEdit, setItemToEdit] = useState<any>(null);
+  const [installmentToEdit, setInstallmentToEdit] = useState<any>(null);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   
   // Modais
@@ -325,6 +326,27 @@ export default function ReportsManager() {
     }
   };
 
+  const handleSaveInstallmentEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!installmentToEdit || !installmentToEdit.id || !firestore) return;
+    setIsSubmitting(true);
+    try {
+      const docRef = doc(firestore, 'accounts_payable', installmentToEdit.id);
+      await updateDoc(docRef, {
+        description: installmentToEdit.description || '',
+        amount: Number(installmentToEdit.amount),
+        dueDate: installmentToEdit.dueDate || installmentToEdit.date,
+      });
+      toast({ title: "Parcela Atualizada" });
+      setInstallmentToEdit(null);
+    } catch (error: any) {
+      console.error("Erro ao atualizar parcela:", error);
+      alert("Erro ao salvar alterações: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (ordersLoading || cashflowLoading || payablesLoading) {
     return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>;
   }
@@ -527,6 +549,18 @@ export default function ReportsManager() {
                                   {Number(p.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                 </p>
                                 <div className="flex gap-2">
+                                  {/* BOTÃO DE EDITAR PARCELA */}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setInstallmentToEdit({ ...p });
+                                    }}
+                                    className="p-2.5 bg-zinc-800/50 text-zinc-400 hover:bg-zinc-700 hover:text-white rounded-lg transition-all border border-zinc-700/50"
+                                    title="Editar Parcela"
+                                  >
+                                    <Pencil size={16} />
+                                  </button>
+
                                   {p.status !== 'paid' && (
                                     <button 
                                       onClick={(e) => { e.stopPropagation(); setItemToPay(p); }} 
@@ -697,6 +731,71 @@ export default function ReportsManager() {
                   <div className="flex gap-3 pt-2">
                     <button type="button" onClick={() => setItemToEdit(null)} className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-900">Cancelar</button>
                     <button type="submit" disabled={isSubmitting} className="flex-1 py-4 bg-primary text-black font-black uppercase tracking-widest text-[10px] rounded-xl shadow-[0_5px_20px_-5px_rgba(255,95,31,0.4)]">
+                      {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={16} /> : "Salvar Alterações"}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* MODAL DE EDIÇÃO DE PARCELA (CONTAS A PAGAR) */}
+        <AnimatePresence>
+          {installmentToEdit && (
+            <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" onClick={() => setInstallmentToEdit(null)}>
+              <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-[#09090b] border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden">
+                <div className="p-6 border-b border-white/5 bg-zinc-900/30 flex justify-between items-center">
+                  <h3 className="text-lg font-black text-white uppercase tracking-tighter">Editar Parcela {installmentToEdit.installmentNumber || ''}</h3>
+                  <button onClick={() => setInstallmentToEdit(null)} className="p-2 text-zinc-500 hover:text-white bg-white/5 rounded-full"><X size={20}/></button>
+                </div>
+                <form onSubmit={handleSaveInstallmentEdit} className="p-6 space-y-6 bg-[#050505]">
+                  <div className="space-y-2">
+                    <label className={labelClass}>Descrição / Fornecedor</label>
+                    <input 
+                      type="text" 
+                      value={installmentToEdit.description || installmentToEdit.supplier || ''}
+                      onChange={(e) => setInstallmentToEdit({...installmentToEdit, description: e.target.value})}
+                      className={inputClass}
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className={labelClass}>Valor (R$)</label>
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        required
+                        value={installmentToEdit.amount || ''}
+                        onChange={(e) => setInstallmentToEdit({...installmentToEdit, amount: e.target.value})}
+                        className={inputClass}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className={labelClass}>Vencimento</label>
+                      <input 
+                        type="date" 
+                        required
+                        value={installmentToEdit.dueDate || installmentToEdit.date || ''}
+                        onChange={(e) => setInstallmentToEdit({...installmentToEdit, dueDate: e.target.value})}
+                        className={cn(inputClass, "[color-scheme:dark]")}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button 
+                      type="button"
+                      onClick={() => setInstallmentToEdit(null)}
+                      className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-900"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex-1 py-4 bg-primary text-black font-black uppercase tracking-widest text-[10px] rounded-xl shadow-[0_5px_20px_-5px_rgba(255,95,31,0.4)]"
+                    >
                       {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={16} /> : "Salvar Alterações"}
                     </button>
                   </div>
