@@ -282,7 +282,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       items, 
       total_value: totalValue,
       amount_paid: amountPaid, 
-      balance_due: balance_due, 
+      balance_due: totalValue - amountPaid, 
       installments,
       updatedAt: serverTimestamp(),
       ...(order ? {} : { createdAt: serverTimestamp(), id: docRef.id })
@@ -667,7 +667,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                 <span>
                   <strong>Endereço:</strong> {
                     (fullCustomerData?.address || fullCustomerData?.street || fullCustomerData?.endereco || fullCustomerData?.rua) ? 
-                    `${fullCustomerData?.street || fullCustomerData?.address || fullCustomerData?.endereco}, ${fullCustomerData?.number || fullCustomerData?.numero || 'S/N'} ${fullCustomerData?.complemento ? '(' + fullCustomerData.complemento + ')' : ''} - ${fullCustomerData?.neighborhood || fullCustomerData?.bairro || ''} ${fullCustomerData?.city || fullCustomerData?.cidade || ''}` 
+                    `${fullCustomerData?.street || fullCustomerData?.address || fullCustomerData?.endereco}, ${fullCustomerData?.number || fullCustomerData?.numero || 'S/N'} ${fullCustomerData?.complemento ? '(' + fullCustomerData.complemento + ')' : ''} - ${fullCustomerData?.bairro || fullCustomerData?.bairro || ''} ${fullCustomerData?.city || fullCustomerData?.cidade || ''}` 
                     : (order?.customerAddress || order?.endereco || '______________________________________________________________')
                   }
                 </span>
@@ -687,7 +687,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </div>
         </div>
 
-        {/* FICHA TÉCNICA - ITENS */}
+        {/* FICHA TÉCNICA - ITENS OTIMIZADOS */}
         <div className="mb-6">
           <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 mb-2 flex items-center gap-2">
             <Box size={12} className="text-black" /> Descrição dos Serviços e Materiais
@@ -702,16 +702,22 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 border-x border-b border-gray-300">
-              {items.map((item, idx) => (
-                <tr key={idx} className="hover:bg-gray-50">
-                  <td className="p-3 font-black text-lg border-r border-gray-200 w-12 text-center">{item.quantity || 0}</td>
-                  <td className="p-3 font-mono text-[10px] text-gray-400 border-r border-gray-200 w-16">{item.productCode || '--'}</td>
-                  <td className="p-3 text-sm font-bold uppercase leading-tight">{item.desc || 'Item de produção padrão'}</td>
-                  <td className="p-3 border-l border-gray-200 w-20">
-                    <div className="w-6 h-6 border-2 border-gray-200 rounded mx-auto" />
-                  </td>
+              {items && items.length > 0 ? (
+                items.map((item, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50 border-b border-gray-300">
+                    <td className="py-1.5 px-3 font-black text-lg border-r border-gray-200 w-16 text-center">{item.quantity || 0}</td>
+                    <td className="py-1.5 px-3 font-mono text-[10px] text-gray-400 border-r border-gray-200 w-16 text-center">{item.productCode || '--'}</td>
+                    <td className="py-1.5 px-3 text-sm font-bold uppercase leading-tight border-r border-gray-200">{item.desc || 'Item de produção padrão'}</td>
+                    <td className="py-1.5 px-3 w-20">
+                      <div className="w-5 h-5 border-2 border-gray-200 rounded-sm mx-auto" />
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="py-4 px-3 text-center text-gray-400 italic">Nenhum item detalhado na OS...</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -750,7 +756,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                     <div className="border-b border-gray-600 flex-1 h-5 min-w-[100px]"></div>
                     
                     <span className="text-[10px] text-gray-500 font-bold uppercase ml-4 mb-0.5">Data:</span>
-                    {/* LARGURA DA DATA AUMENTADA PARA W-28 */}
                     <div className="border-b border-gray-600 w-28 h-5"></div> 
                   </div>
                 </div>
