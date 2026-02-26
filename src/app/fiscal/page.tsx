@@ -14,22 +14,34 @@ import {
   RefreshCw,
   TrendingUp,
   Package,
-  Zap
+  Zap,
+  Trash2,
+  X,
+  AlertTriangle
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { doc, updateDoc } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
+import { useToast } from '@/hooks/use-toast';
 
 export default function FiscalCenterPage() {
+  const firestore = useFirestore();
+  const { toast } = useToast();
   const { orders, isLoading } = useOrders();
   const [filter, setFilter] = useState<'all' | 'issued' | 'pending' | 'error'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Estado para exclusão cirúrgica de registros fiscais
+  const [noteToDelete, setNoteToDelete] = useState<any>(null);
 
   // 1. Filtrar pedidos que possuem metadados de NFe
   const fiscalOrders = useMemo(() => {
     return orders.filter(o => 
-      o.nfe_status !== undefined || o.nfeStatus !== undefined
+      o.nfe_status !== undefined && o.nfe_status !== null || 
+      o.nfeStatus !== undefined && o.nfeStatus !== null
     );
   }, [orders]);
 
@@ -75,6 +87,33 @@ export default function FiscalCenterPage() {
       return matchesFilter && matchesSearch;
     });
   }, [fiscalOrders, filter, searchTerm]);
+
+  // FUNÇÃO DE EXCLUSÃO CIRÚRGICA (RESET FISCAL)
+  const handleConfirmDeleteNote = async () => {
+    if (!noteToDelete || !firestore) return;
+    
+    try {
+      const orderRef = doc(firestore, 'orders', noteToDelete.id);
+      
+      // Reseta absolutamente todas as propriedades fiscais (camelCase e snake_case)
+      await updateDoc(orderRef, {
+        nfe_status: null,
+        nfeStatus: null,
+        nfe_url: null,
+        nfeUrl: null,
+        nfe_pdf_url: null,
+        nfePdfUrl: null,
+        nfe_xml_url: null,
+        nfeXmlUrl: null
+      });
+      
+      toast({ title: "Registro Fiscal Removido", description: "Os dados da nota foram resetados com sucesso." });
+      setNoteToDelete(null);
+    } catch (error: any) {
+      console.error("Erro ao excluir nota:", error);
+      alert("Erro ao excluir registro fiscal: " + error.message);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -208,7 +247,7 @@ export default function FiscalCenterPage() {
                     <StatusBadge status={status} />
                   </div>
 
-                  <div className="col-span-2 flex justify-end gap-2">
+                  <div className="col-span-2 flex justify-end items-center gap-2">
                     {status === 'issued' ? (
                       <div className="flex items-center gap-2">
                         {/* BOTÃO PDF (DANFE) */}
@@ -236,6 +275,15 @@ export default function FiscalCenterPage() {
                         <RefreshCw size={12} /> Reemitir
                       </button>
                     )}
+
+                    {/* BOTÃO DE EXCLUIR REGISTRO FISCAL (SURGICAL RESET) */}
+                    <button
+                      onClick={() => setNoteToDelete(order)}
+                      className="flex items-center justify-center p-2 text-red-500 bg-red-500/10 hover:bg-red-500 hover:text-white rounded border border-red-500/20 transition-all ml-1"
+                      title="Excluir Registro da Nota"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 </motion.div>
               );
@@ -247,6 +295,44 @@ export default function FiscalCenterPage() {
             )}
           </div>
         </div>
+
+        {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO FISCAL */}
+        <AnimatePresence>
+          {noteToDelete && (
+            <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
+              <motion.div 
+                initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+                animate={{ scale: 1, opacity: 1, y: 0 }} 
+                exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                className="bg-[#0c0c0e] border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl text-center"
+              >
+                <div className="w-20 h-20 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6 border border-red-500/20 mx-auto">
+                  <AlertTriangle size={32} />
+                </div>
+                <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-3">Excluir Registro Fiscal?</h3>
+                <p className="text-zinc-400 text-sm uppercase tracking-widest leading-relaxed mb-8">
+                  Tem certeza que deseja apagar os dados da NFe do cliente <strong className="text-white">"{noteToDelete.client}"</strong>? 
+                  <br /><br />
+                  <span className="text-xs text-red-400/80 font-bold px-3 py-1.5 bg-red-500/5 rounded-lg border border-red-500/10">O PEDIDO CONTINUARÁ EXISTINDO, MAS O STATUS FISCAL SERÁ RESETADO.</span>
+                </p>
+                <div className="flex gap-4">
+                  <button 
+                    onClick={() => setNoteToDelete(null)} 
+                    className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-400 font-black uppercase text-[10px] tracking-widest hover:bg-zinc-900 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    onClick={handleConfirmDeleteNote} 
+                    className="flex-1 py-4 rounded-xl bg-red-500 text-white font-black uppercase text-[10px] tracking-widest shadow-[0_0_25px_rgba(239,68,68,0.4)] active:scale-95 transition-all"
+                  >
+                    Sim, Excluir NFe
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </main>
     </div>
   );
