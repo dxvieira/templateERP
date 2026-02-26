@@ -317,7 +317,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           <div className="flex items-center gap-4">
             <div className="bg-primary/10 text-primary p-2 rounded-xl border border-primary/20"><Calculator size={20} /></div>
             <div>
-              <span className="text-primary text-[9px] font-black uppercase tracking-[0.3em]">Gestão Administrativa VisComm</span>
+              <span className="text-primary text-[9px] font-black uppercase tracking-[0.3em]">Gestão Administrativa IMPACTO</span>
               <h2 className="text-xl font-black text-white uppercase tracking-tight">OS <span className="text-zinc-600">#{order?.id || 'NOVA'}</span></h2>
             </div>
           </div>

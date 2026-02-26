@@ -99,7 +99,7 @@ function OrdersManagerContent() {
           <div className="flex flex-col items-center mb-8">
             <div className={`p-4 rounded-full mb-4 border ${isPassError ? 'bg-destructive/10 text-destructive border-destructive/30' : 'bg-primary/10 text-primary border-primary/30'}`}><Lock size={32} /></div>
             <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Acesso Administrativo</h2>
-            <p className="text-zinc-500 text-[10px] mt-2 text-center uppercase tracking-[0.3em] font-bold">Terminal de Comando VisComm <br/> Identifique-se para gerenciar o financeiro</p>
+            <p className="text-zinc-500 text-[10px] mt-2 text-center uppercase tracking-[0.3em] font-bold">Terminal de Comando IMPACTO <br/> Identifique-se para gerenciar o financeiro</p>
           </div>
           <form onSubmit={handleUnlock} className="space-y-4">
             <div className="relative group">
@@ -119,7 +119,7 @@ function OrdersManagerContent() {
       <main className="flex-1 md:ml-64 p-4 md:p-6 space-y-6 mt-16 md:mt-0 z-10 pb-20">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-white/5 pb-6">
           <div className="space-y-1">
-            <div className="flex items-center gap-2 text-emerald-500"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,1)]" /><span className="text-[10px] font-black uppercase tracking-[0.2em]">Console Administrativo VisComm</span></div>
+            <div className="flex items-center gap-2 text-emerald-500"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,1)]" /><span className="text-[10px] font-black uppercase tracking-[0.2em]">Console Administrativo IMPACTO</span></div>
             <h1 className="text-3xl font-black tracking-tighter text-white uppercase leading-none">Gestão de <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-green-600">Custos e Pauta</span></h1>
           </div>
           <Button onClick={() => { setEditingOrder(null); setIsModalOpen(true); }} className="bg-emerald-500 text-black font-black h-10 px-6 rounded-full uppercase tracking-widest text-[10px] shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:bg-white"><Plus size={16} strokeWidth={3} className="mr-2" /> Nova OS</Button>
