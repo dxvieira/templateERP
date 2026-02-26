@@ -16,7 +16,7 @@ import {
 import { 
   ResponsiveContainer, PieChart, Pie, Cell, 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, 
-  Tooltip, Legend 
+  Tooltip, Legend, Label
 } from 'recharts';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -55,6 +55,9 @@ export default function ReportsManager() {
   const [installmentToEdit, setInstallmentToEdit] = useState<any>(null);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   
+  // Estado para interação do gráfico de pizza
+  const [activePieIndex, setActivePieIndex] = useState<number | null>(null);
+
   // Modais
   const [isCashflowModalOpen, setIsCashflowModalOpen] = useState(false);
   const [isPayableModalOpen, setIsPayableModalOpen] = useState(false);
@@ -203,11 +206,18 @@ export default function ReportsManager() {
     filteredOrders.forEach(o => {
       const val = Number(o.total_value || o.totalValue || 0);
       biTotalValue += val;
-      biStatus[o.status] = (biStatus[o.status] || 0) + 1;
+      const st = o.status || 'Pendente';
+      biStatus[st] = (biStatus[st] || 0) + 1;
       biClients[o.client] = (biClients[o.client] || 0) + val;
     });
 
-    const statusChart = Object.entries(biStatus).map(([name, value]) => ({ name, value }));
+    const totalOrdersCount = filteredOrders.length;
+    const statusChart = Object.entries(biStatus).map(([name, value]) => ({ 
+      name, 
+      value,
+      percent: totalOrdersCount > 0 ? Math.round((value / totalOrdersCount) * 100) : 0
+    }));
+
     const clientChart = Object.entries(biClients)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
@@ -226,11 +236,11 @@ export default function ReportsManager() {
       },
       ordersBI: {
         filteredOrders,
-        totalCount: filteredOrders.length,
+        totalCount: totalOrdersCount,
         inProduction: filteredOrders.filter(o => !['Concluído', 'Entregue'].includes(o.status)).length,
         finalized: filteredOrders.filter(o => ['Concluído', 'Entregue'].includes(o.status)).length,
         totalValue: biTotalValue,
-        ticketMedio: filteredOrders.length > 0 ? biTotalValue / filteredOrders.length : 0,
+        ticketMedio: totalOrdersCount > 0 ? biTotalValue / totalOrdersCount : 0,
         statusChart,
         clientChart
       },
@@ -620,22 +630,27 @@ export default function ReportsManager() {
             <div className="p-6 space-y-10">
               {/* GRID DE GRÁFICOS BI */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* GRÁFICO DE STATUS */}
-                <div className="bg-zinc-950/50 border border-zinc-800 p-6 rounded-3xl">
+                {/* GRÁFICO DE STATUS ULTRA-MODERNO */}
+                <div className="bg-zinc-950/50 border border-zinc-800 p-6 rounded-3xl relative overflow-hidden">
                   <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-6 flex items-center gap-2">
                     <PieChartIcon size={14}/> Distribuição de Produção
                   </h3>
-                  <div className="h-[250px]">
+                  <div className="h-[300px] relative">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie 
                           data={ordersBI.statusChart} 
                           cx="50%" 
                           cy="50%" 
-                          innerRadius={60} 
-                          outerRadius={80} 
-                          paddingAngle={5} 
+                          innerRadius={80} 
+                          outerRadius={100} 
+                          paddingAngle={10} 
+                          cornerRadius={10}
                           dataKey="value"
+                          strokeWidth={2}
+                          onMouseEnter={(_, index) => setActivePieIndex(index)}
+                          onMouseLeave={() => setActivePieIndex(null)}
+                          labelLine={false}
                         >
                           {ordersBI.statusChart.map((entry, index) => {
                             const statusName = entry.name ? String(entry.name).toUpperCase() : '';
@@ -644,16 +659,63 @@ export default function ReportsManager() {
                               <Cell 
                                 key={`cell-${index}`} 
                                 fill={sliceColor} 
-                                stroke="rgba(0,0,0,0.5)" 
-                                strokeWidth={2} 
+                                fillOpacity={0.8}
+                                stroke={sliceColor} 
+                                className="outline-none"
                               />
                             );
                           })}
+                          
+                          {/* ÁREA CENTRAL INTERATIVA */}
+                          <Label
+                            content={({ viewBox }) => {
+                              if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                                const activeItem = activePieIndex !== null ? ordersBI.statusChart[activePieIndex] : null;
+                                const statusName = activeItem?.name ? String(activeItem.name).toUpperCase() : '';
+                                const color = activeItem ? (PRODUCTION_COLORS[statusName] || PRODUCTION_COLORS['DEFAULT']) : '#fff';
+
+                                return (
+                                  <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
+                                    <tspan x={viewBox.cx} y={viewBox.cy - 20} fill="#71717a" className="text-[10px] font-black uppercase tracking-[0.2em]">
+                                      {activeItem ? statusName : 'TOTAL'}
+                                    </tspan>
+                                    <tspan x={viewBox.cx} y={viewBox.cy + 15} fill={color} className="text-4xl font-black tracking-tighter">
+                                      {activeItem ? activeItem.value : ordersBI.totalCount}
+                                    </tspan>
+                                    <tspan x={viewBox.cx} y={viewBox.cy + 40} fill="#71717a" className="text-[9px] font-bold uppercase tracking-widest">
+                                      {activeItem ? `${activeItem.percent}% DO TOTAL` : 'PEDIDOS NO MÊS'}
+                                    </tspan>
+                                  </text>
+                                )
+                              }
+                            }}
+                          />
                         </Pie>
-                        <Tooltip contentStyle={{ backgroundColor: '#09090b', border: '1px solid #27272a', borderRadius: '12px', fontSize: '10px' }} />
-                        <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold' }} />
+                        <Tooltip content={<></>} />
                       </PieChart>
                     </ResponsiveContainer>
+                  </div>
+                  
+                  {/* LEGENDA MODERNA */}
+                  <div className="flex flex-wrap justify-center gap-3 mt-4">
+                    {ordersBI.statusChart.map((item, index) => {
+                      const statusName = item.name ? String(item.name).toUpperCase() : '';
+                      const color = PRODUCTION_COLORS[statusName] || PRODUCTION_COLORS['DEFAULT'];
+                      return (
+                        <div 
+                          key={index} 
+                          className={cn(
+                            "flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all cursor-default",
+                            activePieIndex === index ? "bg-white/10 border-white/20 scale-105" : "bg-zinc-900/50 border-zinc-800"
+                          )}
+                          onMouseEnter={() => setActivePieIndex(index)}
+                          onMouseLeave={() => setActivePieIndex(null)}
+                        >
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}` }} />
+                          <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest">{item.name}</span>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
 
