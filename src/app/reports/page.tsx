@@ -25,9 +25,6 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
 // Configuração de Cores para Gráficos (Neon VisComm)
-const COLORS = ['#FF5F1F', '#10B981', '#3B82F6', '#D946EF', '#EAB308'];
-
-// MAPEAR CORES EXATAS COM O REATOR DE PRODUÇÃO
 const PRODUCTION_COLORS: Record<string, string> = {
   'ARTE': '#d946ef',         // Fuchsia/Rosa (Arte Final)
   'ARTE FINAL': '#d946ef',   // Fallback
@@ -630,12 +627,12 @@ export default function ReportsManager() {
             <div className="p-6 space-y-10">
               {/* GRID DE GRÁFICOS BI */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* GRÁFICO DE STATUS ULTRA-MODERNO */}
-                <div className="bg-zinc-950/50 border border-zinc-800 p-6 rounded-3xl relative overflow-hidden">
-                  <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-6 flex items-center gap-2">
+                {/* GRÁFICO DE STATUS ULTRA-MODERNO: DOUGHNUT NEON INTERATIVO */}
+                <div className="bg-zinc-950/50 border border-zinc-800 p-6 rounded-3xl relative overflow-hidden flex flex-col items-center">
+                  <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-6 flex items-center gap-2 self-start">
                     <PieChartIcon size={14}/> Distribuição de Produção
                   </h3>
-                  <div className="h-[300px] relative">
+                  <div className="h-[320px] w-full relative">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie 
@@ -644,29 +641,37 @@ export default function ReportsManager() {
                           cy="50%" 
                           innerRadius={80} 
                           outerRadius={100} 
-                          paddingAngle={10} 
+                          paddingAngle={5} 
                           cornerRadius={10}
                           dataKey="value"
                           strokeWidth={2}
                           onMouseEnter={(_, index) => setActivePieIndex(index)}
                           onMouseLeave={() => setActivePieIndex(null)}
                           labelLine={false}
+                          className="outline-none"
                         >
                           {ordersBI.statusChart.map((entry, index) => {
                             const statusName = entry.name ? String(entry.name).toUpperCase() : '';
                             const sliceColor = PRODUCTION_COLORS[statusName] || PRODUCTION_COLORS['DEFAULT'];
+                            const isActive = activePieIndex === index;
+                            
                             return (
                               <Cell 
                                 key={`cell-${index}`} 
                                 fill={sliceColor} 
-                                fillOpacity={0.8}
+                                fillOpacity={activePieIndex !== null ? (isActive ? 1 : 0.4) : 0.8}
                                 stroke={sliceColor} 
-                                className="outline-none"
+                                strokeWidth={isActive ? 4 : 2}
+                                style={{
+                                  filter: isActive ? `drop-shadow(0 0 12px ${sliceColor})` : 'none',
+                                  transition: 'all 0.3s ease'
+                                }}
+                                className="outline-none cursor-pointer"
                               />
                             );
                           })}
                           
-                          {/* ÁREA CENTRAL INTERATIVA */}
+                          {/* ÁREA CENTRAL DINÂMICA (PROJETOR DE DADOS) */}
                           <Label
                             content={({ viewBox }) => {
                               if (viewBox && "cx" in viewBox && "cy" in viewBox) {
@@ -676,14 +681,30 @@ export default function ReportsManager() {
 
                                 return (
                                   <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
-                                    <tspan x={viewBox.cx} y={viewBox.cy - 20} fill="#71717a" className="text-[10px] font-black uppercase tracking-[0.2em]">
-                                      {activeItem ? statusName : 'TOTAL'}
+                                    <tspan 
+                                      x={viewBox.cx} 
+                                      y={viewBox.cy - 20} 
+                                      fill={activeItem ? color : "#71717a"} 
+                                      className="text-[10px] font-black uppercase tracking-[0.3em]"
+                                      style={{ transition: 'fill 0.3s ease' }}
+                                    >
+                                      {activeItem ? statusName : 'TOTAL GERAL'}
                                     </tspan>
-                                    <tspan x={viewBox.cx} y={viewBox.cy + 15} fill={color} className="text-4xl font-black tracking-tighter">
+                                    <tspan 
+                                      x={viewBox.cx} 
+                                      y={viewBox.cy + 15} 
+                                      fill="#fff" 
+                                      className="text-5xl font-black tracking-tighter"
+                                    >
                                       {activeItem ? activeItem.value : ordersBI.totalCount}
                                     </tspan>
-                                    <tspan x={viewBox.cx} y={viewBox.cy + 40} fill="#71717a" className="text-[9px] font-bold uppercase tracking-widest">
-                                      {activeItem ? `${activeItem.percent}% DO TOTAL` : 'PEDIDOS NO MÊS'}
+                                    <tspan 
+                                      x={viewBox.cx} 
+                                      y={viewBox.cy + 42} 
+                                      fill="#71717a" 
+                                      className="text-[9px] font-bold uppercase tracking-widest"
+                                    >
+                                      {activeItem ? `${activeItem.percent}% DO FLUXO` : 'PEDIDOS REGISTRADOS'}
                                     </tspan>
                                   </text>
                                 )
@@ -696,22 +717,30 @@ export default function ReportsManager() {
                     </ResponsiveContainer>
                   </div>
                   
-                  {/* LEGENDA MODERNA */}
-                  <div className="flex flex-wrap justify-center gap-3 mt-4">
+                  {/* LEGENDA COMPACTA COM BADGES CIRCULARES NEON */}
+                  <div className="flex flex-wrap justify-center gap-3 mt-6">
                     {ordersBI.statusChart.map((item, index) => {
                       const statusName = item.name ? String(item.name).toUpperCase() : '';
                       const color = PRODUCTION_COLORS[statusName] || PRODUCTION_COLORS['DEFAULT'];
+                      const isActive = activePieIndex === index;
+                      
                       return (
                         <div 
                           key={index} 
                           className={cn(
-                            "flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all cursor-default",
-                            activePieIndex === index ? "bg-white/10 border-white/20 scale-105" : "bg-zinc-900/50 border-zinc-800"
+                            "flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all cursor-pointer",
+                            isActive ? "bg-white/10 border-white/20 scale-105" : "bg-zinc-900/50 border-zinc-800 hover:border-zinc-700"
                           )}
                           onMouseEnter={() => setActivePieIndex(index)}
                           onMouseLeave={() => setActivePieIndex(null)}
                         >
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}` }} />
+                          <div 
+                            className="w-2.5 h-2.5 rounded-full" 
+                            style={{ 
+                              backgroundColor: color, 
+                              boxShadow: `0 0 10px ${color}` 
+                            }} 
+                          />
                           <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest">{item.name}</span>
                         </div>
                       )
@@ -970,7 +999,7 @@ export default function ReportsManager() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className={labelClass}>Fornecedor</label>
-                      <input required value={payableFormData.supplier} onChange={e => setPayableFormData({...payableFormData, supplier: e.target.value})} className={inputClass} />
+                      <input required value={payableFormData.supplier} onChange={e => setPreviewInstallments(prev => prev.map(inst => ({ ...inst, supplier: e.target.value }))).then(() => setPayableFormData({...payableFormData, supplier: e.target.value}))} className={inputClass} />
                     </div>
                     <div>
                       <label className={labelClass}>Descrição</label>
