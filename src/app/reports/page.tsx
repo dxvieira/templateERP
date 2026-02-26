@@ -691,7 +691,7 @@ export default function ReportsManager() {
                             }}
                           />
                         </Pie>
-                        <Tooltip content={<></>} />
+                        <Tooltip content={() => null} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
