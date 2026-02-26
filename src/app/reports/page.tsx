@@ -9,7 +9,8 @@ import {
   Download, Plus, Search, Trash2, Calendar, 
   Loader2, X, Wallet2, CheckCircle2, Receipt, 
   ArrowRight, CreditCard, Box, Factory, Check,
-  BarChart3, PieChart as PieChartIcon, ShoppingBag, Users as UsersIcon
+  BarChart3, PieChart as PieChartIcon, ShoppingBag, Users as UsersIcon,
+  ChevronDown, ChevronUp, Layers
 } from 'lucide-react';
 import { 
   ResponsiveContainer, PieChart, Pie, Cell, 
@@ -35,6 +36,7 @@ export default function ReportsManager() {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [itemToDelete, setItemToDelete] = useState<any>(null);
   const [itemToPay, setItemToPay] = useState<any>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   
   // Modais
   const [isCashflowModalOpen, setIsCashflowModalOpen] = useState(false);
@@ -71,7 +73,7 @@ export default function ReportsManager() {
   const { data: payables, isLoading: payablesLoading } = useCollection(payablesQuery);
 
   // --- MOTOR DE FUSÃO FINANCEIRA ---
-  const { transactions, kpis, ordersBI } = useMemo(() => {
+  const { transactions, kpis, ordersBI, groupedPayables } = useMemo(() => {
     const fusion: any[] = [];
     let monthIncomes = 0;
     let monthExpenses = 0;
@@ -147,11 +149,33 @@ export default function ReportsManager() {
       } catch (e) {}
     });
 
-    // 3. Processar Contas a Pagar (KPI Pendentes)
+    // 3. Processar Contas a Pagar (KPI Pendentes + Agrupamento)
+    const groups: Record<string, any> = {};
     payables?.forEach(payable => {
       if (payable.status !== 'paid') {
         totalPayables += Number(payable.amount) || 0;
       }
+
+      const gid = payable.groupId || payable.id;
+      if (!groups[gid]) {
+        groups[gid] = {
+          groupId: gid,
+          supplier: payable.supplier,
+          description: payable.description,
+          totalAmount: 0,
+          installments: [],
+          allPaid: true
+        };
+      }
+      groups[gid].installments.push(payable);
+      groups[gid].totalAmount += Number(payable.amount) || 0;
+      if (payable.status !== 'paid') groups[gid].allPaid = false;
+    });
+
+    const groupedArray = Object.values(groups).sort((a: any, b: any) => {
+      const earliestA = a.installments.reduce((min: string, inst: any) => (inst.dueDate < min ? inst.dueDate : min), '9999-99-99');
+      const earliestB = b.installments.reduce((min: string, inst: any) => (inst.dueDate < min ? inst.dueDate : min), '9999-99-99');
+      return earliestA.localeCompare(earliestB);
     });
 
     // 4. BI de Pedidos
@@ -192,11 +216,16 @@ export default function ReportsManager() {
         ticketMedio: filteredOrders.length > 0 ? biTotalValue / filteredOrders.length : 0,
         statusChart,
         clientChart
-      }
+      },
+      groupedPayables: groupedArray
     };
   }, [orders, cashflowManual, payables, selectedMonth]);
 
   // --- FUNÇÕES DE AÇÃO ---
+  const toggleGroup = (gid: string) => {
+    setExpandedGroups(prev => ({ ...prev, [gid]: !prev[gid] }));
+  };
+
   const handleExportCSV = () => {
     if (!transactions || transactions.length === 0) {
       alert("Não há dados para exportar neste mês.");
@@ -238,18 +267,13 @@ export default function ReportsManager() {
 
   const handleConfirmDelete = async () => {
     if (!itemToDelete || !firestore) return;
-    
     try {
-      // Descobre de qual coleção apagar com base nos dados do item
       const isContaAPagar = itemToDelete.hasOwnProperty('supplier') || itemToDelete.status === 'pending';
       const collectionName = isContaAPagar ? 'accounts_payable' : 'cashflow_manual';
-      
       await deleteDoc(doc(firestore, collectionName, itemToDelete.id));
-      
       toast({ title: "Registro Removido" });
       setItemToDelete(null);
     } catch (error: any) {
-      console.error("Erro ao excluir:", error);
       alert("Erro ao excluir: " + error.message);
     }
   };
@@ -384,48 +408,109 @@ export default function ReportsManager() {
 
           {activeTab === 'CONTAS' && (
             <div className="divide-y divide-white/5">
-              {payables?.length > 0 ? payables.map((p) => (
-                <div key={p.id} className="group flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-4">
-                  <div className="flex items-center gap-4 flex-1">
-                     <div className={cn("flex flex-col items-center justify-center min-w-[50px] p-2 rounded-xl border", p.status === 'paid' ? "bg-emerald-500/10 border-emerald-500/20" : "bg-zinc-950 border-zinc-900")}>
-                       <span className="text-[8px] font-black text-zinc-600 uppercase">{p.dueDate ? format(parseISO(p.dueDate), 'MMM', { locale: ptBR }) : '-'}</span>
-                       <span className={cn("text-lg font-black leading-none", p.status === 'paid' ? "text-emerald-500" : "text-white")}>{p.dueDate ? format(parseISO(p.dueDate), 'dd') : '-'}</span>
-                     </div>
-                     <div className="min-w-0">
-                        <p className="text-sm font-bold text-white uppercase truncate">{p.supplier}</p>
-                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest">{p.description} • {p.category}</p>
-                     </div>
+              {groupedPayables.length > 0 ? groupedPayables.map((group: any) => (
+                <div key={group.groupId} className="flex flex-col">
+                  {/* LINHA MESTRA (ACORDEÃO) */}
+                  <div 
+                    onClick={() => toggleGroup(group.groupId)}
+                    className={cn(
+                      "flex flex-col md:flex-row md:items-center justify-between p-5 cursor-pointer transition-all border-l-2",
+                      expandedGroups[group.groupId] ? "bg-zinc-900/60 border-primary" : "hover:bg-zinc-900/30 border-transparent"
+                    )}
+                  >
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className={cn(
+                        "p-2.5 rounded-xl border flex items-center justify-center",
+                        group.allPaid ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" : "bg-zinc-900 border-zinc-800 text-zinc-500"
+                      )}>
+                        <Layers size={20} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-black text-white uppercase truncate">{group.supplier}</h4>
+                          <span className="text-[8px] bg-zinc-800 px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-400 font-black uppercase">
+                            {group.installments.length} PARCELAS
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-0.5 truncate">{group.description}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-8 mt-4 md:mt-0">
+                      <div className="text-right">
+                        <p className="text-[9px] text-zinc-600 uppercase font-black tracking-widest">Total do Contrato</p>
+                        <p className="text-lg font-black font-mono text-white">
+                          {group.totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className={cn(
+                          "px-2.5 py-1 rounded-full border text-[8px] font-black uppercase tracking-widest",
+                          group.allPaid ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
+                        )}>
+                          {group.allPaid ? 'Liquidado' : 'Em Aberto'}
+                        </div>
+                        {expandedGroups[group.groupId] ? <ChevronUp className="text-zinc-700" size={20} /> : <ChevronDown className="text-zinc-700" size={20} />}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-8">
-                     <div className="text-right">
-                        <p className="text-lg font-black font-mono tracking-tighter text-white">{p.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                        <span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded-full border", p.status === 'paid' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-yellow-500/10 text-yellow-500 border-yellow-500/20")}>{p.status === 'paid' ? 'Liquidado' : 'Pendente'}</span>
-                     </div>
-                     <div className="flex gap-2">
-                        {p.status !== 'paid' && (
-                          <button 
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setItemToPay(p);
-                            }} 
-                            className="p-3 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black rounded-xl transition-all border border-emerald-500/20"
-                          >
-                            <Check size={18} strokeWidth={3} />
-                          </button>
-                        )}
-                        <button 
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setItemToDelete(p);
-                          }} 
-                          className="p-3 bg-zinc-900 text-zinc-600 hover:text-red-500 rounded-xl transition-all border border-zinc-800"
-                        >
-                          <Trash2 size={18}/>
-                        </button>
-                     </div>
-                  </div>
+
+                  {/* PARCELAS INDIVIDUAIS */}
+                  <AnimatePresence>
+                    {expandedGroups[group.groupId] && (
+                      <motion.div 
+                        initial={{ height: 0, opacity: 0 }} 
+                        animate={{ height: 'auto', opacity: 1 }} 
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden bg-black/40 border-t border-white/5"
+                      >
+                        <div className="divide-y divide-white/5 pl-8 md:pl-16">
+                          {group.installments.sort((a: any, b: any) => a.installmentNumber - b.installmentNumber).map((p: any) => (
+                            <div key={p.id} className="flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-white/5 transition-all gap-4">
+                              <div className="flex items-center gap-4">
+                                <div className="text-[9px] font-black text-zinc-600 bg-zinc-900/50 px-2 py-1 rounded border border-zinc-800">
+                                  {p.installmentNumber || 1}/{p.totalInstallments || 1}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Vencimento:</span>
+                                    <span className={cn("text-[10px] font-bold", p.status === 'paid' ? "text-emerald-500" : "text-white")}>
+                                      {p.dueDate ? format(parseISO(p.dueDate), 'dd/MM/yyyy') : '-'}
+                                    </span>
+                                  </div>
+                                  <span className="text-[8px] text-zinc-600 font-black uppercase tracking-[0.2em]">{p.method} • {p.category}</span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-6">
+                                <p className="text-sm font-black font-mono text-white">
+                                  {Number(p.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </p>
+                                <div className="flex gap-2">
+                                  {p.status !== 'paid' && (
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); setItemToPay(p); }} 
+                                      className="p-2.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black rounded-lg transition-all border border-emerald-500/20"
+                                      title="Baixar Parcela"
+                                    >
+                                      <Check size={16} strokeWidth={3} />
+                                    </button>
+                                  )}
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); setItemToDelete(p); }} 
+                                    className="p-2.5 bg-zinc-900 text-zinc-600 hover:text-red-500 rounded-lg transition-all border border-zinc-800"
+                                    title="Excluir Parcela"
+                                  >
+                                    <Trash2 size={16}/>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               )) : <EmptyState icon={Receipt} text="Sem contas pendentes" />}
             </div>
@@ -504,22 +589,20 @@ export default function ReportsManager() {
           )}
         </div>
 
-        {/* MODAL DE EXCLUSÃO (RELATÓRIOS) */}
+        {/* MODAIS DE CONFIRMAÇÃO */}
         <AnimatePresence>
           {itemToDelete && (
             <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
               <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-[#0c0c0e] border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl text-center">
-                <div className="w-20 h-20 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6 border border-red-500/20 mx-auto">
-                  <span className="text-2xl">⚠️</span>
-                </div>
-                <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-3">Confirmar Exclusão</h3>
+                <div className="w-20 h-20 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6 border border-red-500/20 mx-auto text-2xl">⚠️</div>
+                <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-3">Excluir Lançamento</h3>
                 <p className="text-zinc-400 text-sm uppercase tracking-widest leading-relaxed mb-8">
-                  Tem certeza que deseja apagar <strong className="text-white">"{itemToDelete.description || itemToDelete.supplier || 'este lançamento'}"</strong>? <br />
-                  <span className="text-xs text-red-400 font-bold">ESTA AÇÃO NÃO PODERÁ SER DESFEITA E AFETARÁ O CAIXA.</span>
+                  Deseja apagar <strong className="text-white">"{itemToDelete.description || itemToDelete.supplier}"</strong>? <br />
+                  <span className="text-xs text-red-400 font-bold">ESTA AÇÃO É DEFINITIVA.</span>
                 </p>
                 <div className="flex gap-4">
                   <button onClick={() => setItemToDelete(null)} className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-400 font-black uppercase text-[10px] tracking-widest hover:bg-zinc-900 transition-colors">Cancelar</button>
-                  <button onClick={handleConfirmDelete} className="flex-1 py-4 rounded-xl bg-red-500 text-white font-black uppercase text-[10px] tracking-widest shadow-[0_0_25px_rgba(239,68,68,0.4)] hover:bg-red-600 transition-colors active:scale-95">Sim, Excluir</button>
+                  <button onClick={handleConfirmDelete} className="flex-1 py-4 rounded-xl bg-red-500 text-white font-black uppercase text-[10px] tracking-widest shadow-[0_0_25px_rgba(239,68,68,0.4)] hover:bg-red-600 transition-colors active:scale-95">Confirmar</button>
                 </div>
               </motion.div>
             </div>
@@ -531,18 +614,18 @@ export default function ReportsManager() {
             <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
               <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-[#0c0c0e] border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl text-center">
                 <div className="w-20 h-20 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mb-6 border border-emerald-500/20 mx-auto text-4xl">💰</div>
-                <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-3">Confirmar Pagamento</h3>
-                <p className="text-zinc-400 text-sm uppercase tracking-widest mb-8">Liquidar <strong className="text-white">R$ {Number(itemToPay.amount).toLocaleString('pt-BR')}</strong>?</p>
+                <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-3">Liquidar Parcela</h3>
+                <p className="text-zinc-400 text-sm uppercase tracking-widest mb-8">Confirmar pagamento de <strong className="text-white">R$ {Number(itemToPay.amount).toLocaleString('pt-BR')}</strong>?</p>
                 <div className="flex gap-4">
                   <button onClick={() => setItemToPay(null)} className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-400 font-black uppercase text-[10px] tracking-widest">Cancelar</button>
-                  <button onClick={handleConfirmPayment} className="flex-1 py-4 rounded-xl bg-emerald-500 text-white font-black uppercase text-[10px] tracking-widest shadow-[0_0_25px_rgba(16,185,129,0.4)]">Confirmar Baixa</button>
+                  <button onClick={handleConfirmPayment} className="flex-1 py-4 rounded-xl bg-emerald-500 text-white font-black uppercase text-[10px] tracking-widest shadow-[0_0_25px_rgba(16,185,129,0.4)]">Efetivar Baixa</button>
                 </div>
               </motion.div>
             </div>
           )}
         </AnimatePresence>
 
-        {/* MODAL NOVO LANÇAMENTO (FLUXO) */}
+        {/* MODAIS DE FORMULÁRIO */}
         <AnimatePresence>
           {isCashflowModalOpen && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" onClick={() => setIsCashflowModalOpen(false)}>
@@ -590,7 +673,6 @@ export default function ReportsManager() {
           )}
         </AnimatePresence>
 
-        {/* MODAL NOVA CONTA (PAGAR) */}
         <AnimatePresence>
           {isPayableModalOpen && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" onClick={() => setIsPayableModalOpen(false)}>
@@ -642,16 +724,26 @@ export default function ReportsManager() {
                 <div className="p-8 border-t border-white/5">
                   <button onClick={async () => {
                     setIsSubmitting(true);
+                    const groupId = Date.now().toString();
                     try {
-                      for(const inst of previewInstallments) {
+                      for(let i=0; i<previewInstallments.length; i++) {
+                        const inst = previewInstallments[i];
                         await addDoc(collection(firestore, 'accounts_payable'), {
-                          supplier: payableFormData.supplier, description: payableFormData.description,
-                          amount: Number(inst.amount), dueDate: inst.dueDate, status: 'pending', userId: user.uid
+                          supplier: payableFormData.supplier, 
+                          description: payableFormData.description,
+                          amount: Number(inst.amount), 
+                          dueDate: inst.dueDate, 
+                          status: 'pending', 
+                          userId: user.uid,
+                          groupId: groupId,
+                          installmentNumber: i + 1,
+                          totalInstallments: previewInstallments.length,
+                          createdAt: serverTimestamp()
                         });
                       }
-                      setIsPayableModalOpen(false); setPreviewInstallments([]); toast({title: "Salvo"});
+                      setIsPayableModalOpen(false); setPreviewInstallments([]); toast({title: "Pauta de Pagamentos Salva"});
                     } catch(e) { alert(e); } finally { setIsSubmitting(false); }
-                  }} disabled={isSubmitting} className="w-full py-5 bg-primary text-black font-black uppercase tracking-widest rounded-2xl">Salvar Pauta</button>
+                  }} disabled={isSubmitting} className="w-full py-5 bg-primary text-black font-black uppercase tracking-widest rounded-2xl">Efetivar Compromissos</button>
                 </div>
               </motion.div>
             </div>
