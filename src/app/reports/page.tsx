@@ -236,16 +236,22 @@ export default function ReportsManager() {
     } catch (e) { alert("Erro: " + e); }
   };
 
-  const handleDeleteTransaction = async (id: string, origin: string) => {
-    if (origin === 'SISTEMA (OS)') {
-      alert("⚠️ Lançamento automático. Cancele no pedido original.");
-      return;
-    }
-    if (!window.confirm("Deseja apagar este registro manual?")) return;
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete || !firestore) return;
+    
     try {
-      await deleteDoc(doc(firestore, 'cashflow_manual', id));
+      // Descobre de qual coleção apagar com base nos dados do item
+      const isContaAPagar = itemToDelete.hasOwnProperty('supplier') || itemToDelete.status === 'pending';
+      const collectionName = isContaAPagar ? 'accounts_payable' : 'cashflow_manual';
+      
+      await deleteDoc(doc(firestore, collectionName, itemToDelete.id));
+      
       toast({ title: "Registro Removido" });
-    } catch (e) { alert("Erro ao excluir"); }
+      setItemToDelete(null);
+    } catch (error: any) {
+      console.error("Erro ao excluir:", error);
+      alert("Erro ao excluir: " + error.message);
+    }
   };
 
   const handleSaveManualEntry = async (e: React.FormEvent) => {
@@ -356,7 +362,20 @@ export default function ReportsManager() {
                      <p className={cn("text-lg font-black font-mono tracking-tighter", t.type === 'income' ? "text-emerald-500" : "text-red-500")}>
                        {t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                      </p>
-                     <button onClick={() => handleDeleteTransaction(t.id, t.origin)} className="p-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all border border-red-500/20"><Trash2 size={16}/></button>
+                     <button 
+                       onClick={(e) => {
+                         e.preventDefault();
+                         e.stopPropagation();
+                         if (t.origin === 'SISTEMA (OS)') {
+                           alert("⚠️ Lançamento automático. Cancele no pedido original.");
+                           return;
+                         }
+                         setItemToDelete(t);
+                       }} 
+                       className="p-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all border border-red-500/20"
+                     >
+                       <Trash2 size={16}/>
+                     </button>
                   </div>
                 </div>
               )) : <EmptyState icon={Target} text="Sem movimentos no período" />}
@@ -384,9 +403,27 @@ export default function ReportsManager() {
                      </div>
                      <div className="flex gap-2">
                         {p.status !== 'paid' && (
-                          <button onClick={() => setItemToPay(p)} className="p-3 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black rounded-xl transition-all border border-emerald-500/20"><Check size={18} strokeWidth={3} /></button>
+                          <button 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setItemToPay(p);
+                            }} 
+                            className="p-3 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black rounded-xl transition-all border border-emerald-500/20"
+                          >
+                            <Check size={18} strokeWidth={3} />
+                          </button>
                         )}
-                        <button onClick={() => setItemToDelete(p)} className="p-3 bg-zinc-900 text-zinc-600 hover:text-red-500 rounded-xl transition-all border border-zinc-800"><Trash2 size={18}/></button>
+                        <button 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setItemToDelete(p);
+                          }} 
+                          className="p-3 bg-zinc-900 text-zinc-600 hover:text-red-500 rounded-xl transition-all border border-zinc-800"
+                        >
+                          <Trash2 size={18}/>
+                        </button>
                      </div>
                   </div>
                 </div>
@@ -467,17 +504,22 @@ export default function ReportsManager() {
           )}
         </div>
 
-        {/* MODAIS (REUTILIZADOS) */}
+        {/* MODAL DE EXCLUSÃO (RELATÓRIOS) */}
         <AnimatePresence>
           {itemToDelete && (
             <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
               <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-[#0c0c0e] border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl text-center">
-                <div className="w-20 h-20 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6 border border-red-500/20 mx-auto"><Trash2 size={32} /></div>
+                <div className="w-20 h-20 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6 border border-red-500/20 mx-auto">
+                  <span className="text-2xl">⚠️</span>
+                </div>
                 <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-3">Confirmar Exclusão</h3>
-                <p className="text-zinc-400 text-sm uppercase tracking-widest mb-8">Apagar "{itemToDelete.description || itemToDelete.supplier}"?</p>
+                <p className="text-zinc-400 text-sm uppercase tracking-widest leading-relaxed mb-8">
+                  Tem certeza que deseja apagar <strong className="text-white">"{itemToDelete.description || itemToDelete.supplier || 'este lançamento'}"</strong>? <br />
+                  <span className="text-xs text-red-400 font-bold">ESTA AÇÃO NÃO PODERÁ SER DESFEITA E AFETARÁ O CAIXA.</span>
+                </p>
                 <div className="flex gap-4">
-                  <button onClick={() => setItemToDelete(null)} className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-400 font-black uppercase text-[10px] tracking-widest">Cancelar</button>
-                  <button onClick={async () => { try { await deleteDoc(doc(firestore, 'accounts_payable', itemToDelete.id)); setItemToDelete(null); toast({title: "Removido"}); } catch(e){ alert(e); } }} className="flex-1 py-4 rounded-xl bg-red-500 text-white font-black uppercase text-[10px] tracking-widest shadow-[0_0_25px_rgba(239,68,68,0.4)]">Sim, Excluir</button>
+                  <button onClick={() => setItemToDelete(null)} className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-400 font-black uppercase text-[10px] tracking-widest hover:bg-zinc-900 transition-colors">Cancelar</button>
+                  <button onClick={handleConfirmDelete} className="flex-1 py-4 rounded-xl bg-red-500 text-white font-black uppercase text-[10px] tracking-widest shadow-[0_0_25px_rgba(239,68,68,0.4)] hover:bg-red-600 transition-colors active:scale-95">Sim, Excluir</button>
                 </div>
               </motion.div>
             </div>
