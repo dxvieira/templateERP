@@ -230,9 +230,20 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   };
 
   const handlePrintOP = () => {
+    // Guarda o título original do sistema
     const originalTitle = document.title;
-    document.title = "\u200b";
+    
+    // Extrai os dados para nomear o arquivo
+    const nomeCliente = order?.client || order?.customerName || order?.cliente || 'Cliente';
+    const numeroOS = order?.id ? String(order.id).padStart(6, '0') : '000000';
+    
+    // Altera o título temporariamente (o navegador usa isso para o nome do PDF)
+    document.title = `${nomeCliente} ${numeroOS}`;
+    
+    // Abre a tela de impressão
     window.print();
+    
+    // Restaura o título da aba do navegador imediatamente
     document.title = originalTitle;
   };
 
