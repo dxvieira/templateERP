@@ -80,20 +80,17 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       try {
         const clientsRef = collection(firestore, 'clients');
         
-        // TENTATIVA 1: Busca direta pelo ID (Mais rápido e preciso)
         const clientId = order.clientId || order.customerId || order.clienteId || order.id_cliente;
         if (clientId) {
           const clientSnap = await getDoc(doc(firestore, 'clients', clientId));
           if (clientSnap.exists()) {
             setFullCustomerData(clientSnap.data());
-            return; // Encontrado via ID
+            return;
           }
         }
         
-        // TENTATIVA 2: Busca por nome (Caso a OS tenha apenas a string do nome salva)
         const clientName = order.client || order.customerName || order.cliente;
         if (clientName) {
-          // Tenta buscar pela key 'name'
           const qName = query(clientsRef, where('name', '==', clientName));
           const snapName = await getDocs(qName);
           
@@ -102,7 +99,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
             return;
           }
           
-          // Tenta buscar pela key 'company' (Razão Social)
           const qCompany = query(clientsRef, where('company', '==', clientName));
           const snapCompany = await getDocs(qCompany);
           if (!snapCompany.empty) {
@@ -241,24 +237,14 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
     try {
       const orderRef = doc(firestore, 'orders', order.id);
-      
-      // 1. Muda para processando (Botão Amarelo)
       await updateDoc(orderRef, { nfe_status: 'processing' });
-      
-      // 2. Simula o tempo de latência da SEFAZ (3 segundos)
       await new Promise(resolve => setTimeout(resolve, 3000));
-
-      // 3. Conclui a emissão (Botão Verde e Azul) e injeta arquivos de teste
       await updateDoc(orderRef, {
         nfe_status: 'issued',
         nfe_pdf_url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
         nfe_xml_url: 'https://www.w3schools.com/xml/note.xml' 
       });
-      
-      toast({ 
-        title: "Nota Emitida", 
-        description: "A simulação de faturamento foi concluída com sucesso." 
-      });
+      toast({ title: "Nota Emitida", description: "A simulação de faturamento foi concluída com sucesso." });
     } catch (error: any) {
       console.error("Erro ao simular emissão de NFe:", error);
       alert("Erro no banco de dados: " + error.message);
@@ -279,6 +265,13 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
     const docRef = order ? doc(firestore, 'orders', order.id) : doc(collection(firestore, 'orders'));
     
+    // RECALCULO FINANCEIRO ATÔMICO ANTES DE SALVAR
+    const finalTotalValue = items.reduce((acc, item) => acc + (Number(item.quantity || 0) * Number(item.unitValue || 0)), 0);
+    const finalAmountPaid = installments
+      .filter(i => i.status === 'paid')
+      .reduce((acc, i) => acc + (Number(i.amount) || 0), 0);
+    const finalBalanceDue = finalTotalValue - finalAmountPaid;
+
     const payload = {
       client, 
       seller, 
@@ -287,9 +280,9 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       delivery_date: deliveryDate, 
       observations, 
       items, 
-      total_value: totalValue,
-      amount_paid: amountPaid, 
-      balance_due: totalValue - amountPaid, 
+      total_value: finalTotalValue,
+      amount_paid: finalAmountPaid, 
+      balance_due: finalBalanceDue, 
       installments,
       updatedAt: serverTimestamp(),
       ...(order ? {} : { createdAt: serverTimestamp(), id: docRef.id })
@@ -297,7 +290,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
     setDoc(docRef, payload, { merge: true })
       .then(() => {
-        toast({ title: "Protocolo Atualizado" });
+        toast({ title: "Protocolo Atualizado", description: "Dados operacionais e financeiros sincronizados." });
         onClose();
       })
       .catch((err) => {
@@ -317,7 +310,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-md p-2 md:p-4">
-      {/* MODAL VISÍVEL NO SISTEMA */}
       <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }} className="bg-[#09090b] w-full max-w-5xl border border-zinc-800 rounded-3xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden print:hidden">
         
         <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-zinc-900/50">
@@ -443,7 +435,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                    <div className="space-y-3">
                       {items.map((item, index) => (
                         <div key={index} className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-4 flex flex-col gap-3 group transition-all hover:border-zinc-700">
-                           {/* LINHA 1: DADOS TÉCNICOS E FINANCEIROS */}
                            <div className="grid grid-cols-1 md:grid-cols-12 items-center gap-3">
                               <div className="md:col-span-1">
                                 <label className="text-[8px] text-zinc-600 uppercase font-black mb-1 block ml-1">Cód</label>
@@ -475,7 +466,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                               </div>
                            </div>
 
-                           {/* LINHA 2: NOTAS DE PRODUÇÃO INDIVIDUAIS */}
                            <div className="w-full">
                               <label className="text-[8px] text-primary/60 uppercase font-black mb-1 block ml-1">Instruções de Produção / Acabamento</label>
                               <input 
@@ -675,12 +665,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
         </div>
       </motion.div>
 
-      {/* ========================================== */}
-      {/* LAYOUT DE IMPRESSÃO - ORDEM DE PRODUÇÃO    */}
-      {/* ========================================== */}
       <div className="hidden print:block fixed inset-0 z-[99999] bg-white text-black p-8 font-sans w-full h-full overflow-y-auto">
-        
-        {/* CABEÇALHO COMPACTO */}
         <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-4">
           <div className="w-32 h-12 bg-gray-100 border-2 border-dashed border-gray-400 flex items-center justify-center text-gray-500 font-bold rounded text-[10px] uppercase">
             [ LOGO ]
@@ -691,7 +676,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </div>
         </div>
 
-        {/* DADOS DO CLIENTE E DATAS (MAPEAMENTO INTELIGENTE) */}
         <div className="grid grid-cols-4 gap-4 mb-4">
           <div className="col-span-3 border-2 border-black p-3 rounded-lg">
             <h2 className="font-bold text-[9px] uppercase text-gray-500 mb-1 tracking-wider">Dados do Parceiro / Cliente</h2>
@@ -737,7 +721,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </div>
         </div>
 
-        {/* FICHA TÉCNICA - ITENS ULTRA-COMPACTOS */}
         <div className="mb-6">
           <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 mb-2 flex items-center gap-2">
             <Box size={12} className="text-black" /> Descrição dos Serviços e Materiais
@@ -757,7 +740,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                   <tr key={idx} className="border-b border-gray-300 leading-none">
                     <td className="py-0.5 px-2 text-center font-black text-sm border-r border-gray-300 w-12">{item.quantity || 0}</td>
                     <td className="py-0.5 px-2 text-center text-gray-400 border-r border-gray-300 w-12 text-[10px] font-mono">{item.productCode || '--'}</td>
-                    <td className="py-0.5 px-2 font-bold uppercase text-xs border-r border-gray-300 leading-tight">{item.desc || 'Item de produção'}</td>
+                    <td className="py-0.5 px-2 font-bold uppercase text-xs border-r border-gray-300 leading-tight">{item.desc || 'Item de production'}</td>
                     <td className="py-0.5 px-2 w-16">
                       <div className="w-4 h-4 border-[1.5px] border-gray-400 rounded-sm mx-auto"></div>
                     </td>
@@ -772,17 +755,10 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </table>
         </div>
 
-        {/* ========================================== */}
-        {/* NOTAS E FLUXO DE PRODUÇÃO                  */}
-        {/* ========================================== */}
         <div className="grid grid-cols-12 gap-8 mt-8">
-          
-          {/* COLUNA ESQUERDA: NOTAS DE PRODUÇÃO */}
           <div className="col-span-5 flex flex-col">
             <h2 className="font-bold text-xs uppercase text-gray-500 mb-3 tracking-wider">Notas de Produção</h2>
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 flex-1 min-h-[150px] text-xs">
-              
-              {/* NOTA GERAL DO PEDIDO (Se existir) */}
               {(order.notes || order.observations || order.observacoes || order.productionNotes || observations) && (
                 <div className="mb-3 pb-2 border-b border-gray-200">
                   <span className="font-bold text-gray-700 uppercase text-[10px]">Nota Geral da OS:</span>
@@ -792,7 +768,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                 </div>
               )}
 
-              {/* NOTAS ESPECÍFICAS POR ITEM */}
               {items && items.length > 0 ? (
                 <div className="flex flex-col gap-2.5">
                   {items.map((item: any, idx: number) => (
@@ -812,20 +787,17 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
             </div>
           </div>
 
-          {/* COLUNA DIREITA: FLUXO / ETAPA (Mais Larga: 7 colunas) */}
           <div className="col-span-7">
             <h2 className="font-bold text-xs uppercase text-gray-500 mb-3 tracking-wider text-right">Fluxo / Etapa</h2>
             
             <div className="flex flex-col gap-4">
               {['ARTE FINAL', 'IMPRESSÃO', 'SERRALHERIA', 'ACABAMENTO', 'INSTALAÇÃO'].map((etapa) => (
                 <div key={etapa} className="flex flex-col">
-                  {/* Linha 1: Checkbox (um pouco maior) e Título da Etapa */}
                   <div className="flex items-center gap-3">
                     <div className="w-5 h-5 border-2 border-gray-500 rounded-sm"></div>
                     <span className="font-bold text-sm text-gray-800 tracking-wide">{etapa}</span>
                   </div>
                   
-                  {/* Linha 2: Campos de Assinatura e Data */}
                   <div className="flex items-end gap-1 pl-8 mt-2">
                     <span className="text-[10px] text-gray-500 font-bold uppercase mb-0.5">Resp:</span>
                     <div className="border-b border-gray-600 flex-1 h-5 min-w-[100px]"></div>
@@ -839,7 +811,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </div>
         </div>
 
-        {/* RODAPÉ E ASSINATURAS */}
         <div className="mt-auto pt-8 border-t border-gray-200">
           <div className="grid grid-cols-2 gap-12 text-center">
             <div className="space-y-1">

@@ -26,7 +26,7 @@ interface OrderCardProps {
 }
 
 /**
- * Card de Pedido - Refatorado para elevação sutil e design tático.
+ * Card de Pedido - Refatorado para cálculo dinâmico de progresso financeiro e status.
  */
 export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
   const isDone = useMemo(() => ['Concluído', 'Entregue'].includes(order.status), [order.status]);
@@ -59,19 +59,24 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
   }, [order.status]);
 
   const financialStats = useMemo(() => {
+    // MOTOR DE CALCULO DINÂMICO (RESILIENTE)
     const total = Number(order.total_value || order.totalValue) || 0;
     const paid = Number(order.amount_paid || order.amountPaid) || 0;
     
     const installments = Array.isArray(order.installments) ? order.installments : [];
     
     const instCount = installments.length;
-    const paidCount = installments.filter(i => i.status === 'paid').length;
-    const hasOverdue = installments.some(i => i.status === 'overdue');
+    const paidCount = installments.filter(i => i.status === 'paid' || i.status === 'pago').length;
+    const hasOverdue = installments.some(i => i.status === 'overdue' || i.status === 'atrasado');
     
-    const progress = total === 0 ? 0 : Math.min(100, Math.round((paid / total) * 100));
-    const balanceDue = order.balance_due !== undefined ? order.balance_due : (order.balanceDue !== undefined ? order.balanceDue : (total - paid));
+    // Calcula progresso real baseado no valor pago
+    const progress = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
     
-    return { progress, isFullyPaid: progress === 100 && total > 0, instCount, paidCount, hasOverdue, balanceDue };
+    // Saldo devedor recalculado ou vindo do doc
+    const balanceDue = order.balance_due !== undefined ? order.balance_due : (total - paid);
+    const isFullyPaid = balanceDue <= 0 && total > 0;
+    
+    return { progress, isFullyPaid, instCount, paidCount, hasOverdue, balanceDue };
   }, [order.total_value, order.totalValue, order.amount_paid, order.amountPaid, order.balance_due, order.balanceDue, order.installments]);
 
   return (
