@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo, useMemo } from 'react';
-import { Calendar, ChevronRight, CheckCircle2, AlertTriangle, DollarSign, Layers } from 'lucide-react';
+import { Calendar, ChevronRight, CheckCircle2, AlertTriangle, DollarSign, Layers, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface Order {
@@ -23,12 +23,13 @@ export interface Order {
 interface OrderCardProps {
   order: Order;
   onClick?: (order: Order) => void;
+  onDelete?: (order: Order) => void;
 }
 
 /**
  * Card de Pedido - Refatorado para cálculo dinâmico de progresso financeiro e status.
  */
-export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
+export const OrderCard = memo(({ order, onClick, onDelete }: OrderCardProps) => {
   const isDone = useMemo(() => ['Concluído', 'Entregue'].includes(order.status), [order.status]);
   
   const dateInfo = useMemo(() => {
@@ -138,6 +139,20 @@ export const OrderCard = memo(({ order, onClick }: OrderCardProps) => {
                   {dateInfo.formatted}
                 </div>
               </div>
+
+              {onDelete && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(order);
+                  }}
+                  className="p-2 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                  title="Excluir Pedido"
+                >
+                  <Trash2 size={18} />
+                </button>
+              )}
+
               <ChevronRight className="text-zinc-800 group-hover:text-white group-hover:translate-x-1 transition-all" size={16} />
             </div>
           </div>

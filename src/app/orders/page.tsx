@@ -20,6 +20,7 @@ import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { Button } from '@/components/ui/button';
 import { AdminOrderModal } from '@/components/dashboard/AdminOrderModal';
+import { useToast } from '@/hooks/use-toast';
 
 const PRODUCTION_STAGES = [
   'Todos',
@@ -34,6 +35,7 @@ const PRODUCTION_STAGES = [
 function OrdersManagerContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { toast } = useToast();
   const editId = searchParams.get('edit');
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -42,10 +44,14 @@ function OrdersManagerContent() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todos');
-  const { orders, isLoading } = useOrders();
+  const { orders, isLoading, deleteOrder } = useOrders();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
+
+  // Estados de Exclusão
+  const [orderToDelete, setOrderToDelete] = useState<any>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Efeito para lidar com redirecionamento de relatórios
   useEffect(() => {
@@ -71,6 +77,21 @@ function OrdersManagerContent() {
     } else {
       setIsPassError(true);
       setTimeout(() => setIsPassError(false), 500);
+    }
+  };
+
+  const handleDeleteOrder = async () => {
+    if (!orderToDelete) return;
+    setIsDeleting(true);
+    try {
+      await deleteOrder(orderToDelete.id);
+      toast({ title: "OS Removida", description: "O protocolo foi excluído do sistema." });
+      setOrderToDelete(null);
+    } catch (error) {
+      console.error("Erro ao excluir pedido:", error);
+      toast({ variant: 'destructive', title: "Falha na exclusão", description: "Verifique suas permissões ou tente novamente." });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -151,7 +172,11 @@ function OrdersManagerContent() {
           <AnimatePresence mode='popLayout'>
             {processedOrders.length > 0 ? processedOrders.map((order) => (
               <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} key={order.id}>
-                <OrderCard order={order} onClick={(o) => { setEditingOrder(o); setIsModalOpen(true); }} />
+                <OrderCard 
+                  order={order} 
+                  onClick={(o) => { setEditingOrder(o); setIsModalOpen(true); }} 
+                  onDelete={(o) => setOrderToDelete(o)}
+                />
               </motion.div>
             )) : (
               <div className="col-span-full py-20 text-center border border-dashed border-zinc-800 rounded-2xl bg-zinc-900/20">
@@ -167,6 +192,50 @@ function OrdersManagerContent() {
           order={editingOrder} 
           onClose={() => { setIsModalOpen(false); setEditingOrder(null); }} 
         />
+
+        {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO CUSTOMIZADO IMPACTO */}
+        <AnimatePresence>
+          {orderToDelete && (
+            <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-[#121212] border border-red-500/30 rounded-2xl p-6 max-w-md w-full shadow-2xl shadow-red-900/20 transform transition-all"
+              >
+                {/* Ícone de Alerta */}
+                <div className="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                </div>
+                
+                <h2 className="text-xl font-black text-white text-center tracking-tight mb-2 uppercase">
+                  Excluir Ordem de Serviço?
+                </h2>
+                
+                <p className="text-zinc-400 text-sm text-center mb-6 leading-relaxed">
+                  Você está prestes a excluir permanentemente a <strong className="text-red-400">OS #{orderToDelete.id || 'N/A'}</strong> do cliente <strong className="text-white">{orderToDelete.client || 'Desconhecido'}</strong>. Todos os dados financeiros e de produção atrelados a ela serão perdidos.
+                </p>
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setOrderToDelete(null)}
+                    disabled={isDeleting}
+                    className="flex-1 py-3 px-4 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl transition-colors disabled:opacity-50 text-sm uppercase tracking-wider"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleDeleteOrder}
+                    disabled={isDeleting}
+                    className="flex-1 py-3 px-4 bg-red-600 hover:bg-red-500 text-white font-black rounded-xl transition-colors disabled:opacity-50 text-sm uppercase tracking-wider flex justify-center items-center gap-2 shadow-lg shadow-red-600/20"
+                  >
+                    {isDeleting ? <Loader2 size={16} className="animate-spin" /> : 'Sim, Excluir'}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </main>
     </div>
   );
