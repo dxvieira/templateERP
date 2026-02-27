@@ -506,11 +506,11 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
         {/* CABEÇALHO CLEAN */}
         <div className="flex justify-between items-center border-b border-gray-800 pb-4 mb-6">
           {/* LOGO DA EMPRESA - IMPACTO (Tamanho Reduzido) */}
-          <div className="w-32 h-12 flex items-center justify-start">
+          <div className="w-32 h-12 flex items-center justify-start print:color-adjust-exact">
             <img 
               src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd" 
               alt="Logo IMPACTO Comunicação Visual" 
-              className="max-w-full max-h-full object-contain print:color-adjust-exact"
+              className="max-w-full max-h-full object-contain"
             />
           </div>
           <div className="text-right">
