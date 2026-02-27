@@ -492,17 +492,13 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       </motion.div>
 
       {/* LAYOUT DE IMPRESSÃO PROFISSIONAL (A4) - CLEAN DESIGN */}
-      <div className="hidden print:block print:absolute print:inset-0 print:bg-white print:border-none w-full h-full max-h-[296mm] overflow-hidden z-[99999] bg-white text-black p-8 pt-0 mt-0 font-sans box-border">
+      <div className="hidden print:block print:fixed print:top-0 print:left-0 print:w-[100vw] print:h-[100vh] print:bg-white print:z-[9999999] print:p-8 box-border print:m-0 bg-white text-black font-sans">
         <style type="text/css" media="print">
           {`
-            @page { size: A4 portrait; margin: 0 !important; padding: 0 !important; }
-            html, body, #root, main { 
-              background-color: white !important; 
-              margin: 0 !important; 
-              padding: 0 !important;
-              -webkit-print-color-adjust: exact !important; 
-              print-color-adjust: exact !important; 
-            }
+            @page { size: A4 portrait; margin: 0 !important; }
+            html, body { margin: 0 !important; padding: 0 !important; background-color: white !important; }
+            /* Esconde os cabeçalhos, menus e navegação global do sistema */
+            header, nav, aside, [data-sidebar], .print-hidden { display: none !important; }
           `}
         </style>
 
