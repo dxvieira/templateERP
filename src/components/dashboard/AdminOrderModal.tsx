@@ -129,7 +129,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       setEmissionDate(order.emission_date || order.emissionDate || new Date().toISOString().split('T')[0]);
       setDeliveryDate(order.delivery_date || order.deliveryDate || '');
       setObservations(order.observations || '');
-      setItems(order.items?.map((item: any) => ({ ...item })) || [{ productCode: '', desc: '', quantity: 1, unitValue: 0 }]);
+      setItems(order.items?.map((item: any) => ({ ...item })) || [{ productCode: '', desc: '', quantity: 1, unitValue: 0, observation: '' }]);
       setInstallments(Array.isArray(order.installments) ? order.installments : []);
     } else {
       resetForm();
@@ -144,7 +144,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     setEmissionDate(new Date().toISOString().split('T')[0]);
     setDeliveryDate('');
     setObservations('');
-    setItems([{ productCode: '', desc: '', quantity: 1, unitValue: 0 }]);
+    setItems([{ productCode: '', desc: '', quantity: 1, unitValue: 0, observation: '' }]);
     setInstallments([]);
   };
 
@@ -440,20 +440,51 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                       <h3 className="text-[10px] text-primary font-black uppercase tracking-[0.2em] flex items-center gap-2"><Box size={14}/> Itens e Orçamento</h3>
                       <button type="button" onClick={() => setItems([...items, { productCode: '', desc: '', quantity: 1, unitValue: 0, observation: '' }])} className="bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg px-3 py-1.5 text-[9px] font-black uppercase transition-all flex items-center gap-1"><Plus size={12}/> Adicionar Item</button>
                    </div>
-                   <div className="space-y-2">
+                   <div className="space-y-3">
                       {items.map((item, index) => (
-                        <div key={index} className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-3 grid grid-cols-1 md:grid-cols-12 items-center gap-3">
-                           <input placeholder="CÓD" value={item.productCode || ''} onChange={e => { const n = [...items]; n[index].productCode = e.target.value; setItems(n); }} className={`${inputClass} md:col-span-1 p-2 text-center text-xs font-mono`} />
-                           <input placeholder="Descrição..." value={item.desc || ''} onChange={e => { const n = [...items]; n[index].desc = e.target.value; setItems(n); }} className={`${inputClass} md:col-span-5 p-2 text-xs`} />
-                           <input type="number" value={item.quantity || 0} onChange={e => { const n = [...items]; n[index].quantity = Number(e.target.value); setItems(n); }} className={`${inputClass} md:col-span-1 p-2 text-center text-xs`} />
-                           <div className="md:col-span-2 relative">
-                             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-600 text-[10px]">R$</span>
-                             <input type="number" step="0.01" value={item.unitValue || 0} onChange={e => { const n = [...items]; n[index].unitValue = Number(e.target.value); setItems(n); }} className={`${inputClass} pl-7 p-2 text-right text-xs`} />
+                        <div key={index} className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-4 flex flex-col gap-3 group transition-all hover:border-zinc-700">
+                           {/* LINHA 1: DADOS TÉCNICOS E FINANCEIROS */}
+                           <div className="grid grid-cols-1 md:grid-cols-12 items-center gap-3">
+                              <div className="md:col-span-1">
+                                <label className="text-[8px] text-zinc-600 uppercase font-black mb-1 block ml-1">Cód</label>
+                                <input placeholder="--" value={item.productCode || ''} onChange={e => { const n = [...items]; n[index].productCode = e.target.value; setItems(n); }} className={`${inputClass} p-2 text-center text-xs font-mono`} />
+                              </div>
+                              <div className="md:col-span-5">
+                                <label className="text-[8px] text-zinc-600 uppercase font-black mb-1 block ml-1">Descrição do Material / Serviço</label>
+                                <input placeholder="Ex: Banner 440g com acabamento..." value={item.desc || ''} onChange={e => { const n = [...items]; n[index].desc = e.target.value; setItems(n); }} className={`${inputClass} p-2 text-xs`} />
+                              </div>
+                              <div className="md:col-span-1">
+                                <label className="text-[8px] text-zinc-600 uppercase font-black mb-1 block ml-1">Qtd</label>
+                                <input type="number" value={item.quantity || 0} onChange={e => { const n = [...items]; n[index].quantity = Number(e.target.value); setItems(n); }} className={`${inputClass} p-2 text-center text-xs`} />
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="text-[8px] text-zinc-600 uppercase font-black mb-1 block ml-1">V. Unitário</label>
+                                <div className="relative">
+                                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-600 text-[10px]">R$</span>
+                                  <input type="number" step="0.01" value={item.unitValue || 0} onChange={e => { const n = [...items]; n[index].unitValue = Number(e.target.value); setItems(n); }} className={`${inputClass} pl-7 p-2 text-right text-xs`} />
+                                </div>
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="text-[8px] text-zinc-600 uppercase font-black mb-1 block ml-1">Subtotal</label>
+                                <div className="text-right font-mono text-xs font-black text-zinc-400 bg-black/20 p-2 rounded-lg border border-zinc-800">
+                                  {((item.quantity || 0) * (item.unitValue || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </div>
+                              </div>
+                              <div className="md:col-span-1 flex justify-end items-end h-full">
+                                <button type="button" onClick={() => setItems(items.filter((_, i) => i !== index))} className="p-2 text-zinc-700 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+                              </div>
                            </div>
-                           <div className="md:col-span-2 text-right font-mono text-xs font-black text-zinc-400 bg-black/20 p-2 rounded-lg border border-zinc-800">
-                             {((item.quantity || 0) * (item.unitValue || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+
+                           {/* LINHA 2: NOTAS DE PRODUÇÃO INDIVIDUAIS */}
+                           <div className="w-full">
+                              <label className="text-[8px] text-primary/60 uppercase font-black mb-1 block ml-1">Instruções de Produção / Acabamento</label>
+                              <input 
+                                placeholder="Notas de produção (ex: Acabamento com ilhós a cada 20cm, refile rente...)" 
+                                value={item.observation || ''} 
+                                onChange={e => { const n = [...items]; n[index].observation = e.target.value; setItems(n); }} 
+                                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-400 text-[11px] rounded-xl p-3 focus:border-primary/50 outline-none transition-all placeholder:text-zinc-800" 
+                              />
                            </div>
-                           <button type="button" onClick={() => setItems(items.filter((_, i) => i !== index))} className="md:col-span-1 p-2 text-zinc-700 hover:text-red-500 ml-auto"><Trash2 size={14}/></button>
                         </div>
                       ))}
                    </div>
