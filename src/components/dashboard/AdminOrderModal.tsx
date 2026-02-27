@@ -545,11 +545,11 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                            <p className="text-[10px] text-zinc-600 font-black uppercase tracking-widest">Nenhuma parcela gerada para este projeto</p>
                         </div>
                       ) : (
-                        installments.map((inst) => {
+                        installments.map((inst, index) => {
                           const isOverdue = inst.status === 'overdue';
                           const isPaid = inst.status === 'paid';
                           const isConfirming = baixaInstallmentUid === inst.uid;
-                          const dueDateStr = inst.due_date || inst.dueDate;
+                          const dueDateStr = inst.due_date || inst.dueDate || '';
 
                           return (
                             <div key={inst.uid} className={cn(
@@ -581,9 +581,21 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                                              {isPaid ? 'Liquidado' : isOverdue ? 'Atrasado' : 'Pendente'}
                                            </span>
                                         </div>
-                                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-0.5">
-                                          {inst.type} • Vencimento: {dueDateStr ? format(parseISO(dueDateStr), 'dd/MM/yy') : '--/--/--'}
-                                        </p>
+                                        <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1">
+                                          <span>{inst.type} &bull; VENCIMENTO:</span>
+                                          <input
+                                            type="date"
+                                            required
+                                            value={dueDateStr} 
+                                            onChange={(e) => {
+                                              const updatedInstallments = installments.map(item => 
+                                                item.uid === inst.uid ? { ...item, due_date: e.target.value } : item
+                                              );
+                                              setInstallments(updatedInstallments);
+                                            }}
+                                            className="bg-transparent border-b border-zinc-700 hover:border-primary focus:border-primary text-zinc-300 focus:outline-none transition-colors px-1 pb-0.5 cursor-pointer [color-scheme:dark]"
+                                          />
+                                        </div>
                                      </div>
                                   </div>
 
