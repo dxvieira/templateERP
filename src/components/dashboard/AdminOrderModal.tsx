@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { doc, setDoc, serverTimestamp, collection, updateDoc, getDoc, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, getDoc, where } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { 
   X, Save, Plus, Trash2, Box, 
@@ -72,33 +72,21 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   const [baixaInstallmentUid, setBaixaInstallmentUid] = useState<string | null>(null);
   const [baixaData, setBaixaData] = useState({ method: PAYMENT_METHODS[0], date: new Date().toISOString().split('T')[0] });
 
-  // BUSCA DADOS COMPLETOS DO CLIENTE PARA A OP (ALGORITMO AVANÇADO)
+  // BUSCA DADOS COMPLETOS DO CLIENTE PARA A OP
   useEffect(() => {
     const fetchCustomerData = async () => {
       if (!order || !firestore) return;
       
       try {
         const clientsRef = collection(firestore, 'clients');
-        
-        const clientId = order.clientId || order.customerId || order.clienteId || order.id_cliente;
-        if (clientId) {
-          const clientSnap = await getDoc(doc(firestore, 'clients', clientId));
-          if (clientSnap.exists()) {
-            setFullCustomerData(clientSnap.data());
-            return;
-          }
-        }
-        
         const clientName = order.client || order.customerName || order.cliente;
         if (clientName) {
           const qName = query(clientsRef, where('name', '==', clientName));
           const snapName = await getDocs(qName);
-          
           if (!snapName.empty) {
             setFullCustomerData(snapName.docs[0].data());
             return;
           }
-          
           const qCompany = query(clientsRef, where('company', '==', clientName));
           const snapCompany = await getDocs(qCompany);
           if (!snapCompany.empty) {
@@ -154,7 +142,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
   const amountPaid = useMemo(() => {
     return installments
-      .filter(i => i.status === 'paid')
+      .filter(i => i.status === 'paid' || i.status === 'pago')
       .reduce((acc, i) => acc + (Number(i.amount) || 0), 0);
   }, [installments]);
 
@@ -199,14 +187,8 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
             newStatus = parseISO(dDate) < new Date() ? 'overdue' : 'pending';
           } catch (e) {}
         }
-        return { 
-          ...i, 
-          status: newStatus, 
-          payment_method: '', 
-          paid_date: '' 
-        };
+        return { ...i, status: newStatus, payment_method: '', paid_date: '' };
       }));
-      toast({ title: "Pagamento Estornado", description: "A parcela voltou ao estado pendente." });
     } else {
       let suggestedMethod = PAYMENT_METHODS[0];
       if (inst.type === 'Cartão') suggestedMethod = inst.payment_method || "Máquina PAGBANK";
@@ -226,28 +208,24 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       paid_date: baixaData.date 
     } : i));
     setBaixaInstallmentUid(null);
-    toast({ title: "Recebimento Registrado", description: "Lembre-se de salvar a OS para efetivar no sistema." });
   };
 
   const handleEmitNFe = async () => {
-    if (!order || !order.id || !firestore) return;
-    
-    const confirmar = window.confirm("Deseja simular a emissão desta Nota Fiscal?");
-    if (!confirmar) return;
+    if (!order?.id || !firestore) return;
+    if (!window.confirm("Deseja simular a emissão desta Nota Fiscal?")) return;
 
     try {
       const orderRef = doc(firestore, 'orders', order.id);
-      await updateDoc(orderRef, { nfe_status: 'processing' });
+      await setDoc(orderRef, { nfe_status: 'processing' }, { merge: true });
       await new Promise(resolve => setTimeout(resolve, 3000));
-      await updateDoc(orderRef, {
+      await setDoc(orderRef, {
         nfe_status: 'issued',
         nfe_pdf_url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
         nfe_xml_url: 'https://www.w3schools.com/xml/note.xml' 
-      });
-      toast({ title: "Nota Emitida", description: "A simulação de faturamento foi concluída com sucesso." });
+      }, { merge: true });
+      toast({ title: "Nota Emitida", description: "Simulação de faturamento concluída." });
     } catch (error: any) {
-      console.error("Erro ao simular emissão de NFe:", error);
-      alert("Erro no banco de dados: " + error.message);
+      alert("Erro ao emitir NFe: " + error.message);
     }
   };
 
@@ -263,44 +241,65 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     if (!firestore) return;
     setLoading(true);
 
-    const docRef = order ? doc(firestore, 'orders', order.id) : doc(collection(firestore, 'orders'));
-    
-    // RECALCULO FINANCEIRO ATÔMICO ANTES DE SALVAR
-    const finalTotalValue = items.reduce((acc, item) => acc + (Number(item.quantity || 0) * Number(item.unitValue || 0)), 0);
-    const finalAmountPaid = installments
-      .filter(i => i.status === 'paid')
-      .reduce((acc, i) => acc + (Number(i.amount) || 0), 0);
-    const finalBalanceDue = finalTotalValue - finalAmountPaid;
+    try {
+      let finalId = order?.id;
+      const isNewOrder = !order;
 
-    const payload = {
-      client, 
-      seller, 
-      status, 
-      emission_date: emissionDate, 
-      delivery_date: deliveryDate, 
-      observations, 
-      items, 
-      total_value: finalTotalValue,
-      amount_paid: finalAmountPaid, 
-      balance_due: finalBalanceDue, 
-      installments,
-      updatedAt: serverTimestamp(),
-      ...(order ? {} : { createdAt: serverTimestamp(), id: docRef.id })
-    };
+      // LÓGICA DE ID SEQUENCIAL (NOVA OS)
+      if (isNewOrder) {
+        const ordersRef = collection(firestore, 'orders');
+        const q = query(ordersRef, orderBy('id', 'desc'), limit(1));
+        const querySnapshot = await getDocs(q);
+        
+        let nextIdNumber = 1;
+        if (!querySnapshot.empty) {
+          const lastIdString = querySnapshot.docs[0].id;
+          const lastIdInt = parseInt(lastIdString, 10);
+          if (!isNaN(lastIdInt)) {
+            nextIdNumber = lastIdInt + 1;
+          }
+        }
+        finalId = String(nextIdNumber).padStart(6, '0');
+      }
 
-    setDoc(docRef, payload, { merge: true })
-      .then(() => {
-        toast({ title: "Protocolo Atualizado", description: "Dados operacionais e financeiros sincronizados." });
-        onClose();
-      })
-      .catch((err) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: docRef.path,
-          operation: order ? 'update' : 'create',
-          requestResourceData: payload
-        }));
-      })
-      .finally(() => setLoading(false));
+      const docRef = doc(firestore, 'orders', finalId);
+      
+      // RECALCULO FINANCEIRO ATÔMICO
+      const finalTotalValue = items.reduce((acc, item) => acc + (Number(item.quantity || 0) * Number(item.unitValue || 0)), 0);
+      const finalAmountPaid = installments
+        .filter(i => i.status === 'paid' || i.status === 'pago')
+        .reduce((acc, i) => acc + (Number(i.amount) || 0), 0);
+      const finalBalanceDue = finalTotalValue - finalAmountPaid;
+
+      const payload = {
+        id: finalId,
+        client, 
+        seller, 
+        status, 
+        emission_date: emissionDate, 
+        delivery_date: deliveryDate, 
+        observations, 
+        items, 
+        total_value: finalTotalValue,
+        amount_paid: finalAmountPaid, 
+        balance_due: finalBalanceDue, 
+        installments,
+        updatedAt: serverTimestamp(),
+        ...(isNewOrder ? { createdAt: serverTimestamp() } : {})
+      };
+
+      await setDoc(docRef, payload, { merge: true });
+      toast({ title: "Protocolo Efetivado", description: `OS #${finalId} registrada com sucesso.` });
+      onClose();
+    } catch (err: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `orders/${order?.id || 'new'}`,
+        operation: order ? 'update' : 'create',
+        requestResourceData: { client, items }
+      }));
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -322,57 +321,21 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </div>
           
           <div className="hidden md:flex gap-4 items-center">
-             <button
-               onClick={handlePrintOP}
-               className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl bg-zinc-800 text-zinc-300 hover:bg-white hover:text-black transition-all"
-             >
-               <Printer size={14} /> IMPRIMIR OP
-             </button>
-
+             <button onClick={handlePrintOP} className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl bg-zinc-800 text-zinc-300 hover:bg-white hover:text-black transition-all"><Printer size={14} /> IMPRIMIR OP</button>
              {order && (
                <div className="flex items-center mr-4 border-r border-zinc-800 pr-6 h-10 gap-2">
                  {(!order.nfe_status || order.nfe_status === 'pending') && (
-                   <button 
-                     onClick={handleEmitNFe}
-                     className="flex items-center gap-2 px-4 py-2 bg-zinc-800/50 border border-zinc-700 text-zinc-400 rounded-xl hover:bg-white hover:text-black transition-all group"
-                     title="Enviar para Faturamento Focus NFe"
-                   >
-                     <FileText size={14} className="group-hover:rotate-12 transition-transform" />
-                     <span className="text-[10px] font-black uppercase tracking-[0.2em]">Emitir NFe</span>
-                   </button>
+                   <button onClick={handleEmitNFe} className="flex items-center gap-2 px-4 py-2 bg-zinc-800/50 border border-zinc-700 text-zinc-400 rounded-xl hover:bg-white hover:text-black transition-all group"><FileText size={14} className="group-hover:rotate-12" /><span className="text-[10px] font-black uppercase tracking-[0.2em]">Emitir NFe</span></button>
                  )}
-
-                 {order.nfe_status === 'processing' && (
-                   <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 rounded-xl cursor-wait">
-                     <Loader2 size={14} className="animate-spin" />
-                     <span className="text-[10px] font-black uppercase tracking-[0.2em]">Processando...</span>
-                   </div>
-                 )}
-
+                 {order.nfe_status === 'processing' && <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 rounded-xl cursor-wait"><Loader2 size={14} className="animate-spin" /><span className="text-[10px] font-black uppercase tracking-[0.2em]">Processando...</span></div>}
                  {order.nfe_status === 'issued' && (
                    <div className="flex items-center gap-2">
-                     <button
-                       onClick={() => window.open(order.nfe_pdf_url || order.nfe_url, '_blank')}
-                       className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500 hover:text-white transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)]"
-                       title="Baixar DANFE (PDF)"
-                     >
-                       <Download size={14} />
-                       <span className="text-[9px] font-black uppercase tracking-widest">PDF</span>
-                     </button>
-
-                     <button
-                       onClick={() => window.open(order.nfe_xml_url, '_blank')}
-                       className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500 hover:text-white transition-all"
-                       title="Baixar XML"
-                     >
-                       <FileText size={14} />
-                       <span className="text-[9px] font-black uppercase tracking-widest">XML</span>
-                     </button>
+                     <button onClick={() => window.open(order.nfe_pdf_url || order.nfe_url, '_blank')} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500 hover:text-white transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)]"><Download size={14} /><span className="text-[9px] font-black uppercase tracking-widest">PDF</span></button>
+                     <button onClick={() => window.open(order.nfe_xml_url, '_blank')} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500 hover:text-white transition-all"><FileText size={14} /><span className="text-[9px] font-black uppercase tracking-widest">XML</span></button>
                    </div>
                  )}
                </div>
              )}
-
              <div className="text-right">
                 <p className="text-[9px] text-zinc-500 uppercase font-black">Total</p>
                 <p className="text-xl font-black text-white">{totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
@@ -380,9 +343,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
              <div className="w-px h-8 bg-zinc-800" />
              <div className="text-right">
                 <p className="text-[9px] text-zinc-500 uppercase font-black">Saldo Devedor</p>
-                <p className={cn("text-xl font-black", balanceDue > 0 ? "text-red-500" : "text-green-500")}>
-                  {balanceDue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                </p>
+                <p className={cn("text-xl font-black", balanceDue > 0 ? "text-red-500" : "text-green-500")}>{balanceDue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
              </div>
           </div>
           <button onClick={onClose} className="p-2 text-zinc-500 hover:text-white transition-colors bg-white/5 rounded-full ml-4"><X size={20}/></button>
@@ -442,7 +403,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                               </div>
                               <div className="md:col-span-5">
                                 <label className="text-[8px] text-zinc-600 uppercase font-black mb-1 block ml-1">Descrição do Material / Serviço</label>
-                                <input placeholder="Ex: Banner 440g com acabamento..." value={item.desc || ''} onChange={e => { const n = [...items]; n[index].desc = e.target.value; setItems(n); }} className={`${inputClass} p-2 text-xs`} />
+                                <input placeholder="Ex: Banner 440g..." value={item.desc || ''} onChange={e => { const n = [...items]; n[index].desc = e.target.value; setItems(n); }} className={`${inputClass} p-2 text-xs`} />
                               </div>
                               <div className="md:col-span-1">
                                 <label className="text-[8px] text-zinc-600 uppercase font-black mb-1 block ml-1">Qtd</label>
@@ -465,15 +426,9 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                                 <button type="button" onClick={() => setItems(items.filter((_, i) => i !== index))} className="p-2 text-zinc-700 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
                               </div>
                            </div>
-
                            <div className="w-full">
                               <label className="text-[8px] text-primary/60 uppercase font-black mb-1 block ml-1">Instruções de Produção / Acabamento</label>
-                              <input 
-                                placeholder="Notas de produção (ex: Acabamento com ilhós a cada 20cm, refile rente...)" 
-                                value={item.observation || ''} 
-                                onChange={e => { const n = [...items]; n[index].observation = e.target.value; setItems(n); }} 
-                                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-400 text-[11px] rounded-xl p-3 focus:border-primary/50 outline-none transition-all placeholder:text-zinc-800" 
-                              />
+                              <input placeholder="Notas de produção..." value={item.observation || ''} onChange={e => { const n = [...items]; n[index].observation = e.target.value; setItems(n); }} className="w-full bg-zinc-950 border border-zinc-800 text-zinc-400 text-[11px] rounded-xl p-3 focus:border-primary/50 outline-none transition-all placeholder:text-zinc-800" />
                            </div>
                         </div>
                       ))}
@@ -483,169 +438,41 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
             ) : (
               <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <section className="bg-zinc-900/30 border border-zinc-800 rounded-3xl p-6">
-                   <div className="flex items-center gap-3 mb-6">
-                      <div className="p-2 bg-primary/10 rounded-xl"><RefreshCw size={18} className="text-primary"/></div>
-                      <div>
-                         <h3 className="text-sm font-black text-white uppercase tracking-tight">Gerador de Cobranças</h3>
-                         <p className="text-[9px] text-zinc-500 uppercase tracking-widest">Crie o cronograma de pagamentos automaticamente</p>
-                      </div>
-                   </div>
-                   
+                   <div className="flex items-center gap-3 mb-6"><div className="p-2 bg-primary/10 rounded-xl"><RefreshCw size={18} className="text-primary"/></div><div><h3 className="text-sm font-black text-white uppercase tracking-tight">Gerador de Cobranças</h3><p className="text-[9px] text-zinc-500 uppercase tracking-widest">Crie o cronograma de pagamentos automaticamente</p></div></div>
                    <div className={cn("grid gap-4 items-end", genConfig.type === 'Cartão' ? "grid-cols-1 md:grid-cols-5" : "grid-cols-1 md:grid-cols-4")}>
-                      <div>
-                         <label className={labelClass}>Valor Total</label>
-                         <input type="number" step="0.01" value={genConfig.total} onChange={e => setInstallmentGenConfig({...genConfig, total: Number(e.target.value)})} className={inputClass} />
-                      </div>
-                      <div>
-                         <label className={labelClass}>Tipo de Fatura</label>
-                         <select value={genConfig.type} onChange={e => setInstallmentGenConfig({...genConfig, type: e.target.value})} className={inputClass}>
-                            {INSTALLMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                         </select>
-                      </div>
-                      
-                      {genConfig.type === 'Cartão' && (
-                        <div>
-                           <label className={labelClass}>Máquina</label>
-                           <select 
-                             value={genConfig.machine} 
-                             onChange={e => setInstallmentGenConfig({...genConfig, machine: e.target.value})} 
-                             className={inputClass}
-                           >
-                              <option value="Máquina PAGBANK">Máquina PAGBANK</option>
-                              <option value="Máquina SIPAG">Máquina SIPAG</option>
-                           </select>
-                        </div>
-                      )}
-
-                      <div>
-                         <label className={labelClass}>Nº Parcelas</label>
-                         <input type="number" value={genConfig.count} onChange={e => setInstallmentGenConfig({...genConfig, count: Number(e.target.value)})} className={inputClass} min={1} />
-                      </div>
+                      <div><label className={labelClass}>Valor Total</label><input type="number" step="0.01" value={genConfig.total} onChange={e => setInstallmentGenConfig({...genConfig, total: Number(e.target.value)})} className={inputClass} /></div>
+                      <div><label className={labelClass}>Tipo de Fatura</label><select value={genConfig.type} onChange={e => setInstallmentGenConfig({...genConfig, type: e.target.value})} className={inputClass}>{INSTALLMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                      {genConfig.type === 'Cartão' && (<div><label className={labelClass}>Máquina</label><select value={genConfig.machine} onChange={e => setInstallmentGenConfig({...genConfig, machine: e.target.value})} className={inputClass}><option value="Máquina PAGBANK">Máquina PAGBANK</option><option value="Máquina SIPAG">Máquina SIPAG</option></select></div>)}
+                      <div><label className={labelClass}>Nº Parcelas</label><input type="number" value={genConfig.count} onChange={e => setInstallmentGenConfig({...genConfig, count: Number(e.target.value)})} className={inputClass} min={1} /></div>
                       <button type="button" onClick={handleGenerateInstallments} className="bg-white text-black h-12 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-primary transition-all shadow-lg active:scale-95">Gerar Parcelas</button>
                    </div>
                 </section>
-
                 <section className="space-y-4">
                    <h3 className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] border-b border-white/5 pb-2 flex items-center gap-2"><History size={14}/> Cronograma de Recebíveis</h3>
-                   
                    <div className="grid grid-cols-1 gap-2">
                       {installments.length === 0 ? (
-                        <div className="py-12 border-2 border-dashed border-zinc-800 rounded-3xl text-center">
-                           <Receipt className="mx-auto mb-3 text-zinc-700 opacity-20" size={40} />
-                           <p className="text-[10px] text-zinc-600 font-black uppercase tracking-widest">Nenhuma parcela gerada para este projeto</p>
-                        </div>
+                        <div className="py-12 border-2 border-dashed border-zinc-800 rounded-3xl text-center"><Receipt className="mx-auto mb-3 text-zinc-700 opacity-20" size={40} /><p className="text-[10px] text-zinc-600 font-black uppercase tracking-widest">Nenhuma parcela gerada para este projeto</p></div>
                       ) : (
                         installments.map((inst, index) => {
                           const isOverdue = inst.status === 'overdue';
-                          const isPaid = inst.status === 'paid';
+                          const isPaid = inst.status === 'paid' || inst.status === 'pago';
                           const isConfirming = baixaInstallmentUid === inst.uid;
-                          const dueDateStr = inst.due_date || inst.dueDate || '';
-
                           return (
-                            <div key={inst.uid} className={cn(
-                              "flex flex-col rounded-2xl border transition-all overflow-hidden",
-                              isPaid ? "bg-emerald-500/5 border-emerald-500/20" : 
-                              isOverdue ? "bg-red-500/5 border-red-500/20" : "bg-zinc-900/40 border-zinc-800 hover:border-zinc-700",
-                              isConfirming && "border-primary/50 ring-1 ring-primary/20"
-                            )}>
+                            <div key={inst.uid} className={cn("flex flex-col rounded-2xl border transition-all overflow-hidden", isPaid ? "bg-emerald-500/5 border-emerald-500/20" : isOverdue ? "bg-red-500/5 border-red-500/20" : "bg-zinc-900/40 border-zinc-800 hover:border-zinc-700", isConfirming && "border-primary/50 ring-1 ring-primary/20")}>
                                <div className="flex items-center justify-between p-4">
                                   <div className="flex items-center gap-4">
-                                     <button 
-                                       type="button" 
-                                       onClick={() => handleToggleBaixa(inst.uid)}
-                                       className={cn(
-                                         "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all",
-                                         isPaid ? "bg-emerald-500 border-emerald-500 text-black" : "border-zinc-700 hover:border-primary"
-                                       )}
-                                     >
-                                       {isPaid && <CheckCircle2 size={14} strokeWidth={3} />}
-                                     </button>
+                                     <button type="button" onClick={() => handleToggleBaixa(inst.uid)} className={cn("w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all", isPaid ? "bg-emerald-500 border-emerald-500 text-black" : "border-zinc-700 hover:border-primary")}>{isPaid && <CheckCircle2 size={14} strokeWidth={3} />}</button>
                                      <div>
-                                        <div className="flex items-center gap-2">
-                                           <span className="text-xs font-black text-white">{inst.id}</span>
-                                           <span className={cn(
-                                             "text-[8px] font-black uppercase px-1.5 py-0.5 rounded border",
-                                             isPaid ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
-                                             isOverdue ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-zinc-800 text-zinc-500 border-zinc-700'
-                                           )}>
-                                             {isPaid ? 'Liquidado' : isOverdue ? 'Atrasado' : 'Pendente'}
-                                           </span>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1">
-                                          <span>{inst.type} &bull; VENCIMENTO:</span>
-                                          <input
-                                            type="date"
-                                            required
-                                            value={dueDateStr} 
-                                            onChange={(e) => {
-                                              const updatedInstallments = installments.map(item => 
-                                                item.uid === inst.uid ? { ...item, due_date: e.target.value } : item
-                                              );
-                                              setInstallments(updatedInstallments);
-                                            }}
-                                            className="bg-transparent border-b border-zinc-700 hover:border-primary focus:border-primary text-zinc-300 focus:outline-none transition-colors px-1 pb-0.5 cursor-pointer [color-scheme:dark]"
-                                          />
-                                        </div>
+                                        <div className="flex items-center gap-2"><span className="text-xs font-black text-white">{inst.id}</span><span className={cn("text-[8px] font-black uppercase px-1.5 py-0.5 rounded border", isPaid ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : isOverdue ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-zinc-800 text-zinc-500 border-zinc-700')}>{isPaid ? 'Liquidado' : isOverdue ? 'Atrasado' : 'Pendente'}</span></div>
+                                        <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1"><span>{inst.type} &bull; VENCIMENTO:</span><input type="date" required value={inst.due_date || inst.dueDate || ''} onChange={(e) => { const updatedInstallments = installments.map(item => item.uid === inst.uid ? { ...item, due_date: e.target.value } : item); setInstallments(updatedInstallments); }} className="bg-transparent border-b border-zinc-700 hover:border-primary focus:border-primary text-zinc-300 focus:outline-none transition-colors px-1 pb-0.5 cursor-pointer [color-scheme:dark]" /></div>
                                      </div>
                                   </div>
-
                                   <div className="flex items-center gap-6">
-                                     <div className="text-right">
-                                        <p className="text-sm font-black text-white font-mono">{inst.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                                        {(isPaid || inst.payment_method) && <p className="text-[8px] text-emerald-500 uppercase font-black">{inst.payment_method}</p>}
-                                     </div>
+                                     <div className="text-right"><p className="text-sm font-black text-white font-mono">{inst.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>{(isPaid || inst.payment_method) && <p className="text-[8px] text-emerald-500 uppercase font-black">{inst.payment_method}</p>}</div>
                                      <button type="button" onClick={() => setInstallments(installments.filter(i => i.uid !== inst.uid))} className="p-2 text-zinc-700 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
                                   </div>
                                </div>
-
-                               <AnimatePresence>
-                                 {isConfirming && (
-                                   <motion.div 
-                                     initial={{ height: 0, opacity: 0 }} 
-                                     animate={{ height: 'auto', opacity: 1 }} 
-                                     exit={{ height: 0, opacity: 0 }}
-                                     className="bg-zinc-900 border-t border-primary/20 p-4"
-                                   >
-                                      <div className="flex flex-col md:flex-row gap-4 items-end">
-                                         <div className="flex-1 w-full">
-                                            <label className={labelClass}>Conta de Destino</label>
-                                            <select 
-                                              value={baixaData.method} 
-                                              onChange={e => setBaixaData({...baixaData, method: e.target.value})} 
-                                              className={inputClass}
-                                            >
-                                               {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
-                                            </select>
-                                         </div>
-                                         <div className="w-full md:w-48">
-                                            <label className={labelClass}>Data do Recebimento</label>
-                                            <input 
-                                              type="date" 
-                                              value={baixaData.date} 
-                                              onChange={e => setBaixaData({...baixaData, date: e.target.value})} 
-                                              className={inputClass} 
-                                            />
-                                         </div>
-                                         <div className="flex gap-2 w-full md:w-auto">
-                                            <button 
-                                              type="button" 
-                                              onClick={() => setBaixaInstallmentUid(null)} 
-                                              className="flex-1 md:px-4 py-3 rounded-xl border border-zinc-700 text-zinc-400 hover:bg-zinc-800 text-[10px] font-black uppercase tracking-widest transition-colors"
-                                            >
-                                              Cancelar
-                                            </button>
-                                            <button 
-                                              type="button" 
-                                              onClick={confirmBaixa} 
-                                              className="flex-1 md:px-6 py-3 rounded-xl bg-primary text-black text-[10px] font-black uppercase tracking-widest shadow-[0_0_15px_rgba(255,95,31,0.3)] hover:bg-white transition-all flex items-center justify-center gap-2"
-                                            >
-                                              <ArrowDownLeft size={14} /> Confirmar Baixa
-                                            </button>
-                                         </div>
-                                      </div>
-                                   </motion.div>
-                                 )}
-                               </AnimatePresence>
+                               <AnimatePresence>{isConfirming && (<motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-zinc-900 border-t border-primary/20 p-4"><div className="flex flex-col md:flex-row gap-4 items-end"><div className="flex-1 w-full"><label className={labelClass}>Conta de Destino</label><select value={baixaData.method} onChange={e => setBaixaData({...baixaData, method: e.target.value})} className={inputClass}>{PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}</select></div><div className="w-full md:w-48"><label className={labelClass}>Data do Recebimento</label><input type="date" value={baixaData.date} onChange={e => setBaixaData({...baixaData, date: e.target.value})} className={inputClass} /></div><div className="flex gap-2 w-full md:w-auto"><button type="button" onClick={() => setBaixaInstallmentUid(null)} className="flex-1 md:px-4 py-3 rounded-xl border border-zinc-700 text-zinc-400 hover:bg-zinc-800 text-[10px] font-black uppercase tracking-widest transition-colors">Cancelar</button><button type="button" onClick={confirmBaixa} className="flex-1 md:px-6 py-3 rounded-xl bg-primary text-black text-[10px] font-black uppercase tracking-widest shadow-[0_0_15px_rgba(255,95,31,0.3)] hover:bg-white transition-all flex items-center justify-center gap-2"><ArrowDownLeft size={14} /> Confirmar Baixa</button></div></div></motion.div>)}</AnimatePresence>
                             </div>
                           );
                         })
@@ -659,174 +486,34 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
         <div className="p-5 border-t border-zinc-800 bg-zinc-900/50 flex justify-end gap-3">
            <button onClick={onClose} className="px-6 py-3 rounded-xl border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800">Cancelar</button>
-           <button form="adminOrderForm" type="submit" disabled={loading} className="px-10 py-3 rounded-xl bg-primary text-black text-[10px] font-black uppercase tracking-widest shadow-[0_0_25px_-5px_rgba(255,95,31,0.5)] disabled:opacity-50 flex items-center gap-2">
-             {loading ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> Efetivar Registro</>}
-           </button>
+           <button form="adminOrderForm" type="submit" disabled={loading} className="px-10 py-3 rounded-xl bg-primary text-black text-[10px] font-black uppercase tracking-widest shadow-[0_0_25px_-5px_rgba(255,95,31,0.5)] disabled:opacity-50 flex items-center gap-2">{loading ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> Efetivar Registro</>}</button>
         </div>
       </motion.div>
 
       <div className="hidden print:block fixed inset-0 z-[99999] bg-white text-black p-8 font-sans w-full h-full overflow-y-auto">
-        <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-4">
-          <div className="w-32 h-12 bg-gray-100 border-2 border-dashed border-gray-400 flex items-center justify-center text-gray-500 font-bold rounded text-[10px] uppercase">
-            [ LOGO ]
-          </div>
-          <div className="text-right">
-            <h1 className="text-xl font-black uppercase tracking-widest leading-none">Ordem de Produção</h1>
-            <p className="text-lg font-bold mt-1">OS #{order?.id || '000000'}</p>
-          </div>
-        </div>
-
+        <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-4"><div className="w-32 h-12 bg-gray-100 border-2 border-dashed border-gray-400 flex items-center justify-center text-gray-500 font-bold rounded text-[10px] uppercase">[ LOGO ]</div><div className="text-right"><h1 className="text-xl font-black uppercase tracking-widest leading-none">Ordem de Produção</h1><p className="text-lg font-bold mt-1">OS #{order?.id || '000000'}</p></div></div>
         <div className="grid grid-cols-4 gap-4 mb-4">
-          <div className="col-span-3 border-2 border-black p-3 rounded-lg">
-            <h2 className="font-bold text-[9px] uppercase text-gray-500 mb-1 tracking-wider">Dados do Parceiro / Cliente</h2>
-            <p className="font-black text-lg uppercase leading-tight">
-              {fullCustomerData?.name || fullCustomerData?.company || fullCustomerData?.nome || client || 'Nome não informado'}
-            </p>
-            
+          <div className="col-span-3 border-2 border-black p-3 rounded-lg"><h2 className="font-bold text-[9px] uppercase text-gray-500 mb-1 tracking-wider">Dados do Parceiro / Cliente</h2><p className="font-black text-lg uppercase leading-tight">{fullCustomerData?.name || fullCustomerData?.company || client || 'Nome não informado'}</p>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-xs">
-              <p className="flex gap-1 items-center">
-                <FileBadge size={10} /> 
-                <strong>Doc:</strong> {
-                  fullCustomerData?.cpfCnpj || fullCustomerData?.cnpj || fullCustomerData?.cpf || fullCustomerData?.documento || fullCustomerData?.document || '_________________'
-                }
-              </p>
-              <p className="flex gap-1 items-center">
-                <Phone size={10} /> 
-                <strong>Tel:</strong> {
-                  fullCustomerData?.mobile || fullCustomerData?.landline || fullCustomerData?.telefone || fullCustomerData?.phone || order?.customerPhone || '_________________'
-                }
-              </p>
-              <p className="col-span-2 flex gap-1 items-start">
-                <MapPin size={10} className="mt-0.5 shrink-0" /> 
-                <span>
-                  <strong>Endereço:</strong> {
-                    (fullCustomerData?.address || fullCustomerData?.street || fullCustomerData?.endereco || fullCustomerData?.rua) ? 
-                    `${fullCustomerData?.street || fullCustomerData?.address || fullCustomerData?.endereco}, ${fullCustomerData?.number || fullCustomerData?.numero || 'S/N'} ${fullCustomerData?.complemento ? '(' + fullCustomerData.complemento + ')' : ''} - ${fullCustomerData?.bairro || fullCustomerData?.bairro || ''} ${fullCustomerData?.city || fullCustomerData?.cidade || ''}` 
-                    : (order?.customerAddress || order?.endereco || '______________________________________________________________')
-                  }
-                </span>
-              </p>
+              <p className="flex gap-1 items-center"><FileBadge size={10} /> <strong>Doc:</strong> {fullCustomerData?.cpfCnpj || fullCustomerData?.cnpj || '_________________'}</p>
+              <p className="flex gap-1 items-center"><Phone size={10} /> <strong>Tel:</strong> {fullCustomerData?.mobile || fullCustomerData?.landline || '_________________'}</p>
+              <p className="col-span-2 flex gap-1 items-start"><MapPin size={10} className="mt-0.5 shrink-0" /> <span><strong>Endereço:</strong> {fullCustomerData?.street ? `${fullCustomerData.street}, ${fullCustomerData.number || 'S/N'} - ${fullCustomerData.neighborhood || ''}` : '______________________________________________________________'}</span></p>
             </div>
           </div>
-          
-          <div className="col-span-1 flex flex-col gap-2">
-            <div className="bg-gray-100 p-2 rounded border border-gray-300 text-center">
-              <label className="text-[8px] font-black text-gray-500 uppercase block">Emissão</label>
-              <p className="text-sm font-bold">{emissionDate ? format(parseISO(emissionDate), 'dd/MM/yyyy') : '--/--/--'}</p>
-            </div>
-            <div className="bg-black text-white p-2 rounded text-center">
-              <label className="text-[8px] font-black text-gray-400 uppercase block">Entrega</label>
-              <p className="text-sm font-bold">{deliveryDate ? format(parseISO(deliveryDate), 'dd/MM/yyyy') : 'IMEDIATO'}</p>
-            </div>
-          </div>
+          <div className="col-span-1 flex flex-col gap-2"><div className="bg-gray-100 p-2 rounded border border-gray-300 text-center"><label className="text-[8px] font-black text-gray-500 uppercase block">Emissão</label><p className="text-sm font-bold">{emissionDate ? format(parseISO(emissionDate), 'dd/MM/yyyy') : '--/--/--'}</p></div><div className="bg-black text-white p-2 rounded text-center"><label className="text-[8px] font-black text-gray-400 uppercase block">Entrega</label><p className="text-sm font-bold">{deliveryDate ? format(parseISO(deliveryDate), 'dd/MM/yyyy') : 'IMEDIATO'}</p></div></div>
         </div>
-
-        <div className="mb-6">
-          <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 mb-2 flex items-center gap-2">
-            <Box size={12} className="text-black" /> Descrição dos Serviços e Materiais
-          </h3>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-black text-white">
-                <th className="p-2 text-left text-[9px] font-black uppercase tracking-widest rounded-tl">Qtd</th>
-                <th className="p-2 text-left text-[9px] font-black uppercase tracking-widest">Cód</th>
-                <th className="p-2 text-left text-[9px] font-black uppercase tracking-widest">Especificação Técnica</th>
-                <th className="p-2 text-center text-[9px] font-black uppercase tracking-widest rounded-tr">Conf.</th>
-              </tr>
-            </thead>
+        <div className="mb-6"><h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 mb-2 flex items-center gap-2"><Box size={12} className="text-black" /> Descrição dos Serviços e Materiais</h3>
+          <table className="w-full border-collapse"><thead><tr className="bg-black text-white"><th className="p-2 text-left text-[9px] font-black uppercase tracking-widest rounded-tl">Qtd</th><th className="p-2 text-left text-[9px] font-black uppercase tracking-widest">Cód</th><th className="p-2 text-left text-[9px] font-black uppercase tracking-widest">Especificação Técnica</th><th className="p-2 text-center text-[9px] font-black uppercase tracking-widest rounded-tr">Conf.</th></tr></thead>
             <tbody className="divide-y divide-gray-200 border-x border-b border-gray-300">
-              {items && items.length > 0 ? (
-                items.map((item, idx) => (
-                  <tr key={idx} className="border-b border-gray-300 leading-none">
-                    <td className="py-0.5 px-2 text-center font-black text-sm border-r border-gray-300 w-12">{item.quantity || 0}</td>
-                    <td className="py-0.5 px-2 text-center text-gray-400 border-r border-gray-300 w-12 text-[10px] font-mono">{item.productCode || '--'}</td>
-                    <td className="py-0.5 px-2 font-bold uppercase text-xs border-r border-gray-300 leading-tight">{item.desc || 'Item de production'}</td>
-                    <td className="py-0.5 px-2 w-16">
-                      <div className="w-4 h-4 border-[1.5px] border-gray-400 rounded-sm mx-auto"></div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={4} className="py-2 px-3 text-center text-gray-400 italic text-xs">Nenhum item detalhado na OS...</td>
-                </tr>
-              )}
+              {items && items.length > 0 ? (items.map((item, idx) => (<tr key={idx} className="border-b border-gray-300 leading-none"><td className="py-0.5 px-2 text-center font-black text-sm border-r border-gray-300 w-12">{item.quantity || 0}</td><td className="py-0.5 px-2 text-center text-gray-400 border-r border-gray-300 w-12 text-[10px] font-mono">{item.productCode || '--'}</td><td className="py-0.5 px-2 font-bold uppercase text-xs border-r border-gray-300 leading-tight">{item.desc || 'Item de produção'}</td><td className="py-0.5 px-2 w-16"><div className="w-4 h-4 border-[1.5px] border-gray-400 rounded-sm mx-auto"></div></td></tr>))) : (<tr><td colSpan={4} className="py-2 px-3 text-center text-gray-400 italic text-xs">Nenhum item detalhado na OS...</td></tr>)}
             </tbody>
           </table>
         </div>
-
         <div className="grid grid-cols-12 gap-8 mt-8">
-          <div className="col-span-5 flex flex-col">
-            <h2 className="font-bold text-xs uppercase text-gray-500 mb-3 tracking-wider">Notas de Produção</h2>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 flex-1 min-h-[150px] text-xs">
-              {(order?.notes || order?.observations || order?.observacoes || order?.productionNotes || observations) && (
-                <div className="mb-3 pb-2 border-b border-gray-200">
-                  <span className="font-bold text-gray-700 uppercase text-[10px]">Nota Geral da OS:</span>
-                  <p className="text-gray-600 italic mt-0.5 leading-tight">
-                    {order?.notes || order?.observations || order?.observacoes || order?.productionNotes || observations}
-                  </p>
-                </div>
-              )}
-
-              {items && items.length > 0 ? (
-                <div className="flex flex-col gap-2.5">
-                  {items.map((item: any, idx: number) => (
-                    <div key={idx} className="flex flex-col">
-                      <span className="font-bold text-gray-800 uppercase text-[10px]">
-                        {idx + 1}. {item.desc || item.name || item.descricao || 'Item'}:
-                      </span>
-                      <span className="text-gray-600 italic mt-0.5 leading-tight">
-                        {item.observation || item.notes || item.observacao || item.details || 'Sem observações específicas.'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-400 italic">Nenhuma nota técnica anexada a este protocolo.</p>
-              )}
-            </div>
-          </div>
-
-          <div className="col-span-7">
-            <h2 className="font-bold text-xs uppercase text-gray-500 mb-3 tracking-wider text-right">Fluxo / Etapa</h2>
-            
-            <div className="flex flex-col gap-4">
-              {['ARTE FINAL', 'IMPRESSÃO', 'SERRALHERIA', 'ACABAMENTO', 'INSTALAÇÃO'].map((etapa) => (
-                <div key={etapa} className="flex flex-col">
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 border-2 border-gray-500 rounded-sm"></div>
-                    <span className="font-bold text-sm text-gray-800 tracking-wide">{etapa}</span>
-                  </div>
-                  
-                  <div className="flex items-end gap-1 pl-8 mt-2">
-                    <span className="text-[10px] text-gray-500 font-bold uppercase mb-0.5">Resp:</span>
-                    <div className="border-b border-gray-600 flex-1 h-5 min-w-[100px]"></div>
-                    
-                    <span className="text-[10px] text-gray-500 font-bold uppercase ml-4 mb-0.5">Data:</span>
-                    <div className="border-b border-gray-600 w-28 h-5"></div> 
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <div className="col-span-5 flex flex-col"><h2 className="font-bold text-xs uppercase text-gray-500 mb-3 tracking-wider">Notas de Produção</h2><div className="border-2 border-dashed border-gray-300 rounded-lg p-3 flex-1 min-h-[150px] text-xs">{(order?.notes || order?.observations || order?.observacoes || order?.productionNotes || observations) && (<div className="mb-3 pb-2 border-b border-gray-200"><span className="font-bold text-gray-700 uppercase text-[10px]">Nota Geral da OS:</span><p className="text-gray-600 italic mt-0.5 leading-tight">{order?.notes || order?.observations || order?.observacoes || order?.productionNotes || observations}</p></div>)} {items && items.length > 0 ? (<div className="flex flex-col gap-2.5">{items.map((item: any, idx: number) => (<div key={idx} className="flex flex-col"><span className="font-bold text-gray-800 uppercase text-[10px]">{idx + 1}. {item.desc || item.name || 'Item'}:</span><span className="text-gray-600 italic mt-0.5 leading-tight">{item.observation || item.notes || 'Sem observações específicas.'}</span></div>))}</div>) : (<p className="text-gray-400 italic">Nenhuma nota técnica anexada.</p>)}</div></div>
+          <div className="col-span-7"><h2 className="font-bold text-xs uppercase text-gray-500 mb-3 tracking-wider text-right">Fluxo / Etapa</h2><div className="flex flex-col gap-4">{['ARTE FINAL', 'IMPRESSÃO', 'SERRALHERIA', 'ACABAMENTO', 'INSTALAÇÃO'].map((etapa) => (<div key={etapa} className="flex flex-col"><div className="flex items-center gap-3"><div className="w-5 h-5 border-2 border-gray-500 rounded-sm"></div><span className="font-bold text-sm text-gray-800 tracking-wide">{etapa}</span></div><div className="flex items-end gap-1 pl-8 mt-2"><span className="text-[10px] text-gray-500 font-bold uppercase mb-0.5">Resp:</span><div className="border-b border-gray-600 flex-1 h-5 min-w-[100px]"></div><span className="text-[10px] text-gray-500 font-bold uppercase ml-4 mb-0.5">Data:</span><div className="border-b border-gray-600 w-28 h-5"></div></div></div>))}</div></div>
         </div>
-
-        <div className="mt-auto pt-8 border-t border-gray-200">
-          <div className="grid grid-cols-2 gap-12 text-center">
-            <div className="space-y-1">
-              <div className="h-[1px] bg-black w-full" />
-              <p className="text-[9px] font-black uppercase tracking-widest">Responsável Produção</p>
-            </div>
-            <div className="space-y-1">
-              <div className="h-[1px] bg-black w-full" />
-              <p className="text-[9px] font-black uppercase tracking-widest">Conferência de Qualidade</p>
-            </div>
-          </div>
-          <div className="flex justify-between items-end mt-8 opacity-30 grayscale">
-            <div className="text-[7px] font-bold uppercase tracking-[0.4em]">VisComm • Cloud Command Center</div>
-            <div className="text-[7px] font-mono">EMISSÃO: {new Date().toLocaleString('pt-BR')}</div>
-          </div>
-        </div>
+        <div className="mt-auto pt-8 border-t border-gray-200"><div className="grid grid-cols-2 gap-12 text-center"><div className="space-y-1"><div className="h-[1px] bg-black w-full" /><p className="text-[9px] font-black uppercase tracking-widest">Responsável Produção</p></div><div className="space-y-1"><div className="h-[1px] bg-black w-full" /><p className="text-[9px] font-black uppercase tracking-widest">Conferência de Qualidade</p></div></div><div className="flex justify-between items-end mt-8 opacity-30 grayscale"><div className="text-[7px] font-bold uppercase tracking-[0.4em]">VisComm • Cloud Command Center</div><div className="text-[7px] font-mono">EMISSÃO: {new Date().toLocaleString('pt-BR')}</div></div></div>
       </div>
     </div>
   );
