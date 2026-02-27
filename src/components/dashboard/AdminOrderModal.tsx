@@ -265,6 +265,13 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     }
   };
 
+  const handlePrintOP = () => {
+    const originalTitle = document.title;
+    document.title = "\u200b";
+    window.print();
+    document.title = originalTitle;
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore) return;
@@ -324,7 +331,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           
           <div className="hidden md:flex gap-4 items-center">
              <button
-               onClick={() => window.print()}
+               onClick={handlePrintOP}
                className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl bg-zinc-800 text-zinc-300 hover:bg-white hover:text-black transition-all"
              >
                <Printer size={14} /> IMPRIMIR OP
@@ -431,7 +438,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                 <section className="space-y-4">
                    <div className="flex justify-between items-center border-b border-white/5 pb-2">
                       <h3 className="text-[10px] text-primary font-black uppercase tracking-[0.2em] flex items-center gap-2"><Box size={14}/> Itens e Orçamento</h3>
-                      <button type="button" onClick={() => setItems([...items, { productCode: '', desc: '', quantity: 1, unitValue: 0 }])} className="bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg px-3 py-1.5 text-[9px] font-black uppercase transition-all flex items-center gap-1"><Plus size={12}/> Adicionar Item</button>
+                      <button type="button" onClick={() => setItems([...items, { productCode: '', desc: '', quantity: 1, unitValue: 0, observation: '' }])} className="bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg px-3 py-1.5 text-[9px] font-black uppercase transition-all flex items-center gap-1"><Plus size={12}/> Adicionar Item</button>
                    </div>
                    <div className="space-y-2">
                       {items.map((item, index) => (
@@ -727,13 +734,38 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
         {/* ========================================== */}
         <div className="grid grid-cols-12 gap-8 mt-8">
           
-          {/* COLUNA ESQUERDA: NOTAS DE PRODUÇÃO (Mais Estreita: 5 colunas) */}
+          {/* COLUNA ESQUERDA: NOTAS DE PRODUÇÃO */}
           <div className="col-span-5 flex flex-col">
             <h2 className="font-bold text-xs uppercase text-gray-500 mb-3 tracking-wider">Notas de Produção</h2>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 flex-1 min-h-[150px]">
-              <p className="text-gray-500 italic text-sm">
-                {order.notes || order.observations || order.observacoes || order.productionNotes || 'Nenhuma nota técnica específica anexada a este protocolo.'}
-              </p>
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 flex-1 min-h-[150px] text-xs">
+              
+              {/* NOTA GERAL DO PEDIDO (Se existir) */}
+              {(order.notes || order.observations || order.observacoes || order.productionNotes || observations) && (
+                <div className="mb-3 pb-2 border-b border-gray-200">
+                  <span className="font-bold text-gray-700 uppercase text-[10px]">Nota Geral da OS:</span>
+                  <p className="text-gray-600 italic mt-0.5 leading-tight">
+                    {order.notes || order.observations || order.observacoes || order.productionNotes || observations}
+                  </p>
+                </div>
+              )}
+
+              {/* NOTAS ESPECÍFICAS POR ITEM */}
+              {items && items.length > 0 ? (
+                <div className="flex flex-col gap-2.5">
+                  {items.map((item: any, idx: number) => (
+                    <div key={idx} className="flex flex-col">
+                      <span className="font-bold text-gray-800 uppercase text-[10px]">
+                        {idx + 1}. {item.desc || item.name || item.descricao || 'Item'}:
+                      </span>
+                      <span className="text-gray-600 italic mt-0.5 leading-tight">
+                        {item.observation || item.notes || item.observacao || item.details || 'Sem observações específicas.'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-400 italic">Nenhuma nota técnica anexada a este protocolo.</p>
+              )}
             </div>
           </div>
 
