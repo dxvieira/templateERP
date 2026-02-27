@@ -759,11 +759,11 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           <div className="col-span-5 flex flex-col">
             <h2 className="font-bold text-xs uppercase text-gray-500 mb-3 tracking-wider">Notas de Produção</h2>
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 flex-1 min-h-[150px] text-xs">
-              {(order.notes || order.observations || order.observacoes || order.productionNotes || observations) && (
+              {(order?.notes || order?.observations || order?.observacoes || order?.productionNotes || observations) && (
                 <div className="mb-3 pb-2 border-b border-gray-200">
                   <span className="font-bold text-gray-700 uppercase text-[10px]">Nota Geral da OS:</span>
                   <p className="text-gray-600 italic mt-0.5 leading-tight">
-                    {order.notes || order.observations || order.observacoes || order.productionNotes || observations}
+                    {order?.notes || order?.observations || order?.observacoes || order?.productionNotes || observations}
                   </p>
                 </div>
               )}
