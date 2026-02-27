@@ -490,7 +490,19 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
         </div>
       </motion.div>
 
-      <div className="hidden print:block fixed inset-0 z-[99999] bg-white text-black p-8 font-sans w-full h-full overflow-y-auto">
+      {/* LAYOUT DE IMPRESSÃO PROFISSIONAL (A4) */}
+      <div className="hidden print:block absolute top-0 left-0 w-[200mm] h-[287mm] z-[99999] bg-white text-black p-4 font-sans overflow-hidden">
+        <style type="text/css" media="print">
+          {`
+            @page { size: A4 portrait; margin: 5mm; }
+            html, body { 
+              background: white !important; 
+              -webkit-print-color-adjust: exact !important; 
+              print-color-adjust: exact !important; 
+            }
+          `}
+        </style>
+
         <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-4">
           {/* LOGO DA EMPRESA - IMPACTO */}
           <div className="w-48 h-16 flex items-center justify-start">
@@ -501,39 +513,136 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
             />
           </div>
           <div className="text-right">
-            <h1 className="text-xl font-black uppercase tracking-widest leading-none">Ordem de Produção</h1>
-            <p className="text-lg font-bold mt-1">OS #{order?.id || '000000'}</p>
+            <h1 className="text-xl font-black uppercase tracking-widest leading-none text-black">Ordem de Produção</h1>
+            <p className="text-lg font-black mt-1 text-black">OS #{order?.id || '000000'}</p>
           </div>
         </div>
+
         <div className="grid grid-cols-4 gap-4 mb-4">
-          <div className="col-span-3 border-2 border-black p-3 rounded-lg"><h2 className="font-bold text-[9px] uppercase text-gray-500 mb-1 tracking-wider">Dados do Parceiro / Cliente</h2><p className="font-black text-lg uppercase leading-tight">{fullCustomerData?.name || fullCustomerData?.company || client || 'Nome não informado'}</p>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-xs">
-              <p className="flex gap-1 items-center"><FileBadge size={10} /> <strong>Doc:</strong> {fullCustomerData?.cpfCnpj || fullCustomerData?.cnpj || '_________________'}</p>
-              <p className="flex gap-1 items-center"><Phone size={10} /> <strong>Tel:</strong> {fullCustomerData?.mobile || fullCustomerData?.landline || '_________________'}</p>
-              <p className="col-span-2 flex gap-1 items-start"><MapPin size={10} className="mt-0.5 shrink-0" /> <span><strong>Endereço:</strong> {fullCustomerData?.street ? `${fullCustomerData.street}, ${fullCustomerData.number || 'S/N'} - ${fullCustomerData.neighborhood || ''}` : '______________________________________________________________'}</span></p>
+          <div className="col-span-3 border-2 border-solid border-black p-3 rounded-lg">
+            <h2 className="font-black text-[9px] uppercase text-black mb-1 tracking-wider">Dados do Parceiro / Cliente</h2>
+            <p className="font-black text-lg uppercase leading-tight text-black">{fullCustomerData?.name || fullCustomerData?.company || client || 'Nome não informado'}</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-xs text-black">
+              <p className="flex gap-1 items-center"><strong>Doc:</strong> {fullCustomerData?.cpfCnpj || fullCustomerData?.cnpj || '_________________'}</p>
+              <p className="flex gap-1 items-center"><strong>Tel:</strong> {fullCustomerData?.mobile || fullCustomerData?.landline || '_________________'}</p>
+              <p className="col-span-2 flex gap-1 items-start"><span><strong>Endereço:</strong> {fullCustomerData?.street ? `${fullCustomerData.street}, ${fullCustomerData.number || 'S/N'} - ${fullCustomerData.neighborhood || ''}` : '______________________________________________________________'}</span></p>
             </div>
           </div>
-          <div className="col-span-1 flex flex-col gap-2"><div className="bg-gray-100 p-2 rounded border border-gray-300 text-center"><label className="text-[8px] font-black text-gray-500 uppercase block">Emissão</label><p className="text-sm font-bold">{emissionDate ? format(parseISO(emissionDate), 'dd/MM/yyyy') : '--/--/--'}</p></div><div className="bg-black text-white p-2 rounded text-center"><label className="text-[8px] font-black text-gray-400 uppercase block">Entrega</label><p className="text-sm font-bold">{deliveryDate ? format(parseISO(deliveryDate), 'dd/MM/yyyy') : 'IMEDIATO'}</p></div></div>
+          <div className="col-span-1 flex flex-col gap-2">
+            <div className="bg-gray-100 p-2 rounded border border-solid border-black text-center">
+              <label className="text-[8px] font-black text-black uppercase block">Emissão</label>
+              <p className="text-sm font-black text-black">{emissionDate ? format(parseISO(emissionDate), 'dd/MM/yyyy') : '--/--/--'}</p>
+            </div>
+            <div className="bg-black text-white p-2 rounded text-center">
+              <label className="text-[8px] font-black text-white uppercase block">Entrega</label>
+              <p className="text-sm font-black text-white">{deliveryDate ? format(parseISO(deliveryDate), 'dd/MM/yyyy') : 'IMEDIATO'}</p>
+            </div>
+          </div>
         </div>
-        <div className="mb-6"><h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 mb-2 flex items-center gap-2"><Box size={12} className="text-black" /> Descrição dos Serviços e Materiais</h3>
-          <table className="w-full border-collapse"><thead><tr className="bg-black text-white"><th className="p-2 text-left text-[9px] font-black uppercase tracking-widest rounded-tl">Qtd</th><th className="p-2 text-left text-[9px] font-black uppercase tracking-widest">Cód</th><th className="p-2 text-left text-[9px] font-black uppercase tracking-widest">Especificação Técnica</th><th className="p-2 text-center text-[9px] font-black uppercase tracking-widest rounded-tr">Conf.</th></tr></thead>
-            <tbody className="divide-y divide-gray-200 border-x border-b border-gray-300">
-              {order?.items && order.items.length > 0 ? (order.items.map((item: any, idx: number) => (<tr key={idx} className="border-b border-gray-300 leading-none"><td className="py-0.5 px-2 text-center font-black text-sm border-r border-gray-300 w-12">{item.quantity || item.qtd || 1}</td><td className="py-0.5 px-2 text-center text-gray-400 border-r border-gray-300 w-12 text-[10px] font-mono">{item.productCode || '--'}</td><td className="py-0.5 px-2 font-bold uppercase text-xs border-r border-gray-300 leading-tight">{item.desc || item.name || 'Item de produção'}</td><td className="py-0.5 px-2 w-16"><div className="w-4 h-4 border-[1.5px] border-gray-400 rounded-sm mx-auto"></div></td></tr>))) : (<tr><td colSpan={4} className="py-2 px-3 text-center text-gray-400 italic text-xs">Nenhum item detalhado na OS...</td></tr>)}
+
+        <div className="mb-6">
+          <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-black mb-2 flex items-center gap-2">
+            <Box size={12} className="text-black" /> Descrição dos Serviços e Materiais
+          </h3>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-black text-white">
+                <th className="p-2 text-left text-[9px] font-black uppercase tracking-widest rounded-tl">Qtd</th>
+                <th className="p-2 text-left text-[9px] font-black uppercase tracking-widest">Cód</th>
+                <th className="p-2 text-left text-[9px] font-black uppercase tracking-widest">Especificação Técnica</th>
+                <th className="p-2 text-center text-[9px] font-black uppercase tracking-widest rounded-tr">Conf.</th>
+              </tr>
+            </thead>
+            <tbody className="border-x border-b border-solid border-black">
+              {order?.items && order.items.length > 0 ? (
+                order.items.map((item: any, idx: number) => (
+                  <tr key={idx} className="border-b border-solid border-black leading-none">
+                    <td className="py-1 px-2 text-center font-black text-sm border-r border-solid border-black w-12 text-black">{item.quantity || item.qtd || 1}</td>
+                    <td className="py-1 px-2 text-center text-gray-800 border-r border-solid border-black w-12 text-[10px] font-mono">{item.productCode || '--'}</td>
+                    <td className="py-1 px-2 font-black uppercase text-xs border-r border-solid border-black leading-tight text-black">{item.desc || item.name || 'Item de produção'}</td>
+                    <td className="py-1 px-2 w-16"><div className="w-4 h-4 border-2 border-solid border-black rounded-sm mx-auto"></div></td>
+                  </tr>
+                ))
+              ) : (
+                <tr><td colSpan={4} className="py-2 px-3 text-center text-black italic text-xs">Nenhum item detalhado na OS...</td></tr>
+              )}
             </tbody>
           </table>
         </div>
+
         <div className="grid grid-cols-12 gap-8 mt-8">
-          <div className="col-span-5 flex flex-col"><h2 className="font-bold text-xs uppercase text-gray-500 mb-3 tracking-wider">Notas de Produção</h2><div className="border-2 border-dashed border-gray-300 rounded-lg p-3 flex-1 min-h-[150px] text-xs">{(order?.notes || order?.observations || order?.observacoes || order?.productionNotes || observations) && (
-                <div className="mb-3 pb-2 border-b border-gray-200">
-                  <span className="font-bold text-gray-700 uppercase text-[10px]">Nota Geral da OS:</span>
-                  <p className="text-gray-600 italic mt-0.5 leading-tight">
+          {/* COLUNA ESQUERDA: NOTAS DE PRODUÇÃO */}
+          <div className="col-span-5 flex flex-col">
+            <h2 className="font-black text-xs uppercase text-black mb-3 tracking-wider">Notas de Produção</h2>
+            <div className="border-2 border-solid border-black rounded-lg p-3 flex-1 min-h-[150px] text-xs">
+              
+              {/* NOTA GERAL DO PEDIDO */}
+              {(order?.notes || order?.observations || order?.observacoes || order?.productionNotes || observations) && (
+                <div className="mb-3 pb-2 border-b border-solid border-black">
+                  <span className="font-black text-black uppercase text-[10px]">Nota Geral da OS:</span>
+                  <p className="text-black italic mt-0.5 leading-tight">
                     {order?.notes || order?.observations || order?.observacoes || order?.productionNotes || observations}
                   </p>
                 </div>
-              )} {order?.items && order.items.length > 0 ? (<div className="flex flex-col gap-2.5">{order.items.map((item: any, idx: number) => (<div key={idx} className="flex flex-col"><span className="font-bold text-gray-800 uppercase text-[10px]">{idx + 1}. {item.desc || item.name || 'Item'}:</span><span className="text-gray-600 italic mt-0.5 leading-tight">{item.observation || item.notes || 'Sem observações específicas.'}</span></div>))}</div>) : (<p className="text-gray-400 italic">Nenhuma nota técnica anexada.</p>)}</div></div>
-          <div className="col-span-7"><h2 className="font-bold text-xs uppercase text-gray-500 mb-3 tracking-wider text-right">Fluxo / Etapa</h2><div className="flex flex-col gap-4">{['ARTE FINAL', 'IMPRESSÃO', 'SERRALHERIA', 'ACABAMENTO', 'INSTALAÇÃO'].map((etapa) => (<div key={etapa} className="flex flex-col"><div className="flex items-center gap-3"><div className="w-5 h-5 border-2 border-gray-500 rounded-sm"></div><span className="font-bold text-sm text-gray-800 tracking-wide">{etapa}</span></div><div className="flex items-end gap-1 pl-8 mt-2"><span className="text-[10px] text-gray-500 font-bold uppercase mb-0.5">Resp:</span><div className="border-b border-gray-600 flex-1 h-5 min-w-[100px]"></div><span className="text-[10px] text-gray-500 font-bold uppercase ml-4 mb-0.5">Data:</span><div className="border-b border-gray-600 w-28 h-5"></div></div></div>))}</div></div>
+              )}
+
+              {/* NOTAS ESPECÍFICAS POR ITEM */}
+              {order?.items && order.items.length > 0 ? (
+                <div className="flex flex-col gap-2.5">
+                  {order.items.map((item: any, idx: number) => (
+                    <div key={idx} className="flex flex-col">
+                      <span className="font-black text-black uppercase text-[10px]">
+                        {idx + 1}. {item.desc || item.name || item.descricao}:
+                      </span>
+                      <span className="text-gray-800 italic mt-0.5 leading-tight">
+                        {item.observation || item.notes || item.observacao || item.details || 'Sem observações específicas.'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-black italic">Nenhuma nota técnica anexada.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="col-span-7">
+            <h2 className="font-black text-xs uppercase text-black mb-3 tracking-wider text-right">Fluxo / Etapa</h2>
+            <div className="flex flex-col gap-4">
+              {['ARTE FINAL', 'IMPRESSÃO', 'SERRALHERIA', 'ACABAMENTO', 'INSTALAÇÃO'].map((etapa) => (
+                <div key={etapa} className="flex flex-col">
+                  <div className="flex items-center gap-3">
+                    <div className="w-5 h-5 border-2 border-solid border-black rounded-sm"></div>
+                    <span className="font-black text-sm text-black tracking-wide">{etapa}</span>
+                  </div>
+                  <div className="flex items-end gap-1 pl-8 mt-2">
+                    <span className="text-[10px] text-black font-black uppercase mb-0.5">Resp:</span>
+                    <div className="border-b border-solid border-black flex-1 h-5 min-w-[100px]"></div>
+                    <span className="text-[10px] text-black font-black uppercase ml-4 mb-0.5">Data:</span>
+                    <div className="border-b border-solid border-black w-28 h-5"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-        <div className="mt-auto pt-8 border-t border-gray-200"><div className="grid grid-cols-2 gap-12 text-center"><div className="space-y-1"><div className="h-[1px] bg-black w-full" /><p className="text-[9px] font-black uppercase tracking-widest">Responsável Produção</p></div><div className="space-y-1"><div className="h-[1px] bg-black w-full" /><p className="text-[9px] font-black uppercase tracking-widest">Conferência de Qualidade</p></div></div><div className="flex justify-between items-end mt-8 opacity-30 grayscale"><div className="text-[7px] font-bold uppercase tracking-[0.4em]">VisComm • Cloud Command Center</div><div className="text-[7px] font-mono">EMISSÃO: {new Date().toLocaleString('pt-BR')}</div></div></div>
+
+        <div className="mt-auto pt-8 border-t border-solid border-black">
+          <div className="grid grid-cols-2 gap-12 text-center">
+            <div className="space-y-1">
+              <div className="h-[1px] bg-black w-full" />
+              <p className="text-[9px] font-black uppercase tracking-widest text-black">Responsável Produção</p>
+            </div>
+            <div className="space-y-1">
+              <div className="h-[1px] bg-black w-full" />
+              <p className="text-[9px] font-black uppercase tracking-widest text-black">Conferência de Qualidade</p>
+            </div>
+          </div>
+          <div className="flex justify-between items-end mt-8 opacity-50">
+            <div className="text-[7px] font-black uppercase tracking-[0.4em] text-black">VisComm • Cloud Command Center</div>
+            <div className="text-[7px] font-mono text-black">EMISSÃO: {new Date().toLocaleString('pt-BR')}</div>
+          </div>
+        </div>
       </div>
     </div>
   );
