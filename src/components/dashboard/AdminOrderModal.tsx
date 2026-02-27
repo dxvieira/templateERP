@@ -491,10 +491,10 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       </motion.div>
 
       {/* LAYOUT DE IMPRESSÃO PROFISSIONAL (A4) */}
-      <div className="hidden print:block absolute top-0 left-0 w-[200mm] h-[287mm] z-[99999] bg-white text-black p-4 font-sans overflow-hidden">
+      <div className="hidden print:block print:absolute print:inset-0 w-full h-full max-h-[296mm] overflow-hidden z-[99999] bg-white text-black p-8 font-sans box-border">
         <style type="text/css" media="print">
           {`
-            @page { size: A4 portrait; margin: 5mm; }
+            @page { size: A4 portrait; margin: 0; }
             html, body { 
               background: white !important; 
               -webkit-print-color-adjust: exact !important; 
