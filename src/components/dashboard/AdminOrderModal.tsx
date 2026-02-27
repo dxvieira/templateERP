@@ -311,7 +311,8 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-md p-2 md:p-4">
       <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }} className="bg-[#09090b] w-full max-w-5xl border border-zinc-800 rounded-3xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden print:hidden">
         
-        <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-zinc-900/50">
+        {/* CABEÇALHO DO MODAL - OCULTO NA IMPRESSÃO */}
+        <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-zinc-900/50 print:hidden">
           <div className="flex items-center gap-4">
             <div className="bg-primary/10 text-primary p-2 rounded-xl border border-primary/20"><Calculator size={20} /></div>
             <div>
@@ -491,12 +492,14 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       </motion.div>
 
       {/* LAYOUT DE IMPRESSÃO PROFISSIONAL (A4) - CLEAN DESIGN */}
-      <div className="hidden print:block print:absolute print:inset-0 w-full h-full max-h-[296mm] overflow-hidden z-[99999] bg-white text-black p-8 font-sans box-border">
+      <div className="hidden print:block print:absolute print:inset-0 print:bg-white print:border-none w-full h-full max-h-[296mm] overflow-hidden z-[99999] bg-white text-black p-8 pt-0 mt-0 font-sans box-border">
         <style type="text/css" media="print">
           {`
-            @page { size: A4 portrait; margin: 0; }
-            html, body { 
-              background: white !important; 
+            @page { size: A4 portrait; margin: 0 !important; padding: 0 !important; }
+            html, body, #root, main { 
+              background-color: white !important; 
+              margin: 0 !important; 
+              padding: 0 !important;
               -webkit-print-color-adjust: exact !important; 
               print-color-adjust: exact !important; 
             }
@@ -594,7 +597,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                         {idx + 1}. {item.desc || item.name}:
                       </span>
                       <span className="text-gray-600 italic mt-0.5 leading-tight">
-                        {item.observation || item.notes || item.observacao || 'Sem observações específicas.'}
+                        {item.observation || item.notes || item.observacao || item.details || 'Sem observações específicas.'}
                       </span>
                     </div>
                   ))}
