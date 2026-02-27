@@ -428,7 +428,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                            </div>
                            <div className="w-full">
                               <label className="text-[8px] text-primary/60 uppercase font-black mb-1 block ml-1">Instruções de Produção / Acabamento</label>
-                              <input placeholder="Notas de produção..." value={item.observation || ''} onChange={e => { const n = [...items]; n[index].observation = e.target.value; setItems(n); }} className="w-full bg-zinc-950 border border-zinc-800 text-zinc-400 text-[11px] rounded-xl p-3 focus:border-primary/50 outline-none transition-all placeholder:text-zinc-800" />
+                              <input placeholder="Notas de produção (ex: Acabamento com ilhós a cada 20cm, refile rente...)" value={item.observation || ''} onChange={e => { const n = [...items]; n[index].observation = e.target.value; setItems(n); }} className="w-full bg-zinc-950 border border-zinc-800 text-zinc-400 text-[11px] rounded-xl p-3 focus:border-primary/50 outline-none transition-all placeholder:text-zinc-800" />
                            </div>
                         </div>
                       ))}
@@ -492,11 +492,11 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
       <div className="hidden print:block fixed inset-0 z-[99999] bg-white text-black p-8 font-sans w-full h-full overflow-y-auto">
         <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-4">
-          {/* LOGO DA EMPRESA */}
-          <div className="w-40 h-16 flex items-center justify-start">
+          {/* LOGO DA EMPRESA - IMPACTO */}
+          <div className="w-48 h-16 flex items-center justify-start">
             <img 
-              src="/logo.png" 
-              alt="Logo IMPACTO" 
+              src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd" 
+              alt="Logo IMPACTO Comunicação Visual" 
               className="max-w-full max-h-full object-contain print:color-adjust-exact"
             />
           </div>
@@ -518,7 +518,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
         <div className="mb-6"><h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 mb-2 flex items-center gap-2"><Box size={12} className="text-black" /> Descrição dos Serviços e Materiais</h3>
           <table className="w-full border-collapse"><thead><tr className="bg-black text-white"><th className="p-2 text-left text-[9px] font-black uppercase tracking-widest rounded-tl">Qtd</th><th className="p-2 text-left text-[9px] font-black uppercase tracking-widest">Cód</th><th className="p-2 text-left text-[9px] font-black uppercase tracking-widest">Especificação Técnica</th><th className="p-2 text-center text-[9px] font-black uppercase tracking-widest rounded-tr">Conf.</th></tr></thead>
             <tbody className="divide-y divide-gray-200 border-x border-b border-gray-300">
-              {items && items.length > 0 ? (items.map((item, idx) => (<tr key={idx} className="border-b border-gray-300 leading-none"><td className="py-0.5 px-2 text-center font-black text-sm border-r border-gray-300 w-12">{item.quantity || 0}</td><td className="py-0.5 px-2 text-center text-gray-400 border-r border-gray-300 w-12 text-[10px] font-mono">{item.productCode || '--'}</td><td className="py-0.5 px-2 font-bold uppercase text-xs border-r border-gray-300 leading-tight">{item.desc || 'Item de produção'}</td><td className="py-0.5 px-2 w-16"><div className="w-4 h-4 border-[1.5px] border-gray-400 rounded-sm mx-auto"></div></td></tr>))) : (<tr><td colSpan={4} className="py-2 px-3 text-center text-gray-400 italic text-xs">Nenhum item detalhado na OS...</td></tr>)}
+              {order?.items && order.items.length > 0 ? (order.items.map((item: any, idx: number) => (<tr key={idx} className="border-b border-gray-300 leading-none"><td className="py-0.5 px-2 text-center font-black text-sm border-r border-gray-300 w-12">{item.quantity || item.qtd || 1}</td><td className="py-0.5 px-2 text-center text-gray-400 border-r border-gray-300 w-12 text-[10px] font-mono">{item.productCode || '--'}</td><td className="py-0.5 px-2 font-bold uppercase text-xs border-r border-gray-300 leading-tight">{item.desc || item.name || 'Item de produção'}</td><td className="py-0.5 px-2 w-16"><div className="w-4 h-4 border-[1.5px] border-gray-400 rounded-sm mx-auto"></div></td></tr>))) : (<tr><td colSpan={4} className="py-2 px-3 text-center text-gray-400 italic text-xs">Nenhum item detalhado na OS...</td></tr>)}
             </tbody>
           </table>
         </div>
@@ -530,7 +530,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                     {order?.notes || order?.observations || order?.observacoes || order?.productionNotes || observations}
                   </p>
                 </div>
-              )} {items && items.length > 0 ? (<div className="flex flex-col gap-2.5">{items.map((item: any, idx: number) => (<div key={idx} className="flex flex-col"><span className="font-bold text-gray-800 uppercase text-[10px]">{idx + 1}. {item.desc || item.name || 'Item'}:</span><span className="text-gray-600 italic mt-0.5 leading-tight">{item.observation || item.notes || 'Sem observações específicas.'}</span></div>))}</div>) : (<p className="text-gray-400 italic">Nenhuma nota técnica anexada.</p>)}</div></div>
+              )} {order?.items && order.items.length > 0 ? (<div className="flex flex-col gap-2.5">{order.items.map((item: any, idx: number) => (<div key={idx} className="flex flex-col"><span className="font-bold text-gray-800 uppercase text-[10px]">{idx + 1}. {item.desc || item.name || 'Item'}:</span><span className="text-gray-600 italic mt-0.5 leading-tight">{item.observation || item.notes || 'Sem observações específicas.'}</span></div>))}</div>) : (<p className="text-gray-400 italic">Nenhuma nota técnica anexada.</p>)}</div></div>
           <div className="col-span-7"><h2 className="font-bold text-xs uppercase text-gray-500 mb-3 tracking-wider text-right">Fluxo / Etapa</h2><div className="flex flex-col gap-4">{['ARTE FINAL', 'IMPRESSÃO', 'SERRALHERIA', 'ACABAMENTO', 'INSTALAÇÃO'].map((etapa) => (<div key={etapa} className="flex flex-col"><div className="flex items-center gap-3"><div className="w-5 h-5 border-2 border-gray-500 rounded-sm"></div><span className="font-bold text-sm text-gray-800 tracking-wide">{etapa}</span></div><div className="flex items-end gap-1 pl-8 mt-2"><span className="text-[10px] text-gray-500 font-bold uppercase mb-0.5">Resp:</span><div className="border-b border-gray-600 flex-1 h-5 min-w-[100px]"></div><span className="text-[10px] text-gray-500 font-bold uppercase ml-4 mb-0.5">Data:</span><div className="border-b border-gray-600 w-28 h-5"></div></div></div>))}</div></div>
         </div>
         <div className="mt-auto pt-8 border-t border-gray-200"><div className="grid grid-cols-2 gap-12 text-center"><div className="space-y-1"><div className="h-[1px] bg-black w-full" /><p className="text-[9px] font-black uppercase tracking-widest">Responsável Produção</p></div><div className="space-y-1"><div className="h-[1px] bg-black w-full" /><p className="text-[9px] font-black uppercase tracking-widest">Conferência de Qualidade</p></div></div><div className="flex justify-between items-end mt-8 opacity-30 grayscale"><div className="text-[7px] font-bold uppercase tracking-[0.4em]">VisComm • Cloud Command Center</div><div className="text-[7px] font-mono">EMISSÃO: {new Date().toLocaleString('pt-BR')}</div></div></div>
