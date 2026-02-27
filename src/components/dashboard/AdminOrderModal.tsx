@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -233,17 +234,17 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     // Guarda o título original do sistema
     const originalTitle = document.title;
     
-    // Extrai os dados para nomear o arquivo
-    const nomeCliente = order?.client || order?.customerName || order?.cliente || 'Cliente';
+    // Extrai os dados (ajuste as variáveis 'order.cliente' e 'order.id' conforme o seu estado atual)
+    const nomeCliente = order?.customerName || order?.cliente || order?.clientName || order?.client || 'Cliente';
     const numeroOS = order?.id ? String(order.id).padStart(6, '0') : '000000';
     
-    // Altera o título temporariamente (o navegador usa isso para o nome do PDF)
+    // Muda o título só para a impressão
     document.title = `${nomeCliente} ${numeroOS}`;
     
-    // Abre a tela de impressão
+    // Abre a tela de imprimir/salvar PDF
     window.print();
     
-    // Restaura o título da aba do navegador imediatamente
+    // Devolve o nome do sistema para a aba do navegador
     document.title = originalTitle;
   };
 
