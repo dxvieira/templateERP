@@ -59,7 +59,7 @@ export default function ReportsManager() {
     description: '', amount: '', type: 'income', date: format(new Date(), 'yyyy-MM-dd'), method: 'Pix'
   });
   const [payableFormData, setPayableFormData] = useState({
-    supplier: '', description: '', category: 'Suprimentos', amountTotal: '', installments: 1, method: 'Boleto'
+    supplier: '', description: '', category: 'Suprimentos', amountTotal: '', installments: 1, method: 'Boleto', numeroNF: ''
   });
   const [previewInstallments, setPreviewInstallments] = useState<any[]>([]);
 
@@ -469,7 +469,7 @@ export default function ReportsManager() {
                                     <span className={cn("text-[10px] font-bold", p.status === 'paid' ? "text-emerald-500" : "text-white")}>{p.dueDate ? format(parseISO(p.dueDate), 'dd/MM/yyyy') : '-'}</span>
                                     {p.status === 'paid' && <span className="px-1.5 py-0.5 text-[8px] font-black bg-emerald-500 text-black rounded uppercase tracking-tighter shadow-[0_0_10px_rgba(16,185,129,0.3)]">PAGO</span>}
                                   </div>
-                                  <span className="text-[8px] text-zinc-600 font-black uppercase tracking-[0.2em]">{p.method} • {p.category}</span>
+                                  <span className="text-[8px] text-zinc-600 font-black uppercase tracking-[0.2em]">{p.method} • {p.category} {p.invoiceNumber ? `• NF: ${p.invoiceNumber}` : ''}</span>
                                 </div>
                               </div>
                               <div className="flex items-center gap-6">
@@ -647,8 +647,9 @@ export default function ReportsManager() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div><label className={labelClass}>Fornecedor</label><input required value={payableFormData.supplier} onChange={e => setPayableFormData({...payableFormData, supplier: e.target.value})} className={inputClass} /></div>
                     <div><label className={labelClass}>Descrição</label><input value={payableFormData.description} onChange={e => setPayableFormData({...payableFormData, description: e.target.value})} className={inputClass} /></div>
+                    <div><label className={labelClass}>Nº da NF</label><input value={payableFormData.numeroNF} onChange={e => setPayableFormData({...payableFormData, numeroNF: e.target.value})} className={inputClass} placeholder="Ex: 12345" /></div>
                     <div><label className={labelClass}>Valor Total</label><input type="number" value={payableFormData.amountTotal} onChange={e => setPayableFormData({...payableFormData, amountTotal: e.target.value})} className={inputClass} /></div>
-                    <div><label className={labelClass}>Parcelas</label><div className="flex gap-2"><input type="number" min={1} value={payableFormData.installments} onChange={e => setPayableFormData({...payableFormData, installments: Number(e.target.value)})} className={inputClass} /><button onClick={() => { const total = Number(payableFormData.amountTotal); const count = Number(payableFormData.installments); const v = Number((total / count).toFixed(2)); const list = []; for(let i=0; i<count; i++) list.push({ dueDate: format(addMonths(new Date(), i), 'yyyy-MM-dd'), amount: i === count - 1 ? (total - (v * (count - 1))) : v }); setPreviewInstallments(list); }} className="bg-white text-black px-4 rounded-xl font-black uppercase text-[10px]">Gerar</button></div></div>
+                    <div className="md:col-span-2"><label className={labelClass}>Parcelas</label><div className="flex gap-2"><input type="number" min={1} value={payableFormData.installments} onChange={e => setPayableFormData({...payableFormData, installments: Number(e.target.value)})} className={inputClass} /><button onClick={() => { const total = Number(payableFormData.amountTotal); const count = Number(payableFormData.installments); const v = Number((total / count).toFixed(2)); const list = []; for(let i=0; i<count; i++) list.push({ dueDate: format(addMonths(new Date(), i), 'yyyy-MM-dd'), amount: i === count - 1 ? (total - (v * (count - 1))) : v }); setPreviewInstallments(list); }} className="bg-white text-black px-4 rounded-xl font-black uppercase text-[10px]">Gerar</button></div></div>
                   </div>
                   {previewInstallments.length > 0 && (
                     <div className="space-y-3 pt-4">
@@ -662,7 +663,7 @@ export default function ReportsManager() {
                   )}
                 </div>
                 <div className="p-8 border-t border-white/5">
-                  <button onClick={async () => { setIsSubmitting(true); const groupId = Date.now().toString(); try { for(let i=0; i<previewInstallments.length; i++) { const inst = previewInstallments[i]; await addDoc(collection(firestore, 'accounts_payable'), { supplier: payableFormData.supplier, description: payableFormData.description, amount: Number(inst.amount), dueDate: inst.dueDate, status: 'pending', userId: user.uid, groupId: groupId, installmentNumber: i + 1, totalInstallments: previewInstallments.length, createdAt: serverTimestamp() }); } setIsPayableModalOpen(false); setPreviewInstallments([]); toast({title: "Pauta Salva"}); } catch(e) { alert(e); } finally { setIsSubmitting(false); } }} disabled={isSubmitting} className="w-full py-5 bg-primary text-black font-black uppercase tracking-widest rounded-2xl">Efetivar Compromissos</button>
+                  <button onClick={async () => { setIsSubmitting(true); const groupId = Date.now().toString(); try { for(let i=0; i<previewInstallments.length; i++) { const inst = previewInstallments[i]; await addDoc(collection(firestore, 'accounts_payable'), { supplier: payableFormData.supplier, description: payableFormData.description, amount: Number(inst.amount), dueDate: inst.dueDate, invoiceNumber: payableFormData.numeroNF, status: 'pending', userId: user.uid, groupId: groupId, installmentNumber: i + 1, totalInstallments: previewInstallments.length, createdAt: serverTimestamp() }); } setIsPayableModalOpen(false); setPreviewInstallments([]); setPayableFormData({ supplier: '', description: '', category: 'Suprimentos', amountTotal: '', installments: 1, method: 'Boleto', numeroNF: '' }); toast({title: "Pauta Salva"}); } catch(e) { alert(e); } finally { setIsSubmitting(false); } }} disabled={isSubmitting} className="w-full py-5 bg-primary text-black font-black uppercase tracking-widest rounded-2xl">Efetivar Compromissos</button>
                 </div>
               </motion.div>
             </div>
