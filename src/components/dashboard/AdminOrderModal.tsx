@@ -441,7 +441,13 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                            </div>
                            <div className="w-full">
                               <label className="text-[8px] text-primary/60 uppercase font-black mb-1 block ml-1">Instruções de Produção / Acabamento</label>
-                              <input placeholder="Notas de produção (ex: Acabamento com ilhós a cada 20cm, refile rente...)" value={item.observation || ''} onChange={e => { const n = [...items]; n[index].observation = e.target.value; setItems(n); }} className="w-full bg-zinc-950 border border-zinc-800 text-zinc-400 text-[11px] rounded-xl p-3 focus:border-primary/50 outline-none transition-all placeholder:text-zinc-800" />
+                              <textarea 
+                                rows={2}
+                                placeholder="Notas de produção (ex: Acabamento com ilhós a cada 20cm, refile rente...)" 
+                                value={item.observation || ''} 
+                                onChange={e => { const n = [...items]; n[index].observation = e.target.value; setItems(n); }} 
+                                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-400 text-[11px] rounded-xl p-3 focus:border-primary/50 outline-none transition-all placeholder:text-zinc-800 resize-y" 
+                              />
                            </div>
                         </div>
                       ))}
