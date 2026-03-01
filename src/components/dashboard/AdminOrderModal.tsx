@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -442,11 +441,21 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                            <div className="w-full">
                               <label className="text-[8px] text-primary/60 uppercase font-black mb-1 block ml-1">Instruções de Produção / Acabamento</label>
                               <textarea 
-                                rows={2}
+                                rows={1}
                                 placeholder="Notas de produção (ex: Acabamento com ilhós a cada 20cm, refile rente...)" 
                                 value={item.observation || ''} 
-                                onChange={e => { const n = [...items]; n[index].observation = e.target.value; setItems(n); }} 
-                                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-400 text-[11px] rounded-xl p-3 focus:border-primary/50 outline-none transition-all placeholder:text-zinc-800 resize-y" 
+                                onInput={(e: React.FormEvent<HTMLTextAreaElement>) => {
+                                  const target = e.target as HTMLTextAreaElement;
+                                  target.style.height = 'auto';
+                                  target.style.height = `${target.scrollHeight}px`;
+                                }}
+                                onChange={e => { 
+                                  const n = [...items]; 
+                                  n[index].observation = e.target.value; 
+                                  setItems(n); 
+                                }} 
+                                className="w-full bg-zinc-950 border border-zinc-800 text-zinc-400 text-[11px] rounded-xl p-3 focus:border-primary/50 outline-none transition-all placeholder:text-zinc-800 overflow-hidden min-h-[44px]"
+                                style={{ resize: 'none' }} 
                               />
                            </div>
                         </div>
