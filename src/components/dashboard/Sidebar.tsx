@@ -25,6 +25,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuth, initiateSignOut, useFirestore, useUser } from '@/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import Link from 'next/link';
+import Image from 'next/image';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -100,10 +101,15 @@ export const DashboardSidebar = memo(() => {
     <>
       <header className="fixed top-0 left-0 right-0 z-[110] h-14 md:hidden bg-[#0A0A0A]/80 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between print:hidden">
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shadow-[0_0_10px_rgba(255,95,31,0.5)]">
-            <ClipboardList className="text-black w-4 h-4" />
+          <div className="relative w-32 h-8">
+            <Image 
+              src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd"
+              alt="Logo IMPACTO"
+              fill
+              className="object-contain object-left"
+              priority
+            />
           </div>
-          <span className="text-xl text-white tracking-tighter leading-none font-black">IMPACTO</span>
         </div>
         <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(!isMobileOpen)}>
           {isMobileOpen ? <X className="text-primary w-5 h-5" /> : <Menu className="text-primary w-5 h-5" />}
@@ -125,20 +131,34 @@ export const DashboardSidebar = memo(() => {
         )}
       >
         <div className="flex flex-col h-full p-4 overflow-x-hidden scrollbar-hide">
-          <div className="flex items-center justify-between mb-8 px-2 h-10 overflow-hidden shrink-0">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-[0_0_15px_rgba(255,95,31,0.5)] shrink-0">
+          <div className="flex items-center justify-between mb-8 px-2 h-14 overflow-hidden shrink-0">
+            <div className="flex items-center min-w-0 flex-1 relative h-full">
+              {/* Logo Full - Visível apenas quando expandido */}
+              <div className={cn(
+                "absolute inset-0 transition-all duration-500 flex items-center",
+                isExpanded ? "opacity-100 scale-100 translate-x-0" : "opacity-0 scale-95 -translate-x-4 pointer-events-none"
+              )}>
+                <div className="relative w-40 h-10">
+                  <Image 
+                    src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd"
+                    alt="Logo IMPACTO"
+                    fill
+                    className="object-contain object-left"
+                    priority
+                  />
+                </div>
+              </div>
+
+              {/* Ícone Minimalista / Fallback - Visível apenas quando recolhido */}
+              <div className={cn(
+                "w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-[0_0_15px_rgba(255,95,31,0.5)] shrink-0 transition-all duration-500",
+                isExpanded ? "opacity-0 scale-0 -translate-x-10 pointer-events-none" : "opacity-100 scale-100"
+              )}>
                 <ClipboardList className="text-black w-6 h-6" />
               </div>
-              <div className={cn(
-                "flex flex-col transition-all duration-300 origin-left",
-                isExpanded ? "opacity-100 scale-100 translate-x-0" : "opacity-0 scale-0 -translate-x-10 pointer-events-none"
-              )}>
-                <span className="text-xl text-white font-black tracking-tighter leading-none whitespace-nowrap">IMPACTO</span>
-                <span className="text-[8px] font-bold tracking-[0.2em] text-zinc-500 uppercase whitespace-nowrap">Comunicação Visual</span>
-              </div>
             </div>
-            <button onClick={togglePin} className={cn("hidden md:flex p-2 rounded-lg transition-colors hover:bg-white/5", isExpanded ? "opacity-100" : "opacity-0 pointer-events-none", isPinned ? "text-primary" : "text-zinc-600")}>
+            
+            <button onClick={togglePin} className={cn("hidden md:flex p-2 rounded-lg transition-colors hover:bg-white/5 ml-2", isExpanded ? "opacity-100" : "opacity-0 pointer-events-none", isPinned ? "text-primary" : "text-zinc-600")}>
               {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
             </button>
           </div>
