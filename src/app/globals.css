@@ -81,6 +81,12 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+  
+  /* Efeito Neon Hover */
+  .neon-hover-active {
+    @apply ring-2 ring-primary ring-opacity-50;
+    box-shadow: 0 0 15px rgba(255, 95, 31, 0.4);
+  }
 }
 
 /* Glassmorphism utility */
