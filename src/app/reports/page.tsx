@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -11,7 +12,7 @@ import {
   Loader2, X, Wallet2, CheckCircle2, Receipt, 
   ArrowDownLeft, ArrowRight, CreditCard, Box, Factory, Check,
   BarChart3, PieChart as PieChartIcon, ShoppingBag, Users as UsersIcon,
-  ChevronDown, ChevronUp, Layers, Pencil
+  ChevronDown, ChevronUp, Layers, Pencil, ChevronRight
 } from 'lucide-react';
 import { 
   ResponsiveContainer, PieChart, Pie, Cell, 
@@ -49,6 +50,7 @@ export default function ReportsManager() {
   const [itemToEdit, setItemToEdit] = useState<any>(null);
   const [installmentToEdit, setInstallmentToEdit] = useState<any>(null);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
   const [activePieIndex, setActivePieIndex] = useState<number | null>(null);
 
   const [isCashflowModalOpen, setIsCashflowModalOpen] = useState(false);
@@ -82,7 +84,7 @@ export default function ReportsManager() {
   const { data: cashflowManual, isLoading: cashflowLoading } = useCollection(cashflowQuery);
   const { data: payables, isLoading: payablesLoading } = useCollection(payablesQuery);
 
-  // --- MOTOR DE FUSÃO FINANCEIRA (REFATORADO) ---
+  // --- MOTOR DE FUSÃO FINANCEIRA (REFATORADO COM ACORDEÃO) ---
   const { transactions, kpis, ordersBI, groupedPayables } = useMemo(() => {
     const fusion: any[] = [];
     let monthIncomes = 0;
@@ -100,15 +102,11 @@ export default function ReportsManager() {
         ? new Date(order.createdAt.seconds * 1000) 
         : parseISO(order.emission_date || order.emissionDate || '');
       
-      // KPI A RECEBER: Soma acumulativa de saldos devedores de pedidos criados no mês selecionado
       if (isWithinInterval(orderDate, { start: startDate, end: endDate })) {
         const balance = Number(order.balance_due ?? order.balanceDue) || 0;
-        if (balance > 0) {
-          globalReceivable += balance;
-        }
+        if (balance > 0) globalReceivable += balance;
       }
 
-      // SCAN DE PARCELAS: Captura pagamentos feitos NESTE MÊS, independente do status da OS
       const installments = Array.isArray(order.installments) ? order.installments : [];
       installments.forEach((inst: any) => {
         if ((inst?.status === 'paid' || inst?.status === 'pago') && inst.paid_date) {
@@ -125,7 +123,15 @@ export default function ReportsManager() {
                 amount: amount,
                 method: inst.payment_method || inst.paymentMethod || 'Sistema',
                 origin: 'SISTEMA (OS)',
-                originalId: order.id
+                originalId: order.id,
+                // ANEXO DE PARCELAS PARA ACORDEÃO
+                parcelas: installments.map(i => ({
+                  id: i.uid || i.id,
+                  numero: i.id,
+                  valor: i.amount,
+                  vencimento: i.due_date || i.dueDate,
+                  status: i.status === 'paid' || i.status === 'pago' ? 'liquidado' : 'pendente'
+                }))
               });
             }
           } catch (e) {}
@@ -133,7 +139,20 @@ export default function ReportsManager() {
       });
     });
 
-    // 2. PROCESSAR FLUXO MANUAL
+    // 2. PROCESSAR CONTAS A PAGAR (PRIMEIRO PARA PODER VINCULAR AO FLUXO)
+    const groups: Record<string, any> = {};
+    payables?.forEach(payable => {
+      if (payable.status !== 'paid') totalPayables += Number(payable.amount) || 0;
+      const gid = payable.groupId || payable.id;
+      if (!groups[gid]) {
+        groups[gid] = { groupId: gid, supplier: payable.supplier, description: payable.description, installments: [], totalAmount: 0, allPaid: true };
+      }
+      groups[gid].installments.push(payable);
+      groups[gid].totalAmount += Number(payable.amount) || 0;
+      if (payable.status !== 'paid') groups[gid].allPaid = false;
+    });
+
+    // 3. PROCESSAR FLUXO MANUAL
     cashflowManual?.forEach(entry => {
       try {
         const entryDate = parseISO(entry.date);
@@ -142,6 +161,22 @@ export default function ReportsManager() {
           if (entry.type === 'income') monthIncomes += amount;
           else monthExpenses += amount;
 
+          // Tenta encontrar parcelas se for pagamento de conta
+          let associatedParcelas = [];
+          if (entry.origin === 'CONTAS A PAGAR') {
+             // Busca no grupo de payables que tenha o mesmo fornecedor/descrição aproximada (simplificado)
+             const group = Object.values(groups).find((g: any) => entry.description.includes(g.supplier) || entry.description.includes(g.description));
+             if (group) {
+               associatedParcelas = group.installments.map((p: any) => ({
+                 id: p.id,
+                 numero: `${p.installmentNumber}/${p.totalInstallments}`,
+                 valor: p.amount,
+                 vencimento: p.dueDate,
+                 status: p.status === 'paid' ? 'liquidado' : 'pendente'
+               }));
+             }
+          }
+
           fusion.push({
             id: entry.id,
             date: entry.date,
@@ -149,25 +184,11 @@ export default function ReportsManager() {
             type: entry.type,
             amount: amount,
             method: entry.method || 'Manual',
-            origin: entry.origin || 'MANUAL'
+            origin: entry.origin || 'MANUAL',
+            parcelas: associatedParcelas
           });
         }
       } catch (e) {}
-    });
-
-    // 3. CONTAS A PAGAR
-    const groups: Record<string, any> = {};
-    payables?.forEach(payable => {
-      if (payable.status !== 'paid') {
-        totalPayables += Number(payable.amount) || 0;
-      }
-      const gid = payable.groupId || payable.id;
-      if (!groups[gid]) {
-        groups[gid] = { groupId: gid, supplier: payable.supplier, description: payable.description, totalAmount: 0, installments: [], allPaid: true };
-      }
-      groups[gid].installments.push(payable);
-      groups[gid].totalAmount += Number(payable.amount) || 0;
-      if (payable.status !== 'paid') groups[gid].allPaid = false;
     });
 
     const groupedArray = Object.values(groups).sort((a: any, b: any) => {
@@ -209,48 +230,26 @@ export default function ReportsManager() {
 
     return {
       transactions: fusion,
-      kpis: {
-        incomes: monthIncomes,
-        expenses: monthExpenses,
-        net: monthIncomes - monthExpenses,
-        receivables: globalReceivable,
-        payables: totalPayables
-      },
-      ordersBI: {
-        filteredOrders,
-        totalCount: totalOrdersCount,
-        inProduction: filteredOrders.filter(o => !['Concluído', 'Entregue'].includes(o.status)).length,
-        finalized: filteredOrders.filter(o => ['Concluído', 'Entregue'].includes(o.status)).length,
-        totalValue: biTotalValue,
-        ticketMedio: totalOrdersCount > 0 ? biTotalValue / totalOrdersCount : 0,
-        statusChart,
-        clientChart
-      },
+      kpis: { incomes: monthIncomes, expenses: monthExpenses, net: monthIncomes - monthExpenses, receivables: globalReceivable, payables: totalPayables },
+      ordersBI: { filteredOrders, totalCount: totalOrdersCount, inProduction: filteredOrders.filter(o => !['Concluído', 'Entregue'].includes(o.status)).length, finalized: filteredOrders.filter(o => ['Concluído', 'Entregue'].includes(o.status)).length, totalValue: biTotalValue, ticketMedio: totalOrdersCount > 0 ? biTotalValue / totalOrdersCount : 0, statusChart, clientChart },
       groupedPayables: groupedArray
     };
   }, [orders, cashflowManual, payables, selectedMonth]);
 
-  const toggleGroup = (gid: string) => {
-    setExpandedGroups(prev => ({ ...prev, [gid]: !prev[gid] }));
-  };
+  const toggleGroup = (gid: string) => setExpandedGroups(prev => ({ ...prev, [gid]: !prev[gid] }));
+  const toggleTxExpand = (id: string) => setExpandedTxId(prev => prev === id ? null : id);
 
   const handleRowClick = (item: any) => {
-    if (item.origin === 'SISTEMA (OS)') {
-      router.push(`/orders?edit=${item.originalId}`);
-    } else {
-      setItemToEdit({ ...item });
-    }
+    if (item.origin === 'SISTEMA (OS)') router.push(`/orders?edit=${item.originalId}`);
+    else setItemToEdit({ ...item });
   };
 
   const handleExportCSV = () => {
-    if (!transactions || transactions.length === 0) {
-      alert("Não há dados para exportar neste mês.");
-      return;
-    }
+    if (!transactions || transactions.length === 0) { alert("Não há dados para exportar."); return; }
     let csvContent = "\uFEFFDATA;DESCRIÇÃO;FORMA DE PAGAMENTO;TIPO;VALOR\n";
     transactions.forEach(t => {
       const d = (t.date || '').split('-').reverse().join('/');
-      const valorStr = Number(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const valorStr = Number(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
       csvContent += `${d};${(t.description || '').replace(/;/g, ',')};${t.method || '-'};${t.type === 'income' ? 'Entrada' : 'Saída'};R$ ${valorStr}\n`;
     });
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -263,9 +262,7 @@ export default function ReportsManager() {
   const handleConfirmPayment = async () => {
     if (!itemToPay || !firestore || !user) return;
     try {
-      await updateDoc(doc(firestore, 'accounts_payable', itemToPay.id), { 
-        status: 'paid', paidAt: serverTimestamp(), paymentDate: new Date().toISOString()
-      });
+      await updateDoc(doc(firestore, 'accounts_payable', itemToPay.id), { status: 'paid', paidAt: serverTimestamp(), paymentDate: new Date().toISOString() });
       await addDoc(collection(firestore, 'cashflow_manual'), {
         description: `PGTO: ${itemToPay.supplier || itemToPay.description}`,
         amount: Number(itemToPay.amount), type: 'expense', date: format(new Date(), 'yyyy-MM-dd'),
@@ -279,14 +276,11 @@ export default function ReportsManager() {
   const handleConfirmDelete = async () => {
     if (!itemToDelete || !firestore) return;
     try {
-      const isContaAPagar = itemToDelete.hasOwnProperty('supplier') || itemToDelete.status === 'pending';
-      const collectionName = isContaAPagar ? 'accounts_payable' : 'cashflow_manual';
+      const collectionName = (itemToDelete.hasOwnProperty('supplier') || itemToDelete.status === 'pending') ? 'accounts_payable' : 'cashflow_manual';
       await deleteDoc(doc(firestore, collectionName, itemToDelete.id));
       toast({ title: "Registro Removido" });
       setItemToDelete(null);
-    } catch (error: any) {
-      alert("Erro ao excluir: " + error.message);
-    }
+    } catch (error: any) { alert("Erro ao excluir: " + error.message); }
   };
 
   const handleSaveManualEntry = async (e: React.FormEvent) => {
@@ -294,9 +288,7 @@ export default function ReportsManager() {
     if (!firestore || !user) return;
     setIsSubmitting(true);
     try {
-      await addDoc(collection(firestore, 'cashflow_manual'), {
-        ...cashflowFormData, amount: Number(cashflowFormData.amount), createdAt: serverTimestamp(), userId: user.uid
-      });
+      await addDoc(collection(firestore, 'cashflow_manual'), { ...cashflowFormData, amount: Number(cashflowFormData.amount), createdAt: serverTimestamp(), userId: user.uid });
       toast({ title: "Lançamento Efetuado" });
       setIsCashflowModalOpen(false);
     } catch (e) { toast({ variant: 'destructive', title: "Erro ao salvar" }); }
@@ -308,8 +300,7 @@ export default function ReportsManager() {
     if (!itemToEdit || !itemToEdit.id || !firestore) return;
     setIsSubmitting(true);
     try {
-      const docRef = doc(firestore, 'cashflow_manual', itemToEdit.id);
-      await updateDoc(docRef, { description: itemToEdit.description, amount: Number(itemToEdit.amount), date: itemToEdit.date, method: itemToEdit.method });
+      await updateDoc(doc(firestore, 'cashflow_manual', itemToEdit.id), { description: itemToEdit.description, amount: Number(itemToEdit.amount), date: itemToEdit.date, method: itemToEdit.method });
       toast({ title: "Lançamento Atualizado" });
       setItemToEdit(null);
     } catch (e: any) { alert("Erro: " + e.message); } 
@@ -321,8 +312,7 @@ export default function ReportsManager() {
     if (!installmentToEdit || !installmentToEdit.id || !firestore) return;
     setIsSubmitting(true);
     try {
-      const docRef = doc(firestore, 'accounts_payable', installmentToEdit.id);
-      await updateDoc(docRef, { description: installmentToEdit.description || '', amount: Number(installmentToEdit.amount), dueDate: installmentToEdit.dueDate || installmentToEdit.date });
+      await updateDoc(doc(firestore, 'accounts_payable', installmentToEdit.id), { description: installmentToEdit.description || '', amount: Number(installmentToEdit.amount), dueDate: installmentToEdit.dueDate || installmentToEdit.date });
       toast({ title: "Parcela Atualizada" });
       setInstallmentToEdit(null);
     } catch (e: any) { alert("Erro: " + e.message); } 
@@ -402,35 +392,86 @@ export default function ReportsManager() {
             <div className="divide-y divide-white/5">
               {transactions.length > 0 ? transactions.map((t) => {
                 const fulfillmentDate = t.date ? format(parseISO(t.date), 'dd/MM/yyyy') : '--/--/----';
+                const isExpanded = expandedTxId === t.id;
+                
                 return (
-                  <div key={t.id} onClick={() => handleRowClick(t)} className="group flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-4 cursor-pointer">
-                    <div className="flex items-center gap-4 flex-1">
-                       <div className="flex flex-col items-center justify-center min-w-[50px] bg-zinc-950 p-2 rounded-xl border border-zinc-900">
-                         <span className="text-[8px] font-black text-zinc-600 uppercase">{t.date ? format(parseISO(t.date), 'MMM', { locale: ptBR }) : '-'}</span>
-                         <span className="text-lg font-black text-white leading-none">{t.date ? format(parseISO(t.date), 'dd') : '-'}</span>
-                       </div>
-                       <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-bold text-white uppercase truncate group-hover:text-primary transition-colors">{t.description}</p>
-                            {t.origin === 'SISTEMA (OS)' && <ArrowRight size={12} className="text-zinc-700 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />}
-                          </div>
-                          <div className="flex items-center gap-3 mt-1">
-                             <span className="text-[8px] font-black uppercase text-zinc-600 tracking-widest bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">{t.method}</span>
-                             <span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded-full border", t.type === 'income' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20")}>{t.type === 'income' ? 'Entrada' : 'Saída'}</span>
-                             
-                             {/* EXIBIÇÃO EXPLÍCITA DA DATA DE REALIZAÇÃO */}
-                             <span className="text-[9px] text-zinc-500 font-medium ml-2 border-l border-zinc-800 pl-2">
-                               Realizado em: <span className="text-zinc-400 font-bold">{fulfillmentDate}</span>
-                             </span>
-                          </div>
-                       </div>
+                  <div key={t.id} className="flex flex-col border-l-4 border-transparent transition-all">
+                    <div 
+                      onClick={() => toggleTxExpand(t.id)} 
+                      className={cn(
+                        "group flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-4 cursor-pointer",
+                        isExpanded && "bg-zinc-900/60 border-l-primary"
+                      )}
+                    >
+                      <div className="flex items-center gap-4 flex-1">
+                         <div className="flex flex-col items-center justify-center min-w-[50px] bg-zinc-950 p-2 rounded-xl border border-zinc-900">
+                           <span className="text-[8px] font-black text-zinc-600 uppercase">{t.date ? format(parseISO(t.date), 'MMM', { locale: ptBR }) : '-'}</span>
+                           <span className="text-lg font-black text-white leading-none">{t.date ? format(parseISO(t.date), 'dd') : '-'}</span>
+                         </div>
+                         <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-bold text-white uppercase truncate group-hover:text-primary transition-colors">{t.description}</p>
+                              <ChevronRight size={14} className={cn("text-zinc-700 transition-transform duration-300", isExpanded && "rotate-90 text-primary")} />
+                            </div>
+                            <div className="flex items-center gap-3 mt-1">
+                               <span className="text-[8px] font-black uppercase text-zinc-600 tracking-widest bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">{t.method}</span>
+                               <span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded-full border", t.type === 'income' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20")}>{t.type === 'income' ? 'Entrada' : 'Saída'}</span>
+                               <span className="text-[9px] text-zinc-500 font-medium ml-2 border-l border-zinc-800 pl-2">Realizado em: <span className="text-zinc-400 font-bold">{fulfillmentDate}</span></span>
+                            </div>
+                         </div>
+                      </div>
+                      <div className="flex items-center gap-8">
+                         <p className={cn("text-lg font-black font-mono tracking-tighter", t.type === 'income' ? "text-emerald-500" : "text-red-500")}>
+                           {t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                         </p>
+                         <div className="flex gap-2">
+                            <button onClick={(e) => { e.stopPropagation(); handleRowClick(t); }} className="p-3 bg-zinc-800 text-zinc-400 hover:bg-white hover:text-black rounded-xl transition-all border border-zinc-700"><Pencil size={16}/></button>
+                            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (t.origin === 'SISTEMA (OS)') { alert("⚠️ Lançamento automático. Cancele no pedido original."); return; } setItemToDelete(t); }} className="p-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all border border-red-500/20"><Trash2 size={16}/></button>
+                         </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-8">
-                       <p className={cn("text-lg font-black font-mono tracking-tighter", t.type === 'income' ? "text-emerald-500" : "text-red-500")}>
-                         {t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                       </p>
-                       <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (t.origin === 'SISTEMA (OS)') { alert("⚠️ Lançamento automático. Cancele no pedido original."); return; } setItemToDelete(t); }} className="p-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all border border-red-500/20"><Trash2 size={16}/></button>
-                    </div>
+
+                    {/* ACORDEÃO DE PARCELAS */}
+                    <AnimatePresence>
+                      {isExpanded && t.parcelas && t.parcelas.length > 0 && (
+                        <motion.div 
+                          initial={{ height: 0, opacity: 0 }} 
+                          animate={{ height: 'auto', opacity: 1 }} 
+                          exit={{ height: 0, opacity: 0 }} 
+                          className="overflow-hidden bg-black/40 border-t border-white/5"
+                        >
+                          <div className="p-4 ml-12 space-y-3 bg-zinc-950/50 border border-zinc-800/50 rounded-bl-3xl">
+                            <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
+                              <Layers size={12} /> Cronograma do documento original
+                            </h4>
+                            <div className="flex flex-col gap-2">
+                              {t.parcelas.map((parcela: any, idx: number) => (
+                                <div key={parcela.id || idx} className="flex justify-between items-center py-2 border-b border-zinc-900 last:border-0">
+                                  <div className="flex items-center gap-4">
+                                    <span className={cn(
+                                      "px-2 py-0.5 rounded text-[8px] font-black uppercase border",
+                                      parcela.status === 'liquidado' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-orange-500/10 text-orange-500 border-orange-500/20"
+                                    )}>
+                                      {parcela.status}
+                                    </span>
+                                    <span className="text-xs font-bold text-zinc-300 uppercase">Parcela {parcela.numero}</span>
+                                  </div>
+                                  <div className="flex items-center gap-6">
+                                    <div className="text-right">
+                                      <span className="text-[9px] text-zinc-600 font-bold uppercase block">Vencimento</span>
+                                      <span className="text-[10px] text-zinc-400 font-mono">{parcela.vencimento ? format(parseISO(parcela.vencimento), 'dd/MM/yyyy') : '--/--/----'}</span>
+                                    </div>
+                                    <span className="text-sm font-black text-white font-mono min-w-[100px] text-right">
+                                      {Number(parcela.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 );
               }) : <EmptyState icon={Target} text="Sem movimentos no período" />}
