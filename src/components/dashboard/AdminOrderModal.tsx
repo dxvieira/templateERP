@@ -10,7 +10,7 @@ import {
   History, Calendar as CalendarIcon, Wallet, Receipt,
   CheckCircle2, AlertTriangle, RefreshCw, FileText,
   ArrowDownLeft, ArrowRight, Download, Printer,
-  MapPin, Phone, FileBadge
+  MapPin, Phone, FileBadge, Search
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
@@ -49,6 +49,10 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   const [activeTab, setActiveTab] = useState<'operacional' | 'financeiro'>('operacional');
   const [fullCustomerData, setFullCustomerData] = useState<any>(null);
 
+  // AUTOCOMPLETE STATES
+  const [clientsList, setClientsList] = useState<any[]>([]);
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
+
   // FORM STATES
   const [client, setClient] = useState('');
   const [seller, setSeller] = useState('');
@@ -73,7 +77,23 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   const [baixaInstallmentUid, setBaixaInstallmentUid] = useState<string | null>(null);
   const [baixaData, setBaixaData] = useState({ method: PAYMENT_METHODS[0], date: new Date().toISOString().split('T')[0] });
 
-  // BUSCA DADOS COMPLETOS DO CLIENTE PARA A OP
+  // BUSCA LISTA DE CLIENTES PARA AUTOCOMPLETE
+  useEffect(() => {
+    const fetchClients = async () => {
+      if (!firestore || !isOpen) return;
+      try {
+        const querySnapshot = await getDocs(collection(firestore, 'clients'));
+        const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        data.sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''));
+        setClientsList(data);
+      } catch (error) {
+        console.error("Erro ao carregar lista de clientes:", error);
+      }
+    };
+    fetchClients();
+  }, [firestore, isOpen]);
+
+  // BUSCA DADOS COMPLETOS DO CLIENTE SELECIONADO PARA A OP
   useEffect(() => {
     const fetchCustomerData = async () => {
       if (!order || !firestore) return;
@@ -160,6 +180,15 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   }, [installments]);
 
   const balanceDue = totalValue - amountPaid;
+
+  const filteredClients = useMemo(() => {
+    if (!client) return [];
+    const term = client.toLowerCase();
+    return clientsList.filter(c => 
+      (c.name || '').toLowerCase().includes(term) || 
+      (c.company || '').toLowerCase().includes(term)
+    ).slice(0, 5);
+  }, [client, clientsList]);
 
   const handleGenerateInstallments = () => {
     if (genConfig.count <= 0) return;
@@ -255,7 +284,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
   const handlePrintOP = () => {
     const originalTitle = document.title;
-    const nomeCliente = order?.customerName || order?.cliente || order?.clientName || order?.client || 'Cliente';
+    const nomeCliente = order?.customerName || order?.cliente || order?.clientName || order?.client || client || 'Cliente';
     const numeroOS = order?.id ? String(order.id).padStart(6, '0') : '000000';
     document.title = `${nomeCliente} ${numeroOS}`;
     window.print();
@@ -385,9 +414,52 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                 <section className="space-y-4">
                    <h3 className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] border-b border-white/5 pb-2 flex items-center gap-2"><User size={14}/> Identificação</h3>
                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div className="lg:col-span-2">
+                      <div className="lg:col-span-2 relative">
                         <label className={labelClass}>Cliente / Parceiro</label>
-                        <input required value={client} onChange={e => setClient(e.target.value)} className={inputClass} />
+                        <div className="relative group">
+                          <input 
+                            required 
+                            autoComplete="off"
+                            placeholder="Digite ou busque um cliente..."
+                            value={client} 
+                            onChange={e => {
+                              setClient(e.target.value);
+                              setShowClientDropdown(true);
+                            }} 
+                            onFocus={() => setShowClientDropdown(true)}
+                            onBlur={() => setTimeout(() => setShowClientDropdown(false), 200)}
+                            className={inputClass} 
+                          />
+                          <Search className="absolute right-3 top-[38px] text-zinc-700" size={16} />
+                          
+                          <AnimatePresence>
+                            {showClientDropdown && filteredClients.length > 0 && (
+                              <motion.ul 
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="absolute z-50 left-0 right-0 top-full mt-1 bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl"
+                              >
+                                {filteredClients.map((c: any) => (
+                                  <li 
+                                    key={c.id} 
+                                    onMouseDown={() => {
+                                      setClient(c.name || c.company);
+                                      setShowClientDropdown(false);
+                                    }}
+                                    className="px-4 py-3 hover:bg-primary hover:text-black cursor-pointer transition-colors group flex items-center justify-between border-b border-white/5 last:border-0"
+                                  >
+                                    <div>
+                                      <p className="text-sm font-bold uppercase">{c.name}</p>
+                                      {c.company && <p className="text-[10px] opacity-60 uppercase font-black">{c.company}</p>}
+                                    </div>
+                                    <ArrowRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                                  </li>
+                                ))}
+                              </motion.ul>
+                            )}
+                          </AnimatePresence>
+                        </div>
                       </div>
                       <div>
                         <label className={labelClass}>Status Produção</label>
