@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Target, ChevronLeft, Trophy, Search, X, Loader2, Plus, 
-  CheckCircle2, AlertTriangle, LayoutGrid
+  CheckCircle2, AlertTriangle, LayoutGrid, Calendar as CalendarIcon
 } from 'lucide-react';
 import { useFirestore, useUser } from '@/firebase';
 import { query, collection, where, doc, updateDoc, onSnapshot } from 'firebase/firestore';
@@ -17,19 +17,18 @@ import { startOfWeek, endOfWeek, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 /**
- * Utilitário para calcular a janela da semana atual (Segunda a Domingo)
+ * Utilitário de Data Blindado (Segunda a Domingo)
+ * Garante que a janela capture EXATAMENTE a semana atual.
  */
 const getWeekRange = () => {
   const now = new Date();
+  // weekStartsOn: 1 define Segunda-feira como início
   const start = startOfWeek(now, { weekStartsOn: 1 });
   const end = endOfWeek(now, { weekStartsOn: 1 });
-  // Ajuste para garantir que o fim da semana seja o domingo
-  const sunday = new Date(end);
-  sunday.setDate(sunday.getDate() + 6);
   
   return {
     start: format(start, 'yyyy-MM-dd'),
-    end: format(sunday, 'yyyy-MM-dd')
+    end: format(end, 'yyyy-MM-dd')
   };
 };
 
@@ -43,12 +42,12 @@ export default function WeeklyGoalsPage() {
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   
-  // ESTADO DE ORDENS CONSOLIDADO (DEDUP)
-  const [ordersMap, setOrdersMap] = useState<Record<string, any>>({});
+  const [manualOrders, setManualOrders] = useState<any[]>([]);
+  const [temporalOrders, setTemporalOrders] = useState<any[]>([]);
 
   /**
-   * ESTRATÉGIA FAN-OUT / MERGE
-   * Executa duas queries simples e mescla os resultados no Front-end para evitar erros de índice composto.
+   * ESTRATÉGIA FAN-OUT / MERGE (REATIVA)
+   * Dispara queries independentes e tagueia a origem para auditoria.
    */
   useEffect(() => {
     if (!firestore || !user) return;
@@ -57,29 +56,22 @@ export default function WeeklyGoalsPage() {
     const { start, end } = getWeekRange();
     const ordersRef = collection(firestore, 'orders');
 
-    // 1. QUERY DE PRIORIDADE MANUAL
+    // 1. ESCUTA PRIORIDADE MANUAL
     const qManual = query(ordersRef, where('weekly_priority', '==', true));
-    
-    // 2. QUERY DE JANELA TEMPORAL
+    const unsubManual = onSnapshot(qManual, (snap) => {
+      setManualOrders(snap.docs.map(d => ({ id: d.id, ...d.data(), _origin: 'MANUAL' })));
+    });
+
+    // 2. ESCUTA JANELA TEMPORAL AUTOMÁTICA
     const qTemporal = query(
       ordersRef, 
       where('delivery_date', '>=', start),
       where('delivery_date', '<=', end)
     );
-
-    const results: Record<string, any> = {};
-
-    const handleSnapshot = (snapshot: any) => {
-      snapshot.docs.forEach((doc: any) => {
-        results[doc.id] = { id: doc.id, ...doc.data() };
-      });
-      // Atualiza o estado consolidado (O React lida com a desduplicação ao sobrescrever chaves iguais)
-      setOrdersMap({ ...results });
+    const unsubTemporal = onSnapshot(qTemporal, (snap) => {
+      setTemporalOrders(snap.docs.map(d => ({ id: d.id, ...d.data(), _origin: 'AUTO_DATA' })));
       setIsLoading(false);
-    };
-
-    const unsubManual = onSnapshot(qManual, handleSnapshot);
-    const unsubTemporal = onSnapshot(qTemporal, handleSnapshot);
+    });
 
     return () => {
       unsubManual();
@@ -87,13 +79,26 @@ export default function WeeklyGoalsPage() {
     };
   }, [firestore, user]);
 
-  // 2. FILTRAGEM E BI (Client-side)
+  // MOTOR DE DESDUPLICAÇÃO E MERGE
   const { pendingOrders, completedOrders, progress } = useMemo(() => {
-    const allOrders = Object.values(ordersMap);
+    const mergeMap = new Map<string, any>();
+
+    // Primeiro processa temporais (origem padrão)
+    temporalOrders.forEach(o => mergeMap.set(o.id, o));
+
+    // Processa manuais (sobrescreve se houver conflito para marcar como AMBOS)
+    manualOrders.forEach(o => {
+      if (mergeMap.has(o.id)) {
+        mergeMap.set(o.id, { ...mergeMap.get(o.id), _origin: 'AMBOS' });
+      } else {
+        mergeMap.set(o.id, o);
+      }
+    });
+
+    const allOrders = Array.from(mergeMap.values());
     
-    // Filtra apenas o que não está entregue para a pauta ativa
-    // E remove itens que não deveriam estar aqui (segurança de filtragem local)
-    const active = allOrders.filter(o => !['Entregue'].includes(o.status));
+    // Filtragem local para garantir pauta ativa (Ignora 'Entregue')
+    const active = allOrders.filter(o => o.status !== 'Entregue');
     
     const completed = active.filter(o => o.status === 'Concluído');
     const pending = active.filter(o => o.status !== 'Concluído');
@@ -101,7 +106,7 @@ export default function WeeklyGoalsPage() {
     const percentage = active.length > 0 ? Math.round((completed.length / active.length) * 100) : 0;
     
     return { pendingOrders: pending, completedOrders: completed, progress: percentage };
-  }, [ordersMap]);
+  }, [manualOrders, temporalOrders]);
 
   const handleRemoveFromGoal = useCallback(async (e: any, orderId: string) => {
     if (e) { e.stopPropagation(); e.preventDefault(); }
@@ -110,11 +115,11 @@ export default function WeeklyGoalsPage() {
     updateDoc(doc(firestore, 'orders', orderId), { 
       weekly_priority: false 
     }).then(() => {
-      toast({ title: "Prioridade Removida", description: "O item saiu da lista manual." });
+      toast({ title: "Prioridade Removida" });
     });
   }, [firestore, toast]);
 
-  if (isLoading && Object.keys(ordersMap).length === 0) return (
+  if (isLoading && pendingOrders.length === 0 && completedOrders.length === 0) return (
     <div className="h-full flex items-center justify-center">
       <Loader2 className="w-10 h-10 text-primary animate-spin" />
     </div>
@@ -191,6 +196,20 @@ export default function WeeklyGoalsPage() {
               className="relative group/card"
             >
               <OrderCard order={order} onClick={setEditingOrder} />
+              
+              {/* TAG DE ORIGEM (DEBUG VISUAL) */}
+              <div className="absolute left-4 bottom-4 pointer-events-none opacity-40 group-hover/card:opacity-100 transition-opacity">
+                <span className={cn(
+                  "text-[7px] font-black uppercase px-1.5 py-0.5 rounded border flex items-center gap-1",
+                  order._origin === 'MANUAL' ? "bg-orange-500/10 text-orange-500 border-orange-500/20" : 
+                  order._origin === 'AMBOS' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : 
+                  "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                )}>
+                  {order._origin === 'MANUAL' ? <LayoutGrid size={8}/> : <CalendarIcon size={8}/>}
+                  {order._origin}
+                </span>
+              </div>
+
               <button 
                 onClick={(e) => handleRemoveFromGoal(e, order.id)} 
                 className="absolute -top-2 -right-2 p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-500 hover:text-red-500 opacity-0 group-hover/card:opacity-100 transition-all hover:scale-110 shadow-xl"
@@ -232,7 +251,6 @@ function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Busca todos os pedidos ativos para seleção
   useEffect(() => {
     if (!firestore || !user || !isOpen) return;
     
@@ -241,7 +259,6 @@ function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      // Filtra apenas o que não está entregue
       setAllOrders(docs.filter(o => o.status !== 'Entregue'));
       setLoading(false);
     });

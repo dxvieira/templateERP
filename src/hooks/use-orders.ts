@@ -51,8 +51,9 @@ export function useOrders() {
   // --- ENGINE DE MÉTRICAS (MEMOIZADA) ---
   const stats = useMemo(() => {
     const now = new Date();
-    const weekStart = startOfWeek(now);
-    const weekEnd = endOfWeek(now);
+    // Consistência: Semana começa na Segunda-feira (weekStartsOn: 1)
+    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+    const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
 
     const s = {
       activeCount: 0,
@@ -68,12 +69,15 @@ export function useOrders() {
     orders.forEach(o => {
       const isDone = ['Concluído', 'Entregue'].includes(o.status);
       const delivery = o.delivery_date || o.deliveryDate || '';
+      const isManualPriority = o.weekly_priority === true;
 
       if (!isDone) {
         s.activeCount++;
         
-        // Verifica se pertence à meta da semana
-        if (delivery) {
+        // Verifica se pertence à meta da semana (POR DATA OU POR TAG MANUAL)
+        if (isManualPriority) {
+          s.weeklyGoalCount++;
+        } else if (delivery) {
           try {
             if (isWithinInterval(parseISO(delivery), { start: weekStart, end: weekEnd })) {
               s.weeklyGoalCount++;

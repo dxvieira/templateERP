@@ -18,6 +18,7 @@ export interface Order {
   balanceDue?: number;
   installments?: any[];
   updatedAt?: any;
+  _origin?: 'MANUAL' | 'AUTO_DATA' | 'AMBOS'; // Tag temporária para debug
 }
 
 interface OrderCardProps {
