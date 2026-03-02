@@ -62,6 +62,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   const [installments, setInstallments] = useState<any[]>([]);
   const [genConfig, setInstallmentGenConfig] = useState({
     total: 0,
+    downPayment: 0,
     count: 1,
     type: "Boleto",
     startDate: new Date().toISOString().split('T')[0],
@@ -115,6 +116,10 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       setObservations(order.observations || '');
       setItems(order.items?.map((item: any) => ({ ...item })) || [{ productCode: '', desc: '', quantity: 1, unitValue: 0, observation: '' }]);
       setInstallments(Array.isArray(order.installments) ? order.installments : []);
+      setInstallmentGenConfig(prev => ({
+        ...prev,
+        downPayment: order.down_payment || order.downPayment || 0
+      }));
     } else {
       resetForm();
     }
@@ -130,6 +135,14 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     setObservations('');
     setItems([{ productCode: '', desc: '', quantity: 1, unitValue: 0, observation: '' }]);
     setInstallments([]);
+    setInstallmentGenConfig({
+      total: 0,
+      downPayment: 0,
+      count: 1,
+      type: "Boleto",
+      startDate: new Date().toISOString().split('T')[0],
+      machine: "Máquina PAGBANK"
+    });
   };
 
   const totalValue = useMemo(() => {
@@ -151,16 +164,27 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   const handleGenerateInstallments = () => {
     if (genConfig.count <= 0) return;
     
-    const valuePerInstallment = Number((genConfig.total / genConfig.count).toFixed(2));
+    const total = Number(genConfig.total) || 0;
+    const entrada = Number(genConfig.downPayment) || 0;
+    const count = Number(genConfig.count) || 1;
+
+    if (entrada >= total && total > 0) {
+      alert("O valor da entrada não pode ser maior ou igual ao valor total se houver parcelas pendentes.");
+      return;
+    }
+
+    const saldoDevedor = total - entrada;
+    const valuePerInstallment = Number((saldoDevedor / count).toFixed(2));
+    
     const newInstallments = [];
     const start = parseISO(genConfig.startDate);
 
-    for (let i = 0; i < genConfig.count; i++) {
+    for (let i = 0; i < count; i++) {
       const dueDate = format(addMonths(start, i), 'yyyy-MM-dd');
       newInstallments.push({
-        id: `${i + 1}/${genConfig.count}`,
+        id: `${i + 1}/${count}`,
         uid: generateUid(),
-        amount: i === genConfig.count - 1 ? (genConfig.total - (valuePerInstallment * (genConfig.count - 1))) : valuePerInstallment,
+        amount: i === count - 1 ? (saldoDevedor - (valuePerInstallment * (count - 1))) : valuePerInstallment,
         due_date: dueDate,
         status: parseISO(dueDate) < new Date() ? 'overdue' : 'pending',
         type: genConfig.type,
@@ -170,7 +194,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     }
 
     setInstallments(newInstallments);
-    toast({ title: "Faturas Geradas", description: "O cronograma de pagamentos foi atualizado." });
+    toast({ title: "Faturas Geradas", description: `Cronograma de R$ ${saldoDevedor.toLocaleString('pt-BR')} atualizado.` });
   };
 
   const handleToggleBaixa = (uid: string) => {
@@ -230,20 +254,11 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   };
 
   const handlePrintOP = () => {
-    // Guarda o título original do sistema
     const originalTitle = document.title;
-    
-    // Extrai os dados (ajuste as variáveis 'order.cliente' e 'order.id' conforme o seu estado atual)
     const nomeCliente = order?.customerName || order?.cliente || order?.clientName || order?.client || 'Cliente';
     const numeroOS = order?.id ? String(order.id).padStart(6, '0') : '000000';
-    
-    // Muda o título só para a impressão
     document.title = `${nomeCliente} ${numeroOS}`;
-    
-    // Abre a tela de imprimir/salvar PDF
     window.print();
-    
-    // Devolve o nome do sistema para a aba do navegador
     document.title = originalTitle;
   };
 
@@ -256,7 +271,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       let finalId = order?.id;
       const isNewOrder = !order;
 
-      // LÓGICA DE ID SEQUENCIAL (NOVA OS)
       if (isNewOrder) {
         const ordersRef = collection(firestore, 'orders');
         const q = query(ordersRef, orderBy('id', 'desc'), limit(1));
@@ -274,8 +288,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       }
 
       const docRef = doc(firestore, 'orders', finalId);
-      
-      // RECALCULO FINANCEIRO ATÔMICO
       const finalTotalValue = items.reduce((acc, item) => acc + (Number(item.quantity || 0) * Number(item.unitValue || 0)), 0);
       const finalAmountPaid = installments
         .filter(i => i.status === 'paid' || i.status === 'pago')
@@ -292,6 +304,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
         observations, 
         items, 
         total_value: finalTotalValue,
+        down_payment: genConfig.downPayment,
         amount_paid: finalAmountPaid, 
         balance_due: finalBalanceDue, 
         installments,
@@ -322,7 +335,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-md p-2 md:p-4">
       <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }} className="bg-[#09090b] w-full max-w-5xl border border-zinc-800 rounded-3xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden print:hidden">
         
-        {/* CABEÇALHO DO MODAL - OCULTO NA IMPRESSÃO */}
         <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-zinc-900/50 print:hidden">
           <div className="flex items-center gap-4">
             <div className="bg-primary/10 text-primary p-2 rounded-xl border border-primary/20"><Calculator size={20} /></div>
@@ -467,8 +479,9 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
               <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <section className="bg-zinc-900/30 border border-zinc-800 rounded-3xl p-6">
                    <div className="flex items-center gap-3 mb-6"><div className="p-2 bg-primary/10 rounded-xl"><RefreshCw size={18} className="text-primary"/></div><div><h3 className="text-sm font-black text-white uppercase tracking-tight">Gerador de Cobranças</h3><p className="text-[9px] text-zinc-500 uppercase tracking-widest">Crie o cronograma de pagamentos automaticamente</p></div></div>
-                   <div className={cn("grid gap-4 items-end", genConfig.type === 'Cartão' ? "grid-cols-1 md:grid-cols-5" : "grid-cols-1 md:grid-cols-4")}>
+                   <div className={cn("grid gap-4 items-end", genConfig.type === 'Cartão' ? "grid-cols-1 md:grid-cols-6" : "grid-cols-1 md:grid-cols-5")}>
                       <div><label className={labelClass}>Valor Total</label><input type="number" step="0.01" value={genConfig.total} onChange={e => setInstallmentGenConfig({...genConfig, total: Number(e.target.value)})} className={inputClass} /></div>
+                      <div><label className={labelClass}>Valor Entrada (R$)</label><input type="number" step="0.01" value={genConfig.downPayment} onChange={e => setInstallmentGenConfig({...genConfig, downPayment: Number(e.target.value)})} className={inputClass} placeholder="0.00" /></div>
                       <div><label className={labelClass}>Tipo de Fatura</label><select value={genConfig.type} onChange={e => setInstallmentGenConfig({...genConfig, type: e.target.value})} className={inputClass}>{INSTALLMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
                       {genConfig.type === 'Cartão' && (<div><label className={labelClass}>Máquina</label><select value={genConfig.machine} onChange={e => setInstallmentGenConfig({...genConfig, machine: e.target.value})} className={inputClass}><option value="Máquina PAGBANK">Máquina PAGBANK</option><option value="Máquina SIPAG">Máquina SIPAG</option></select></div>)}
                       <div><label className={labelClass}>Nº Parcelas</label><input type="number" value={genConfig.count} onChange={e => setInstallmentGenConfig({...genConfig, count: Number(e.target.value)})} className={inputClass} min={1} /></div>
