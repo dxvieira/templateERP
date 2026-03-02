@@ -13,6 +13,7 @@ import {
   MapPin, Phone, FileBadge, Search
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -381,10 +382,23 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
         <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-zinc-900/50 print:hidden">
           <div className="flex items-center gap-4">
             <div className="bg-primary/10 text-primary p-2 rounded-xl border border-primary/20"><Calculator size={20} /></div>
-            <div>
-              <span className="text-primary text-[9px] font-black uppercase tracking-[0.3em]">Gestão Administrativa IMPACTO</span>
-              <h2 className="text-xl font-black text-white uppercase tracking-tight">OS <span className="text-zinc-600">#{order?.id || 'NOVA'}</span></h2>
+            <div className="flex flex-col">
+              <h2 className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.3em] leading-none mb-1.5">Gestão Administrativa</h2>
+              <div className="relative w-32 h-8">
+                <Image 
+                  src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd"
+                  alt="Logo IMPACTO"
+                  fill
+                  className="object-contain object-left"
+                  priority
+                />
+              </div>
             </div>
+          </div>
+          
+          <div className="hidden lg:flex items-center gap-3 bg-zinc-950 border border-zinc-800 px-4 py-2 rounded-2xl ml-4 mr-auto">
+            <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest">Protocolo</span>
+            <span className="text-lg font-black text-white">#{order?.id || 'NOVA'}</span>
           </div>
           
           <div className="hidden md:flex gap-4 items-center">

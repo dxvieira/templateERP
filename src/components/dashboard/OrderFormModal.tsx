@@ -1,9 +1,9 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Save, Box, ChevronDown, Activity, Loader2 } from 'lucide-react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useOrders } from '@/hooks/use-orders';
 import { useToast } from '@/hooks/use-toast';
@@ -78,7 +78,24 @@ const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | nul
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" onClick={onClose}>
       <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }} onClick={(e) => e.stopPropagation()} className="bg-[#09090b] w-full max-w-2xl border border-zinc-800 rounded-3xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden">
         <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-zinc-900/30">
-          <h2 className="text-lg font-black text-white uppercase tracking-tighter">{order ? 'Ajustar Pedido' : 'Detalhes do Pedido'}</h2>
+          <div className="flex flex-col">
+            <h2 className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.3em] mb-1.5">{order ? 'Ajustar Pedido' : 'Detalhes do Pedido'}</h2>
+            <div className="relative w-32 h-8">
+              <Image 
+                src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd"
+                alt="Logo IMPACTO"
+                fill
+                className="object-contain object-left"
+                priority
+              />
+            </div>
+          </div>
+          
+          <div className="hidden sm:flex items-center gap-3 bg-zinc-950 border border-zinc-800 px-4 py-2 rounded-2xl ml-auto mr-6">
+            <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest">OS</span>
+            <span className="text-lg font-black text-white">#{order?.id?.slice(-6) || 'NOVA'}</span>
+          </div>
+
           <button onClick={onClose} className="p-2 rounded-full hover:bg-zinc-800 text-zinc-500 hover:text-white transition-colors"><X size={20} /></button>
         </div>
 
