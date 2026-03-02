@@ -1,8 +1,8 @@
 
 'use client';
 
-import React, { useState, useEffect, Suspense, useCallback } from 'react';
-import { collection, query, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import React, { useState, useEffect, Suspense, useCallback, useMemo } from 'react';
+import { collection, query, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, limit } from 'firebase/firestore';
 import { useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -53,25 +53,32 @@ function SuppliersContent() {
     }
   };
 
+  // Auth Guard: Só constrói a query se o usuário estiver autenticado e validado
   const suppliersQuery = useMemoFirebase(() => {
     if (!firestore || !user || !isAuthenticated) return null;
-    return query(collection(firestore, 'suppliers'));
+    return query(collection(firestore, 'suppliers'), limit(100));
   }, [firestore, user, isAuthenticated]);
 
   useEffect(() => {
     if (!suppliersQuery) return;
+    
     const unsubscribe = onSnapshot(suppliersQuery, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       data.sort((a: any, b: any) => a.name.localeCompare(b.name));
       setSuppliers(data);
     }, (error) => {
+        // Tratamento de erro conforme solicitado
+        if (error.code === 'permission-denied') {
+          console.warn('Acesso negado: Verifique suas permissões no Firestore.');
+          toast({ variant: 'destructive', title: 'Acesso Negado', description: 'Você não tem permissão para listar fornecedores.' });
+        }
         errorEmitter.emit('permission-error', new FirestorePermissionError({
             path: 'suppliers',
             operation: 'list'
         }));
     });
     return () => unsubscribe();
-  }, [suppliersQuery]);
+  }, [suppliersQuery, toast]);
 
   const openWhatsApp = (number: string) => {
     if (!number) return;
@@ -79,11 +86,15 @@ function SuppliersContent() {
     window.open(`https://wa.me/55${cleanNum}`, '_blank');
   };
 
-  const filteredSuppliers = suppliers.filter(s => 
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (s.cnpj && s.cnpj.includes(searchTerm))
-  );
+  // Memoização da filtragem para performance
+  const filteredSuppliers = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return suppliers.filter(s => 
+      s.name.toLowerCase().includes(term) ||
+      s.category?.toLowerCase().includes(term) ||
+      (s.cnpj && s.cnpj.includes(searchTerm))
+    );
+  }, [suppliers, searchTerm]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,7 +125,7 @@ function SuppliersContent() {
       .finally(() => setIsSubmitting(false));
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     if (!firestore) return;
     if (window.confirm("Remover este fornecedor da base permanentemente?")) {
       deleteDoc(doc(firestore, 'suppliers', id))
@@ -129,7 +140,7 @@ function SuppliersContent() {
           }));
         });
     }
-  };
+  }, [firestore, toast]);
 
   const openModal = useCallback((supplier: any = null) => {
     if (supplier) {
@@ -149,10 +160,10 @@ function SuppliersContent() {
     setIsModalOpen(true);
   }, []);
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setIsModalOpen(false);
     setEditingSupplier(null);
-  };
+  }, []);
 
   if (!isAuthenticated) {
     return (
@@ -291,7 +302,7 @@ function SuppliersContent() {
                   )} 
                   <div className="flex gap-3 ml-auto">
                      <button type="button" onClick={closeModal} className="px-6 py-3 rounded-xl border border-zinc-700 text-white hover:bg-zinc-800 font-black text-[10px] uppercase tracking-widest">Cancelar</button>
-                     <button form="supplierForm" type="submit" disabled={isSubmitting} className="px-10 py-3 rounded-xl bg-primary text-black hover:bg-white transition-all font-black text-[10px] uppercase tracking-widest shadow-[0_0_20px_rgba(255,95,31,0.4)] disabled:opacity-50 flex items-center gap-2">
+                     <button form="supplierForm" type="submit" disabled={isSubmitting} className="px-10 py-3 rounded-xl bg-primary text-black font-black uppercase tracking-widest shadow-[0_0_20px_rgba(255,95,31,0.4)] disabled:opacity-50 flex items-center gap-2">
                        {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> Salvar Cadastro</>}
                      </button>
                   </div>

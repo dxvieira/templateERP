@@ -10,11 +10,18 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
     // --- COLLECTION RULES ---
 
+    // Regras para configurações de interface do usuário
+    match /user_settings/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+
     // Regra de Suprimentos e Materiais
-    // Usando wildcard recursivo para garantir que listagem e documentos sejam cobertos
-    // Deployment trigger: 2025-03-01.06 - Force rules propagation for collection queries
     match /materials/{document=**} {
       allow read, write: if isSignedIn();
     }
@@ -59,7 +66,7 @@ service cloud.firestore {
       allow write: if false; 
     }
 
-    // Global deny
+    // Global deny - Proteção contra acessos não mapeados
     match /{path=**} {
       allow read, write: if false;
     }
