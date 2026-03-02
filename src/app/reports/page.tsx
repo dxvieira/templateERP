@@ -10,7 +10,7 @@ import {
   TrendingUp, TrendingDown, Wallet, Target, AlertCircle, Download, Plus, Trash2, Calendar, 
   Loader2, X, CheckCircle2, Receipt, ArrowDownLeft, Box, Factory, BarChart3, PieChart as PieChartIcon, 
   ShoppingBag, Users as UsersIcon, ChevronDown, ChevronUp, Layers, Pencil, ChevronRight, Check, Sparkles,
-  FileSpreadsheet
+  FileSpreadsheet, ClipboardList
 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Label } from 'recharts';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
@@ -152,6 +152,10 @@ export default function ReportsManager() {
     const filteredOrders = orders?.filter(o => {
       const d = o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000) : parseISO(o.emission_date || o.delivery_date || '');
       return isWithinInterval(d, { start: startDate, end: endDate });
+    }).sort((a, b) => {
+      const dateA = a.createdAt?.seconds ? a.createdAt.seconds : new Date(a.emission_date || a.delivery_date || '9999-99-99').getTime();
+      const dateB = b.createdAt?.seconds ? b.createdAt.seconds : new Date(b.emission_date || b.delivery_date || '9999-99-99').getTime();
+      return dateA - dateB;
     }) || [];
 
     filteredOrders.forEach(o => {
@@ -467,6 +471,80 @@ export default function ReportsManager() {
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* LISTAGEM DETALHADA DE PEDIDOS (NOVA SEÇÃO) */}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.4em] flex items-center gap-2"><ClipboardList size={14}/> Detalhamento de Protocolos (Cronologia do Mês)</h3>
+                <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">{reportData.ordersBI.filteredOrders.length} Registros Encontrados</span>
+              </div>
+
+              <div className="bg-zinc-950/30 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
+                <div className="overflow-x-auto custom-scrollbar">
+                  <div className="min-w-[800px] divide-y divide-white/5">
+                    {reportData.ordersBI.filteredOrders.length > 0 ? reportData.ordersBI.filteredOrders.map((order: any) => {
+                      const orderDate = order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000) : parseISO(order.emission_date || order.delivery_date || '');
+                      const statusUpper = String(order.status || 'Outros').toUpperCase();
+                      const statusColor = PRODUCTION_COLORS[statusUpper] || PRODUCTION_COLORS['OUTROS'];
+
+                      return (
+                        <div key={order.id} className="group flex items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-8">
+                          <div className="flex items-center gap-6 flex-1">
+                            {/* DATA */}
+                            <div className="flex flex-col items-center justify-center min-w-[50px] bg-zinc-900 p-2 rounded-xl border border-zinc-800">
+                              <span className="text-[8px] font-black text-zinc-600 uppercase">{format(orderDate, 'MMM', { locale: ptBR })}</span>
+                              <span className="text-lg font-black text-white leading-none">{format(orderDate, 'dd')}</span>
+                            </div>
+
+                            {/* CLIENTE E OS */}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-bold text-white uppercase group-hover:text-primary transition-colors whitespace-nowrap truncate max-w-[300px]">
+                                {order.client}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[8px] font-mono font-black text-zinc-600 bg-zinc-950 px-1.5 py-0.5 rounded border border-zinc-900">OS #{order.id.slice(-6)}</span>
+                                <span className="text-[8px] font-black uppercase text-zinc-500 tracking-widest">Aberto em {format(orderDate, 'HH:mm')}</span>
+                              </div>
+                            </div>
+
+                            {/* BADGE DE STATUS */}
+                            <div className="w-[140px] shrink-0">
+                              <div 
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-widest text-center justify-center"
+                                style={{ 
+                                  backgroundColor: `${statusColor}10`, 
+                                  borderColor: `${statusColor}30`, 
+                                  color: statusColor,
+                                  boxShadow: `0 0 10px ${statusColor}15`
+                                }}
+                              >
+                                <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: statusColor }} />
+                                {order.status}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* VALOR E AÇÃO */}
+                          <div className="flex items-center gap-8 shrink-0">
+                            <p className="text-lg font-black font-mono tracking-tighter text-white">
+                              {cleanCurrency(order.total_value || order.totalValue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </p>
+                            <button 
+                              onClick={() => router.push(`/orders?edit=${order.id}`)}
+                              className="p-3 bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-xl transition-all border border-zinc-800"
+                            >
+                              <ChevronRight size={16}/>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }) : (
+                      <EmptyState icon={ShoppingBag} text="Nenhum protocolo neste mês" />
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
