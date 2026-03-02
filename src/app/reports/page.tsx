@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import * as XLSX from 'xlsx';
 
 // MAPEAMENTO DE CORES INDUSTRIAIS
 const PRODUCTION_COLORS: Record<string, string> = { 
@@ -210,72 +211,64 @@ export default function ReportsManager() {
   };
 
   /**
-   * FUNÇÃO DE EXPORTAÇÃO CSV OTIMIZADA PARA EXCEL (PT-BR)
+   * EXPORTAÇÃO EXCEL (.XLSX) PROFISSIONAL COM AUTO-FIT
    */
-  const exportToCSV = () => {
+  const exportToExcel = () => {
     if (!reportData) return;
 
-    // Helper para escapar strings no CSV (Aspas duplas e substituição de aspas internas)
-    const escapeCSV = (val: any) => {
-      if (val === null || val === undefined) return '';
-      const str = String(val).replace(/\n/g, ' ').replace(/\r/g, '');
-      return `"${str.replace(/"/g, '""')}"`;
-    };
-
-    let csvContent = "";
-    const delimiter = ";"; // Obrigatório para Excel pt-BR separar colunas automaticamente
-    let filename = `impacto-relatorio-${activeTab.toLowerCase()}-${selectedMonth}.csv`;
+    let dataToExport: any[] = [];
+    let cols: any[] = [];
+    let filename = `impacto-relatorio-${activeTab.toLowerCase()}-${selectedMonth}.xlsx`;
 
     if (activeTab === 'FLUXO') {
-      csvContent += `Data${delimiter}Descrição${delimiter}Método${delimiter}Tipo${delimiter}Valor\n`;
-      reportData.transactions.forEach(t => {
-        const date = format(parseISO(t.date), 'dd/MM/yyyy');
-        const desc = escapeCSV(t.description);
-        const method = escapeCSV(t.method);
-        const type = t.type === 'income' ? 'Entrada' : 'Saída';
-        const amount = t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-        csvContent += `${date}${delimiter}${desc}${delimiter}${method}${delimiter}${type}${delimiter}${amount}\n`;
-      });
+      dataToExport = reportData.transactions.map(t => ({
+        'Data': format(parseISO(t.date), 'dd/MM/yyyy'),
+        'Descrição': t.description,
+        'Método': t.method,
+        'Tipo': t.type === 'income' ? 'Entrada' : 'Saída',
+        'Valor': t.amount
+      }));
+      cols = [{ wch: 15 }, { wch: 65 }, { wch: 25 }, { wch: 15 }, { wch: 20 }];
     } else if (activeTab === 'CONTAS') {
-      csvContent += `Fornecedor${delimiter}Descrição${delimiter}Vencimento${delimiter}Valor${delimiter}Status\n`;
       reportData.groupedPayables.forEach((g: any) => {
         g.installments.forEach((p: any) => {
-          const supplier = escapeCSV(g.supplier);
-          const desc = escapeCSV(g.description || p.description);
-          const dueDate = format(parseISO(p.dueDate), 'dd/MM/yyyy');
-          const amount = cleanCurrency(p.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-          const status = p.status === 'paid' ? 'Pago' : 'Pendente';
-          csvContent += `${supplier}${delimiter}${desc}${delimiter}${dueDate}${delimiter}${amount}${delimiter}${status}\n`;
+          dataToExport.push({
+            'Fornecedor': g.supplier,
+            'Descrição': g.description || p.description,
+            'Vencimento': format(parseISO(p.dueDate), 'dd/MM/yyyy'),
+            'Valor': cleanCurrency(p.amount),
+            'Status': p.status === 'paid' ? 'Pago' : 'Pendente'
+          });
         });
       });
+      cols = [{ wch: 40 }, { wch: 55 }, { wch: 15 }, { wch: 20 }, { wch: 15 }];
     } else if (activeTab === 'PEDIDOS') {
-      csvContent += `OS${delimiter}Cliente${delimiter}Valor Total${delimiter}Status${delimiter}Entrega\n`;
-      reportData.ordersBI.filteredOrders.forEach((o: any) => {
-        const os = escapeCSV(o.id);
-        const client = escapeCSV(o.client);
-        const total = cleanCurrency(o.total_value || o.totalValue).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-        const status = escapeCSV(o.status);
-        const delivery = o.delivery_date || o.deliveryDate || '--';
-        csvContent += `${os}${delimiter}${client}${delimiter}${total}${delimiter}${status}${delimiter}${delivery}\n`;
-      });
+      dataToExport = reportData.ordersBI.filteredOrders.map((o: any) => ({
+        'OS': o.id,
+        'Cliente': o.client,
+        'Valor Total': cleanCurrency(o.total_value || o.totalValue),
+        'Status': o.status,
+        'Entrega': o.delivery_date || o.deliveryDate || '--'
+      }));
+      cols = [{ wch: 12 }, { wch: 45 }, { wch: 20 }, { wch: 25 }, { wch: 15 }];
     }
 
-    // Adiciona o BOM (Byte Order Mark) para UTF-8 para que o Excel reconheça acentuação pt-BR
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
+    // CRIA A PLANILHA
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    // DEFINE LARGURAS DAS COLUNAS (MAGIC WIDTHS)
+    worksheet['!cols'] = cols;
+
+    // CRIA O LIVRO (WORKBOOK)
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, activeTab);
+
+    // DISPARA O DOWNLOAD NATIVO
+    XLSX.writeFile(workbook, filename);
 
     toast({ 
       title: "Exportação Concluída", 
-      description: "O arquivo CSV foi otimizado para o Microsoft Excel." 
+      description: "Relatório gerado em formato nativo Excel (.xlsx)." 
     });
   };
 
@@ -291,10 +284,10 @@ export default function ReportsManager() {
         </div>
         <div className="flex flex-wrap items-center gap-4">
            <button 
-             onClick={exportToCSV}
-             className="flex items-center gap-2 px-5 py-3 bg-zinc-800 text-zinc-300 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-zinc-700 transition-all border border-white/5"
+             onClick={exportToExcel}
+             className="flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-emerald-500 transition-all border border-white/5 shadow-lg shadow-emerald-900/40"
            >
-             <FileSpreadsheet size={16} /> Exportar
+             <FileSpreadsheet size={16} /> Exportar Excel
            </button>
            <div className="relative group"><Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" size={16} /><input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white text-xs font-black uppercase outline-none focus:border-primary transition-all" /></div>
            {activeTab !== 'PEDIDOS' && (
