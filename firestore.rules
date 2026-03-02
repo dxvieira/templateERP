@@ -1,3 +1,4 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -12,7 +13,7 @@ service cloud.firestore {
     // --- COLLECTION RULES ---
 
     // Regra de Suprimentos e Materiais (Prioritária para resolver erro de listagem)
-    // Deployment trigger: 2025-03-01.01
+    // Deployment trigger: 2025-03-01.02 - Explicit match fix
     match /materials/{document=**} {
       allow read, write: if isSignedIn();
     }

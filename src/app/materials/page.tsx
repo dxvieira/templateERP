@@ -27,7 +27,8 @@ import {
   Layers, 
   Truck,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  Lock
 } from 'lucide-react';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { useToast } from '@/hooks/use-toast';
@@ -46,7 +47,7 @@ const CATEGORY_CONFIG: Record<string, { icon: any, color: string, bg: string }> 
 
 export default function MaterialsPage() {
   const firestore = useFirestore();
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const { toast } = useToast();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -59,18 +60,18 @@ export default function MaterialsPage() {
     category: 'Impressão'
   });
 
-  // Query Memoizada conforme diretrizes
+  // Query Memoizada com proteção contra Race Condition
   const materialsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !user || isUserLoading) return null;
     return query(
       collection(firestore, 'materials'),
       where('status', '==', 'pending'),
       orderBy('createdAt', 'desc')
     );
-  }, [firestore, user]);
+  }, [firestore, user, isUserLoading]);
 
   // Hook padronizado useCollection
-  const { data: itemsData, isLoading } = useCollection(materialsQuery);
+  const { data: itemsData, isLoading: isCollectionLoading } = useCollection(materialsQuery);
   const items = itemsData || [];
 
   const handleAddRequest = async (e: React.FormEvent) => {
@@ -131,6 +132,35 @@ export default function MaterialsPage() {
     }
   };
 
+  // --- EARLY RETURN: AGUARDANDO AUTENTICAÇÃO ---
+  if (isUserLoading) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-4">
+        <div className="absolute top-[-20%] left-[-20%] w-[50%] h-[50%] bg-primary/5 blur-[120px] rounded-full pointer-events-none" />
+        <div className="flex flex-col items-center gap-6 relative z-10">
+          <div className="w-16 h-16 rounded-3xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-2xl">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+          <div className="text-center space-y-2">
+            <h2 className="text-xl font-black text-white uppercase tracking-tighter">Sincronizando Terminal</h2>
+            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Verificando credenciais de acesso...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Lock className="w-12 h-12 text-destructive mx-auto opacity-50" />
+          <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.4em]">Acesso Restrito ao Terminal</p>
+        </div>
+      </div>
+    );
+  }
+
   const labelClass = "text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-1.5 ml-1 block";
   const inputClass = "w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none transition-all";
 
@@ -172,7 +202,7 @@ export default function MaterialsPage() {
 
         {/* GRID DE CATEGORIAS */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {isLoading ? (
+          {isCollectionLoading ? (
             <div className="col-span-full flex justify-center py-20">
               <Loader2 className="w-8 h-8 text-primary animate-spin" />
             </div>
@@ -223,7 +253,7 @@ export default function MaterialsPage() {
                       </motion.div>
                     ))}
                   </AnimatePresence>
-                  {categoryItems.length === 0 && !isLoading && (
+                  {categoryItems.length === 0 && !isCollectionLoading && (
                     <div className="py-10 border border-dashed border-zinc-800 rounded-2xl flex flex-col items-center justify-center opacity-20">
                       <Package size={24} className="mb-2" />
                       <span className="text-[8px] font-black uppercase tracking-widest text-center px-4">Sem solicitações pendentes</span>
