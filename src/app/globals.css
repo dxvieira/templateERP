@@ -66,6 +66,17 @@
   }
 }
 
+@layer utilities {
+  /* Utility to completely hide scrollbars but keep functionality */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
 /* Glassmorphism utility */
 .glass-card {
   @apply bg-white/5 border border-white/10 shadow-2xl;

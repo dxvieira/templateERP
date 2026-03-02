@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useState, memo, useCallback, useEffect } from 'react';
@@ -24,7 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth, initiateSignOut, useFirestore, useUser } from '@/firebase';
-import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import Link from 'next/link';
 
 const navItems = [
@@ -47,7 +46,6 @@ export const DashboardSidebar = memo(() => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
-  const [loadingPref, setLoadingPref] = useState(true);
   
   const router = useRouter();
   const pathname = usePathname();
@@ -67,8 +65,6 @@ export const DashboardSidebar = memo(() => {
         }
       } catch (e) {
         console.error("Erro ao carregar preferências de UI:", e);
-      } finally {
-        setLoadingPref(false);
       }
     }
     loadPreferences();
@@ -123,25 +119,25 @@ export const DashboardSidebar = memo(() => {
         onMouseLeave={() => setIsHovered(false)}
         className={cn(
           "fixed inset-y-0 left-0 z-50 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] print:hidden",
-          "bg-[#0A0A0A] border-r border-white/5 shadow-2xl",
+          "bg-[#0A0A0A] border-r border-white/5 shadow-2xl overflow-x-hidden", // Force horizontal clip
           isExpanded ? "w-64" : "w-20",
           isMobileOpen ? "translate-x-0 w-64" : "max-md:-translate-x-full"
         )}
       >
-        <div className="flex flex-col h-full p-4 overflow-hidden">
+        <div className="flex flex-col h-full p-4 overflow-x-hidden">
           
           {/* LOGO AREA */}
-          <div className="flex items-center justify-between mb-8 px-2 h-10">
+          <div className="flex items-center justify-between mb-8 px-2 h-10 overflow-hidden">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-[0_0_15px_rgba(255,95,31,0.5)] shrink-0">
                 <ClipboardList className="text-black w-6 h-6" />
               </div>
               <div className={cn(
                 "flex flex-col transition-all duration-300 origin-left",
-                isExpanded ? "opacity-100 scale-100" : "opacity-0 scale-0 w-0"
+                isExpanded ? "opacity-100 scale-100 translate-x-0" : "opacity-0 scale-0 -translate-x-10 pointer-events-none"
               )}>
-                <span className="text-xl text-white font-black tracking-tighter leading-none">IMPACTO</span>
-                <span className="text-[8px] font-bold tracking-[0.2em] text-zinc-500 uppercase">Comunicação Visual</span>
+                <span className="text-xl text-white font-black tracking-tighter leading-none whitespace-nowrap">IMPACTO</span>
+                <span className="text-[8px] font-bold tracking-[0.2em] text-zinc-500 uppercase whitespace-nowrap">Comunicação Visual</span>
               </div>
             </div>
 
@@ -159,7 +155,7 @@ export const DashboardSidebar = memo(() => {
           </div>
 
           {/* MAIN NAV */}
-          <nav className="flex-1 space-y-1.5 scrollbar-hide overflow-y-auto">
+          <nav className="flex-1 space-y-1.5 scrollbar-hide overflow-y-auto overflow-x-hidden">
             {navItems.map((item) => (
               <Link
                 key={item.label}
@@ -210,7 +206,7 @@ export const DashboardSidebar = memo(() => {
           </nav>
 
           {/* FOOTER / LOGOUT */}
-          <div className="pt-4 border-t border-white/5">
+          <div className="pt-4 border-t border-white/5 overflow-hidden">
             <button
               onClick={handleLogout}
               className="w-full flex items-center gap-4 px-3 h-12 rounded-xl text-destructive hover:bg-destructive/10 transition-all duration-200 group"
@@ -220,7 +216,7 @@ export const DashboardSidebar = memo(() => {
               </div>
               <span className={cn(
                 "text-xs font-black uppercase tracking-widest transition-all duration-300",
-                isExpanded ? "opacity-100" : "opacity-0 pointer-events-none"
+                isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-10 pointer-events-none"
               )}>
                 Encerrar
               </span>
