@@ -400,32 +400,40 @@ export default function ReportsManager() {
         <div className="bg-[#09090b] border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
           {activeTab === 'FLUXO' && (
             <div className="divide-y divide-white/5">
-              {transactions.length > 0 ? transactions.map((t) => (
-                <div key={t.id} onClick={() => handleRowClick(t)} className="group flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-4 cursor-pointer">
-                  <div className="flex items-center gap-4 flex-1">
-                     <div className="flex flex-col items-center justify-center min-w-[50px] bg-zinc-950 p-2 rounded-xl border border-zinc-900">
-                       <span className="text-[8px] font-black text-zinc-600 uppercase">{t.date ? format(parseISO(t.date), 'MMM', { locale: ptBR }) : '-'}</span>
-                       <span className="text-lg font-black text-white leading-none">{t.date ? format(parseISO(t.date), 'dd') : '-'}</span>
-                     </div>
-                     <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-bold text-white uppercase truncate group-hover:text-primary transition-colors">{t.description}</p>
-                          {t.origin === 'SISTEMA (OS)' && <ArrowRight size={12} className="text-zinc-700 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />}
-                        </div>
-                        <div className="flex items-center gap-3 mt-1">
-                           <span className="text-[8px] font-black uppercase text-zinc-600 tracking-widest bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">{t.method}</span>
-                           <span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded-full border", t.type === 'income' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20")}>{t.type === 'income' ? 'Entrada' : 'Saída'}</span>
-                        </div>
-                     </div>
+              {transactions.length > 0 ? transactions.map((t) => {
+                const fulfillmentDate = t.date ? format(parseISO(t.date), 'dd/MM/yyyy') : '--/--/----';
+                return (
+                  <div key={t.id} onClick={() => handleRowClick(t)} className="group flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-4 cursor-pointer">
+                    <div className="flex items-center gap-4 flex-1">
+                       <div className="flex flex-col items-center justify-center min-w-[50px] bg-zinc-950 p-2 rounded-xl border border-zinc-900">
+                         <span className="text-[8px] font-black text-zinc-600 uppercase">{t.date ? format(parseISO(t.date), 'MMM', { locale: ptBR }) : '-'}</span>
+                         <span className="text-lg font-black text-white leading-none">{t.date ? format(parseISO(t.date), 'dd') : '-'}</span>
+                       </div>
+                       <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-bold text-white uppercase truncate group-hover:text-primary transition-colors">{t.description}</p>
+                            {t.origin === 'SISTEMA (OS)' && <ArrowRight size={12} className="text-zinc-700 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />}
+                          </div>
+                          <div className="flex items-center gap-3 mt-1">
+                             <span className="text-[8px] font-black uppercase text-zinc-600 tracking-widest bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">{t.method}</span>
+                             <span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded-full border", t.type === 'income' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20")}>{t.type === 'income' ? 'Entrada' : 'Saída'}</span>
+                             
+                             {/* EXIBIÇÃO EXPLÍCITA DA DATA DE REALIZAÇÃO */}
+                             <span className="text-[9px] text-zinc-500 font-medium ml-2 border-l border-zinc-800 pl-2">
+                               Realizado em: <span className="text-zinc-400 font-bold">{fulfillmentDate}</span>
+                             </span>
+                          </div>
+                       </div>
+                    </div>
+                    <div className="flex items-center gap-8">
+                       <p className={cn("text-lg font-black font-mono tracking-tighter", t.type === 'income' ? "text-emerald-500" : "text-red-500")}>
+                         {t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                       </p>
+                       <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (t.origin === 'SISTEMA (OS)') { alert("⚠️ Lançamento automático. Cancele no pedido original."); return; } setItemToDelete(t); }} className="p-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all border border-red-500/20"><Trash2 size={16}/></button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-8">
-                     <p className={cn("text-lg font-black font-mono tracking-tighter", t.type === 'income' ? "text-emerald-500" : "text-red-500")}>
-                       {t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                     </p>
-                     <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (t.origin === 'SISTEMA (OS)') { alert("⚠️ Lançamento automático. Cancele no pedido original."); return; } setItemToDelete(t); }} className="p-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all border border-red-500/20"><Trash2 size={16}/></button>
-                  </div>
-                </div>
-              )) : <EmptyState icon={Target} text="Sem movimentos no período" />}
+                );
+              }) : <EmptyState icon={Target} text="Sem movimentos no período" />}
             </div>
           )}
 
