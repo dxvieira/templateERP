@@ -124,8 +124,17 @@ export const useAuth = (): Auth => useFirebase().auth;
 export const useFirestore = (): Firestore => useFirebase().firestore;
 export const useFirebaseApp = (): FirebaseApp => useFirebase().firebaseApp;
 
+/**
+ * Hook para memoizar referências do Firestore com a flag necessária para useCollection/useDoc.
+ */
 export function useMemoFirebase<T>(factory: () => T, deps: DependencyList): T {
-  return useMemo(factory, deps);
+  return useMemo(() => {
+    const result = factory();
+    if (result && typeof result === 'object') {
+      (result as any).__memo = true;
+    }
+    return result;
+  }, deps);
 }
 
 export const useUser = (): UserHookResult => {

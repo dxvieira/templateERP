@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { collection, query, orderBy, doc, deleteDoc, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,48 +27,72 @@ export default function ReportsManager() {
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<'FLUXO' | 'CONTAS' | 'PEDIDOS'>('FLUXO');
-  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [selectedMonth, setSelectedMonth] = useState('');
   const [itemToDelete, setItemToDelete] = useState<any>(null);
   const [itemToPay, setItemToPay] = useState<any>(null);
   const [itemToEdit, setItemToEdit] = useState<any>(null);
-  const [installmentToEdit, setInstallmentToEdit] = useState<any>(null);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
-  const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
   const [activePieIndex, setActivePieIndex] = useState<number | null>(null);
 
   const [isCashflowModalOpen, setIsCashflowModalOpen] = useState(false);
   const [isPayableModalOpen, setIsPayableModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [cashflowFormData, setCashflowFormData] = useState({ description: '', amount: '', type: 'income', date: format(new Date(), 'yyyy-MM-dd'), method: 'Pix' });
-  const [payableFormData, setPayableFormData] = useState({ supplier: '', description: '', category: 'Suprimentos', amountTotal: '', installments: 1, method: 'Boleto', numeroNF: '' });
-  const [previewInstallments, setPreviewInstallments] = useState<any[]>([]);
+  // Evita erros de hidratação definindo o mês inicial apenas no cliente
+  useEffect(() => {
+    setSelectedMonth(format(new Date(), 'yyyy-MM'));
+  }, []);
 
-  const ordersQuery = useMemoFirebase(() => { if (!firestore || !user) return null; return query(collection(firestore, 'orders')); }, [firestore, user]);
-  const cashflowQuery = useMemoFirebase(() => { if (!firestore || !user) return null; return query(collection(firestore, 'cashflow_manual'), orderBy('date', 'desc')); }, [firestore, user]);
-  const payablesQuery = useMemoFirebase(() => { if (!firestore || !user) return null; return query(collection(firestore, 'accounts_payable'), orderBy('dueDate', 'asc')); }, [firestore, user]);
+  const ordersQuery = useMemoFirebase(() => { 
+    if (!firestore || !user) return null; 
+    return query(collection(firestore, 'orders')); 
+  }, [firestore, user]);
+
+  const cashflowQuery = useMemoFirebase(() => { 
+    if (!firestore || !user) return null; 
+    return query(collection(firestore, 'cashflow_manual'), orderBy('date', 'desc')); 
+  }, [firestore, user]);
+
+  const payablesQuery = useMemoFirebase(() => { 
+    if (!firestore || !user) return null; 
+    return query(collection(firestore, 'accounts_payable'), orderBy('dueDate', 'asc')); 
+  }, [firestore, user]);
 
   const { data: orders, isLoading: ordersLoading } = useCollection(ordersQuery);
   const { data: cashflowManual, isLoading: cashflowLoading } = useCollection(cashflowQuery);
   const { data: payables, isLoading: payablesLoading } = useCollection(payablesQuery);
 
   const { transactions, kpis, ordersBI, groupedPayables } = useMemo(() => {
+    if (!selectedMonth) return { transactions: [], kpis: { incomes: 0, expenses: 0, net: 0, receivables: 0, payables: 0 }, ordersBI: { filteredOrders: [], totalCount: 0, inProduction: 0, finalized: 0, totalValue: 0, ticketMedio: 0, statusChart: [], clientChart: [] }, groupedPayables: [] };
+
     const fusion: any[] = [];
     let monthIncomes = 0, monthExpenses = 0, globalReceivable = 0, totalPayables = 0;
-    const [year, month] = (selectedMonth || '').split('-').map(Number);
+    const [year, month] = selectedMonth.split('-').map(Number);
     const startDate = startOfMonth(new Date(year, month - 1)), endDate = endOfMonth(new Date(year, month - 1));
 
     orders?.forEach(order => {
       const orderDate = order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000) : parseISO(order.emission_date || '');
-      if (isWithinInterval(orderDate, { start: startDate, end: endDate })) { const balance = Number(order.balance_due ?? order.balanceDue) || 0; if (balance > 0) globalReceivable += balance; }
+      if (isWithinInterval(orderDate, { start: startDate, end: endDate })) { 
+        const balance = Number(order.balance_due ?? order.balanceDue) || 0; 
+        if (balance > 0) globalReceivable += balance; 
+      }
       const installments = Array.isArray(order.installments) ? order.installments : [];
       installments.forEach((inst: any) => {
         if ((inst?.status === 'paid' || inst?.status === 'pago') && inst.paid_date) {
           try {
             const paidDate = parseISO(inst.paid_date);
             if (isWithinInterval(paidDate, { start: startDate, end: endDate })) {
-              const amount = Number(inst.amount) || 0; monthIncomes += amount;
-              fusion.push({ id: `${order.id}-${inst.uid || Math.random()}`, date: inst.paid_date, description: `PGTO OS #${order.id.slice(-6)} - ${order.client}`, type: 'income', amount, method: inst.payment_method || 'Sistema', origin: 'SISTEMA (OS)', originalId: order.id, parcelas: installments.map(i => ({ id: i.uid || i.id, numero: i.id, valor: i.amount, vencimento: i.due_date, status: i.status === 'paid' ? 'liquidado' : 'pendente' })) });
+              const amount = Number(inst.amount) || 0; 
+              monthIncomes += amount;
+              fusion.push({ 
+                id: `${order.id}-${inst.uid || Math.random()}`, 
+                date: inst.paid_date, 
+                description: `PGTO OS #${order.id.slice(-6)} - ${order.client}`, 
+                type: 'income', 
+                amount, 
+                method: inst.payment_method || 'Sistema', 
+                origin: 'SISTEMA (OS)', 
+                originalId: order.id 
+              });
             }
           } catch (e) {}
         }
@@ -88,7 +112,8 @@ export default function ReportsManager() {
       try {
         const entryDate = parseISO(entry.date);
         if (isWithinInterval(entryDate, { start: startDate, end: endDate })) {
-          const amount = Number(entry.amount) || 0; if (entry.type === 'income') monthIncomes += amount; else monthExpenses += amount;
+          const amount = Number(entry.amount) || 0; 
+          if (entry.type === 'income') monthIncomes += amount; else monthExpenses += amount;
           fusion.push({ id: entry.id, date: entry.date, description: entry.description, type: entry.type, amount, method: entry.method || 'Manual', origin: entry.origin || 'MANUAL' });
         }
       } catch (e) {}
@@ -97,14 +122,30 @@ export default function ReportsManager() {
     const groupedArray = Object.values(groups).sort((a: any, b: any) => a.installments[0]?.dueDate?.localeCompare(b.installments[0]?.dueDate));
     const biStatus: Record<string, number> = {}, biClients: Record<string, number> = {};
     let biTotalValue = 0;
-    const filteredOrders = orders?.filter(o => { const d = o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000) : parseISO(o.emission_date || ''); return isWithinInterval(d, { start: startDate, end: endDate }); }) || [];
-    filteredOrders.forEach(o => { const val = Number(o.total_value ?? o.totalValue) || 0; biTotalValue += val; const statusName = String(o.status || 'Outros').toUpperCase(); biStatus[statusName] = (biStatus[statusName] || 0) + 1; biClients[o.client] = (biClients[o.client] || 0) + val; });
+    const filteredOrders = orders?.filter(o => { 
+      const d = o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000) : parseISO(o.emission_date || ''); 
+      return isWithinInterval(d, { start: startDate, end: endDate }); 
+    }) || [];
+    
+    filteredOrders.forEach(o => { 
+      const val = Number(o.total_value ?? o.totalValue) || 0; 
+      biTotalValue += val; 
+      const statusName = String(o.status || 'Outros').toUpperCase(); 
+      biStatus[statusName] = (biStatus[statusName] || 0) + 1; 
+      biClients[o.client] = (biClients[o.client] || 0) + val; 
+    });
+
     const totalOrdersCount = filteredOrders.length;
     const statusChart = Object.entries(biStatus).map(([name, value]) => ({ name, value, percent: totalOrdersCount > 0 ? Math.round((value / totalOrdersCount) * 100) : 0 }));
     const clientChart = Object.entries(biClients).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 5);
     fusion.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
-    return { transactions: fusion, kpis: { incomes: monthIncomes, expenses: monthExpenses, net: monthIncomes - monthExpenses, receivables: globalReceivable, payables: totalPayables }, ordersBI: { filteredOrders, totalCount: totalOrdersCount, inProduction: filteredOrders.filter(o => !['Concluído', 'Entregue'].includes(o.status)).length, finalized: filteredOrders.filter(o => ['Concluído', 'Entregue'].includes(o.status)).length, totalValue: biTotalValue, ticketMedio: totalOrdersCount > 0 ? biTotalValue / totalOrdersCount : 0, statusChart, clientChart }, groupedPayables: groupedArray };
+    return { 
+      transactions: fusion, 
+      kpis: { incomes: monthIncomes, expenses: monthExpenses, net: monthIncomes - monthExpenses, receivables: globalReceivable, payables: totalPayables }, 
+      ordersBI: { filteredOrders, totalCount: totalOrdersCount, inProduction: filteredOrders.filter(o => !['Concluído', 'Entregue'].includes(o.status)).length, finalized: filteredOrders.filter(o => ['Concluído', 'Entregue'].includes(o.status)).length, totalValue: biTotalValue, ticketMedio: totalOrdersCount > 0 ? biTotalValue / totalOrdersCount : 0, statusChart, clientChart }, 
+      groupedPayables: groupedArray 
+    };
   }, [orders, cashflowManual, payables, selectedMonth]);
 
   const toggleGroup = (gid: string) => setExpandedGroups(prev => ({ ...prev, [gid]: !prev[gid] }));
@@ -116,20 +157,22 @@ export default function ReportsManager() {
     const updateData = { status: 'paid', paidAt: serverTimestamp(), paymentDate: new Date().toISOString() };
     updateDoc(payableRef, updateData).then(async () => {
       const cashflowData = { description: `PGTO: ${itemToPay.supplier || itemToPay.description}`, amount: Number(itemToPay.amount), type: 'expense', date: format(new Date(), 'yyyy-MM-dd'), method: itemToPay.method || 'Boleto', origin: 'CONTAS A PAGAR', createdAt: serverTimestamp(), userId: user.uid };
-      await addDoc(collection(firestore, 'cashflow_manual'), cashflowData); toast({ title: "Baixa Confirmada" }); setItemToPay(null);
+      await addDoc(collection(firestore, 'cashflow_manual'), cashflowData); 
+      toast({ title: "Baixa Confirmada" }); 
+      setItemToPay(null);
     });
   };
 
   const handleConfirmDelete = async () => {
     if (!itemToDelete || !firestore) return;
     const collectionName = (itemToDelete.hasOwnProperty('supplier') || itemToDelete.status === 'pending') ? 'accounts_payable' : 'cashflow_manual';
-    deleteDoc(doc(firestore, collectionName, itemToDelete.id)).then(() => { toast({ title: "Removido" }); setItemToDelete(null); });
+    deleteDoc(doc(firestore, collectionName, itemToDelete.id)).then(() => { 
+      toast({ title: "Removido" }); 
+      setItemToDelete(null); 
+    });
   };
 
   if (ordersLoading || cashflowLoading || payablesLoading) return <div className="h-full flex items-center justify-center"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>;
-
-  const labelClass = "text-[10px] text-zinc-500 uppercase font-black tracking-widest ml-1 mb-1.5 block";
-  const inputClass = "w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none transition-all";
 
   return (
     <div className="p-4 md:p-8 space-y-8 mt-14 md:mt-0 pb-24">
