@@ -42,6 +42,10 @@ const secondaryItems = [
   { icon: Settings, label: 'Configurações', path: '#' },
 ];
 
+/**
+ * Sidebar Otimizada para Performance.
+ * Utiliza next/link com prefetch agressivo e router prefetch em hover.
+ */
 export const DashboardSidebar = memo(() => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -63,7 +67,7 @@ export const DashboardSidebar = memo(() => {
           setIsPinned(prefSnap.data().sidebarPinned || false);
         }
       } catch (e) {
-        console.error("Erro ao carregar preferências de UI:", e);
+        // Erro silencioso em produção para não bloquear UI
       }
     }
     loadPreferences();
@@ -91,12 +95,11 @@ export const DashboardSidebar = memo(() => {
 
   const isExpanded = isPinned || isHovered;
 
-  // Não renderiza Sidebar na página de login
   if (pathname === '/login') return null;
 
   return (
     <>
-      {/* MOBILE HEADER - FIXED AT TOP */}
+      {/* MOBILE HEADER */}
       <header className="fixed top-0 left-0 right-0 z-[110] h-14 md:hidden bg-[#0A0A0A]/80 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between print:hidden">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shadow-[0_0_10px_rgba(255,95,31,0.5)]">
@@ -114,7 +117,7 @@ export const DashboardSidebar = memo(() => {
         <div className="fixed inset-0 z-[105] bg-black/60 backdrop-blur-sm md:hidden" onClick={() => setIsMobileOpen(false)} />
       )}
 
-      {/* SIDEBAR CONTAINER - FIXED WITH HIGH Z-INDEX */}
+      {/* SIDEBAR CONTAINER */}
       <aside
         onMouseEnter={() => !isPinned && setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -127,7 +130,6 @@ export const DashboardSidebar = memo(() => {
       >
         <div className="flex flex-col h-full p-4 overflow-x-hidden scrollbar-hide">
           
-          {/* LOGO AREA */}
           <div className="flex items-center justify-between mb-8 px-2 h-10 overflow-hidden shrink-0">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-[0_0_15px_rgba(255,95,31,0.5)] shrink-0">
@@ -154,7 +156,6 @@ export const DashboardSidebar = memo(() => {
             </button>
           </div>
 
-          {/* MAIN NAV */}
           <nav className="flex-1 space-y-1.5 overflow-y-auto overflow-x-hidden scrollbar-hide">
             {navItems.map((item) => (
               <Link
@@ -162,6 +163,7 @@ export const DashboardSidebar = memo(() => {
                 href={item.path}
                 prefetch={true}
                 onClick={() => setIsMobileOpen(false)}
+                onMouseEnter={() => router.prefetch(item.path)}
                 className={cn(
                   "flex items-center gap-4 px-3 h-12 rounded-xl transition-all duration-200 group relative shrink-0",
                   pathname === item.path 
@@ -188,6 +190,8 @@ export const DashboardSidebar = memo(() => {
               <Link
                 key={item.label}
                 href={item.path}
+                prefetch={true}
+                onMouseEnter={() => router.prefetch(item.path)}
                 className={cn(
                   "flex items-center gap-4 px-3 h-12 rounded-xl transition-all duration-200 group shrink-0",
                   "text-zinc-500 hover:bg-white/5 hover:text-white"
@@ -206,7 +210,6 @@ export const DashboardSidebar = memo(() => {
             ))}
           </nav>
 
-          {/* FOOTER / LOGOUT */}
           <div className="pt-4 border-t border-white/5 overflow-hidden shrink-0">
             <button
               onClick={handleLogout}
@@ -233,7 +236,7 @@ export const DashboardSidebar = memo(() => {
         </div>
       </aside>
 
-      {/* SPACER FOR PINNED MODE - PUSHES CONTENT ON DESKTOP */}
+      {/* SPACER FOR PINNED MODE */}
       <div 
         className={cn(
           "hidden md:block transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] shrink-0",
