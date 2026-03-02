@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Layers } from 'lucide-react';
+import Image from 'next/image';
 
 import { useOrders } from '@/hooks/use-orders';
 import { useUser } from '@/firebase';
@@ -52,15 +53,19 @@ export default function DashboardPage() {
     <div className="p-4 md:p-8 space-y-8 mt-14 md:mt-0">
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
 
-      <header className="flex flex-col justify-end items-start">
-        <h1 className="text-3xl md:text-4xl font-black text-white tracking-tighter leading-none uppercase">
-          Central de Comando<span className="text-primary">.</span>
-        </h1>
-        <div className="flex items-center gap-3 mt-2">
-           <div className="h-[1px] w-6 bg-zinc-800" />
-           <span className="text-primary text-[10px] md:text-xs font-bold uppercase tracking-[0.3em]">
-             Impacto Comunicação Visual
-           </span>
+      {/* HEADER REFATORADO: ALINHAMENTO COM COLUNA DA DIREITA */}
+      <header className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="hidden lg:block lg:col-span-8" />
+        <div className="lg:col-span-4 flex justify-start items-center">
+          <div className="relative w-48 h-12">
+            <Image 
+              src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd"
+              alt="Logo IMPACTO"
+              fill
+              className="object-contain object-left"
+              priority
+            />
+          </div>
         </div>
       </header>
 
@@ -68,7 +73,7 @@ export default function DashboardPage() {
         <div className="lg:col-span-8 bg-[#0c0c0e] border border-zinc-800/60 rounded-3xl p-8 shadow-xl relative overflow-hidden">
           <ProductionHub stats={stats} />
         </div>
-        <div className="lg:col-span-4 bg-[#0c0c0e] border border-zinc-800/60 rounded-3xl p-8 shadow-xl flex flex-col justify-between h-full">
+        <div className="lg:col-span-4 bg-[#0c0c0e] border border-zinc-800/60 rounded-3xl p-8 shadow-xl flex flex-col justify-between h-full relative overflow-hidden group">
           <WeeklyTargetCard pendingCount={stats.weeklyGoalCount} />
         </div>
       </section>

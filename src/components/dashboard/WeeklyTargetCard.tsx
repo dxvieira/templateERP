@@ -1,8 +1,9 @@
+
 'use client';
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Target, Rocket, ArrowUpRight } from 'lucide-react';
+import { Target, ArrowUpRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface WeeklyTargetCardProps {
@@ -49,10 +50,6 @@ export function WeeklyTargetCard({ pendingCount }: WeeklyTargetCardProps) {
       >
         Acessar Missão <ArrowUpRight size={14} />
       </button>
-
-      <div className="absolute top-6 right-6 text-zinc-800 group-hover:text-yellow-500/15 transition-colors rotate-12">
-        <Rocket size={40} />
-      </div>
     </div>
   );
 }
