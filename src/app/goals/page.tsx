@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Target, ChevronLeft, Trophy, Search, X, Loader2, Plus, 
-  CheckCircle2, AlertTriangle, LayoutGrid, Calendar as CalendarIcon
+  CheckCircle2, AlertTriangle, LayoutGrid, Calendar as CalendarIcon,
+  Flag, Zap
 } from 'lucide-react';
 import { useFirestore, useUser } from '@/firebase';
 import { query, collection, where, doc, updateDoc, onSnapshot } from 'firebase/firestore';
@@ -17,12 +18,10 @@ import { startOfWeek, endOfWeek, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 /**
- * Utilitário de Data Blindado (Segunda a Domingo)
- * Garante que a janela capture EXATAMENTE a semana atual.
+ * Utilitário de Data (Segunda a Domingo)
  */
 const getWeekRange = () => {
   const now = new Date();
-  // weekStartsOn: 1 define Segunda-feira como início
   const start = startOfWeek(now, { weekStartsOn: 1 });
   const end = endOfWeek(now, { weekStartsOn: 1 });
   
@@ -46,8 +45,7 @@ export default function WeeklyGoalsPage() {
   const [temporalOrders, setTemporalOrders] = useState<any[]>([]);
 
   /**
-   * ESTRATÉGIA FAN-OUT / MERGE (REATIVA)
-   * Dispara queries independentes e tagueia a origem para auditoria.
+   * ESCUTA REATIVA (FAN-OUT)
    */
   useEffect(() => {
     if (!firestore || !user) return;
@@ -56,13 +54,11 @@ export default function WeeklyGoalsPage() {
     const { start, end } = getWeekRange();
     const ordersRef = collection(firestore, 'orders');
 
-    // 1. ESCUTA PRIORIDADE MANUAL
     const qManual = query(ordersRef, where('weekly_priority', '==', true));
     const unsubManual = onSnapshot(qManual, (snap) => {
       setManualOrders(snap.docs.map(d => ({ id: d.id, ...d.data(), _origin: 'MANUAL' })));
     });
 
-    // 2. ESCUTA JANELA TEMPORAL AUTOMÁTICA
     const qTemporal = query(
       ordersRef, 
       where('delivery_date', '>=', start),
@@ -79,14 +75,13 @@ export default function WeeklyGoalsPage() {
     };
   }, [firestore, user]);
 
-  // MOTOR DE DESDUPLICAÇÃO E MERGE
-  const { pendingOrders, completedOrders, progress } = useMemo(() => {
+  /**
+   * MOTOR DE MERGE E PARTICIONAMENTO (CORREÇÃO DO BUG)
+   */
+  const { pendingOrders, completedOrders, progress, totalOrdersCount } = useMemo(() => {
     const mergeMap = new Map<string, any>();
 
-    // Primeiro processa temporais (origem padrão)
     temporalOrders.forEach(o => mergeMap.set(o.id, o));
-
-    // Processa manuais (sobrescreve se houver conflito para marcar como AMBOS)
     manualOrders.forEach(o => {
       if (mergeMap.has(o.id)) {
         mergeMap.set(o.id, { ...mergeMap.get(o.id), _origin: 'AMBOS' });
@@ -97,15 +92,19 @@ export default function WeeklyGoalsPage() {
 
     const allOrders = Array.from(mergeMap.values());
     
-    // Filtragem local para garantir pauta ativa (Ignora 'Entregue')
-    const active = allOrders.filter(o => o.status !== 'Entregue');
+    // Particionamento Ativo vs Concluído
+    const completed = allOrders.filter(o => ['Concluído', 'Entregue'].includes(o.status));
+    const pending = allOrders.filter(o => !['Concluído', 'Entregue'].includes(o.status));
     
-    const completed = active.filter(o => o.status === 'Concluído');
-    const pending = active.filter(o => o.status !== 'Concluído');
+    const totalCount = allOrders.length;
+    const percentage = totalCount > 0 ? Math.round((completed.length / totalCount) * 100) : 0;
     
-    const percentage = active.length > 0 ? Math.round((completed.length / active.length) * 100) : 0;
-    
-    return { pendingOrders: pending, completedOrders: completed, progress: percentage };
+    return { 
+      pendingOrders: pending, 
+      completedOrders: completed, 
+      progress: percentage,
+      totalOrdersCount: totalCount
+    };
   }, [manualOrders, temporalOrders]);
 
   const handleRemoveFromGoal = useCallback(async (e: any, orderId: string) => {
@@ -119,7 +118,7 @@ export default function WeeklyGoalsPage() {
     });
   }, [firestore, toast]);
 
-  if (isLoading && pendingOrders.length === 0 && completedOrders.length === 0) return (
+  if (isLoading && totalOrdersCount === 0) return (
     <div className="h-full flex items-center justify-center">
       <Loader2 className="w-10 h-10 text-primary animate-spin" />
     </div>
@@ -154,78 +153,117 @@ export default function WeeklyGoalsPage() {
         </div>
       </header>
 
-      {/* PAINEL DE PROGRESSO */}
-      <section className="bg-zinc-900/40 border border-zinc-800 rounded-3xl p-8 relative overflow-hidden group">
-        <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
-          <Trophy size={120} strokeWidth={1} />
+      {/* PAINEL DE PROGRESSO PREMIUM */}
+      <section className="bg-zinc-950/50 border border-zinc-800/50 rounded-[2.5rem] p-8 relative overflow-hidden group shadow-2xl">
+        <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.07] transition-all duration-700">
+          <Trophy size={160} strokeWidth={1} />
         </div>
         
-        <div className="flex justify-between items-end mb-6 relative z-10">
-          <div>
-            <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.3em] mb-1">Status da Expedição</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-6xl font-black text-white tracking-tighter">{completedOrders.length}</span>
-              <span className="text-2xl text-zinc-600 font-black">/ {pendingOrders.length + completedOrders.length}</span>
+        <div className="flex flex-col md:flex-row justify-between items-end mb-8 relative z-10 gap-6">
+          <div className="w-full md:w-auto">
+            <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.4em] mb-2 flex items-center gap-2">
+              <Zap size={12} className="text-primary fill-primary" /> Status da Expedição
+            </p>
+            <div className="flex items-baseline gap-3">
+              <span className="text-7xl font-black text-white tracking-tighter">{completedOrders.length}</span>
+              <span className="text-3xl text-zinc-700 font-black">/ {totalOrdersCount}</span>
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest ml-2 mb-2">Objetivos Concluídos</span>
             </div>
           </div>
-          <div className="text-right">
-            <span className="text-2xl font-black text-primary font-mono">{progress}%</span>
-            <p className="text-[9px] text-zinc-500 font-bold uppercase">Eficiência</p>
+          <div className="text-right w-full md:w-auto">
+            <div className="flex items-center justify-end gap-2 mb-1">
+              <span className="text-4xl font-black text-primary font-mono tracking-tighter">{progress}%</span>
+            </div>
+            <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">Eficiência de Produção</p>
           </div>
         </div>
         
-        <div className="h-4 w-full bg-black/40 rounded-full overflow-hidden border border-zinc-800 p-0.5 relative z-10">
+        <div className="relative h-5 w-full bg-black/60 rounded-full border border-zinc-800 p-1 overflow-hidden shadow-inner">
           <motion.div 
             initial={{ width: 0 }} 
             animate={{ width: `${progress}%` }} 
-            className="h-full bg-gradient-to-r from-orange-600 to-primary rounded-full shadow-[0_0_15px_rgba(255,95,31,0.5)]" 
-          />
+            transition={{ duration: 1.5, ease: [0.22, 1, 0.36, 1] }}
+            className="relative h-full bg-gradient-to-r from-orange-700 via-primary to-orange-400 rounded-full" 
+          >
+            {/* Efeito de Brilho na Ponta */}
+            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-r from-transparent to-white/30 blur-sm rounded-r-full" />
+            <div className="absolute inset-0 shadow-[0_0_20px_rgba(255,95,31,0.4)] rounded-full" />
+          </motion.div>
         </div>
       </section>
 
-      {/* LISTA DE PEDIDOS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <AnimatePresence mode='popLayout'>
-          {pendingOrders.length > 0 ? pendingOrders.map(order => (
-            <motion.div 
-              layout 
-              initial={{ opacity: 0, scale: 0.95 }} 
-              animate={{ opacity: 1, scale: 1 }} 
-              exit={{ opacity: 0, scale: 0.95 }}
-              key={order.id} 
-              className="relative group/card"
-            >
-              <OrderCard order={order} onClick={setEditingOrder} />
-              
-              {/* TAG DE ORIGEM (DEBUG VISUAL) */}
-              <div className="absolute left-4 bottom-4 pointer-events-none opacity-40 group-hover/card:opacity-100 transition-opacity">
-                <span className={cn(
-                  "text-[7px] font-black uppercase px-1.5 py-0.5 rounded border flex items-center gap-1",
-                  order._origin === 'MANUAL' ? "bg-orange-500/10 text-orange-500 border-orange-500/20" : 
-                  order._origin === 'AMBOS' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : 
-                  "bg-blue-500/10 text-blue-500 border-blue-500/20"
-                )}>
-                  {order._origin === 'MANUAL' ? <LayoutGrid size={8}/> : <CalendarIcon size={8}/>}
-                  {order._origin}
-                </span>
-              </div>
-
-              <button 
-                onClick={(e) => handleRemoveFromGoal(e, order.id)} 
-                className="absolute -top-2 -right-2 p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-500 hover:text-red-500 opacity-0 group-hover/card:opacity-100 transition-all hover:scale-110 shadow-xl"
-                title="Remover da lista manual"
+      {/* GRID DE PEDIDOS ATIVOS */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-3 px-2">
+          <Flag size={14} className="text-primary" />
+          <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em]">Pauta em Aberto ({pendingOrders.length})</h3>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <AnimatePresence mode='popLayout'>
+            {pendingOrders.length > 0 ? pendingOrders.map(order => (
+              <motion.div 
+                layout 
+                initial={{ opacity: 0, scale: 0.95 }} 
+                animate={{ opacity: 1, scale: 1 }} 
+                exit={{ opacity: 0, scale: 0.95 }}
+                key={order.id} 
+                className="relative group/card"
               >
-                <X size={14} strokeWidth={3} />
-              </button>
-            </motion.div>
-          )) : (
-            <div className="col-span-full py-20 text-center border-2 border-dashed border-zinc-800 rounded-[2.5rem] bg-zinc-900/10">
-              <CheckCircle2 size={48} className="mx-auto mb-4 text-emerald-500/20" />
-              <p className="text-[10px] text-zinc-600 font-black uppercase tracking-[0.4em]">Fila da Semana Concluída</p>
-            </div>
-          )}
-        </AnimatePresence>
+                <OrderCard order={order} onClick={setEditingOrder} />
+                
+                <div className="absolute left-4 bottom-4 pointer-events-none opacity-40 group-hover/card:opacity-100 transition-opacity">
+                  <span className={cn(
+                    "text-[7px] font-black uppercase px-1.5 py-0.5 rounded border flex items-center gap-1",
+                    order._origin === 'MANUAL' ? "bg-orange-500/10 text-orange-500 border-orange-500/20" : 
+                    order._origin === 'AMBOS' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : 
+                    "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                  )}>
+                    {order._origin === 'MANUAL' ? <LayoutGrid size={8}/> : <CalendarIcon size={8}/>}
+                    {order._origin}
+                  </span>
+                </div>
+
+                <button 
+                  onClick={(e) => handleRemoveFromGoal(e, order.id)} 
+                  className="absolute -top-2 -right-2 p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-500 hover:text-red-500 opacity-0 group-hover/card:opacity-100 transition-all hover:scale-110 shadow-xl z-10"
+                >
+                  <X size={14} strokeWidth={3} />
+                </button>
+              </motion.div>
+            )) : !isLoading && (
+              <div className="col-span-full py-20 text-center border-2 border-dashed border-zinc-800 rounded-[2.5rem] bg-zinc-900/10">
+                <CheckCircle2 size={48} className="mx-auto mb-4 text-emerald-500/20" />
+                <p className="text-[10px] text-zinc-600 font-black uppercase tracking-[0.4em]">Nenhuma missão ativa para o momento</p>
+              </div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
+
+      {/* SEÇÃO DE CONCLUÍDOS (NOVO) */}
+      {completedOrders.length > 0 && (
+        <div className="pt-12 space-y-8">
+          <div className="flex items-center gap-4">
+            <div className="h-px flex-1 bg-gradient-to-r from-transparent to-zinc-800" />
+            <span className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.5em] whitespace-nowrap">Missões Concluídas</span>
+            <div className="h-px flex-1 bg-gradient-to-l from-transparent to-zinc-800" />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {completedOrders.map(order => (
+              <motion.div 
+                key={order.id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="opacity-60 grayscale-[0.4] hover:opacity-100 hover:grayscale-0 transition-all duration-500"
+              >
+                <OrderCard order={order} onClick={setEditingOrder} />
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <OrderFormModal 
         isOpen={!!editingOrder} 
@@ -242,7 +280,7 @@ export default function WeeklyGoalsPage() {
 }
 
 /**
- * COMPONENTE: MODAL DE GERENCIAMENTO DE LISTA
+ * MODAL DE GERENCIAMENTO
  */
 function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const firestore = useFirestore();
@@ -285,7 +323,7 @@ function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md">
       <motion.div 
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
