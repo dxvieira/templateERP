@@ -31,9 +31,16 @@
   * {
     @apply border-border;
   }
-  body {
+  
+  /* BLINDAGEM ESTRUTURAL DE VIEWPORT */
+  html, body {
     @apply bg-[#0A0A0A] text-foreground font-body antialiased;
-    overflow-x: hidden;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden !important;
+    position: fixed;
+    margin: 0;
+    padding: 0;
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -51,7 +58,7 @@
   ::-webkit-scrollbar-thumb {
     background-color: #FF5F1F;
     border-radius: 20px;
-    border: 2px solid #0A0A0A; /* Efeito de flutuação/espaçamento */
+    border: 2px solid #0A0A0A;
     background-clip: content-box;
   }
 
@@ -67,7 +74,6 @@
 }
 
 @layer utilities {
-  /* Utility to completely hide scrollbars but keep functionality */
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
@@ -112,7 +118,6 @@
   to { transform: translateX(100%); }
 }
 
-/* Custom Scrollbar class for specific containers */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }

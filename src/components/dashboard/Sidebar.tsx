@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, memo, useCallback, useEffect } from 'react';
+import React, { useState, memo, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   ClipboardList, 
@@ -53,7 +53,6 @@ export const DashboardSidebar = memo(() => {
   const firestore = useFirestore();
   const { user } = useUser();
 
-  // 1. CARREGAR PREFERÊNCIA DO FIREBASE
   useEffect(() => {
     async function loadPreferences() {
       if (!user || !firestore) return;
@@ -70,7 +69,6 @@ export const DashboardSidebar = memo(() => {
     loadPreferences();
   }, [user, firestore]);
 
-  // 2. SALVAR PREFERÊNCIA (FIXAR)
   const togglePin = async () => {
     const newState = !isPinned;
     setIsPinned(newState);
@@ -93,10 +91,13 @@ export const DashboardSidebar = memo(() => {
 
   const isExpanded = isPinned || isHovered;
 
+  // Não renderiza Sidebar na página de login
+  if (pathname === '/login') return null;
+
   return (
     <>
-      {/* MOBILE HEADER */}
-      <header className="fixed top-0 left-0 right-0 z-[60] h-14 md:hidden bg-[#0A0A0A]/80 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between print:hidden">
+      {/* MOBILE HEADER - FIXED AT TOP */}
+      <header className="fixed top-0 left-0 right-0 z-[110] h-14 md:hidden bg-[#0A0A0A]/80 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between print:hidden">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shadow-[0_0_10px_rgba(255,95,31,0.5)]">
             <ClipboardList className="text-black w-4 h-4" />
@@ -110,24 +111,24 @@ export const DashboardSidebar = memo(() => {
 
       {/* MOBILE OVERLAY */}
       {isMobileOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm md:hidden" onClick={() => setIsMobileOpen(false)} />
+        <div className="fixed inset-0 z-[105] bg-black/60 backdrop-blur-sm md:hidden" onClick={() => setIsMobileOpen(false)} />
       )}
 
-      {/* SIDEBAR CONTAINER */}
+      {/* SIDEBAR CONTAINER - FIXED WITH HIGH Z-INDEX */}
       <aside
         onMouseEnter={() => !isPinned && setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={cn(
-          "fixed inset-y-0 left-0 z-50 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] print:hidden",
-          "bg-[#0A0A0A] border-r border-white/5 shadow-2xl overflow-x-hidden", // Force horizontal clip
+          "fixed inset-y-0 left-0 z-[100] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] print:hidden",
+          "bg-[#0A0A0A] border-r border-white/5 shadow-2xl overflow-x-hidden",
           isExpanded ? "w-64" : "w-20",
           isMobileOpen ? "translate-x-0 w-64" : "max-md:-translate-x-full"
         )}
       >
-        <div className="flex flex-col h-full p-4 overflow-x-hidden">
+        <div className="flex flex-col h-full p-4 overflow-x-hidden scrollbar-hide">
           
           {/* LOGO AREA */}
-          <div className="flex items-center justify-between mb-8 px-2 h-10 overflow-hidden">
+          <div className="flex items-center justify-between mb-8 px-2 h-10 overflow-hidden shrink-0">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-[0_0_15px_rgba(255,95,31,0.5)] shrink-0">
                 <ClipboardList className="text-black w-6 h-6" />
@@ -141,7 +142,6 @@ export const DashboardSidebar = memo(() => {
               </div>
             </div>
 
-            {/* PIN BUTTON (Desktop Only) */}
             <button 
               onClick={togglePin}
               className={cn(
@@ -155,14 +155,15 @@ export const DashboardSidebar = memo(() => {
           </div>
 
           {/* MAIN NAV */}
-          <nav className="flex-1 space-y-1.5 scrollbar-hide overflow-y-auto overflow-x-hidden">
+          <nav className="flex-1 space-y-1.5 overflow-y-auto overflow-x-hidden scrollbar-hide">
             {navItems.map((item) => (
               <Link
                 key={item.label}
                 href={item.path}
                 prefetch={true}
+                onClick={() => setIsMobileOpen(false)}
                 className={cn(
-                  "flex items-center gap-4 px-3 h-12 rounded-xl transition-all duration-200 group relative",
+                  "flex items-center gap-4 px-3 h-12 rounded-xl transition-all duration-200 group relative shrink-0",
                   pathname === item.path 
                     ? "bg-primary text-black font-black" 
                     : "text-zinc-500 hover:bg-white/5 hover:text-white"
@@ -188,7 +189,7 @@ export const DashboardSidebar = memo(() => {
                 key={item.label}
                 href={item.path}
                 className={cn(
-                  "flex items-center gap-4 px-3 h-12 rounded-xl transition-all duration-200 group",
+                  "flex items-center gap-4 px-3 h-12 rounded-xl transition-all duration-200 group shrink-0",
                   "text-zinc-500 hover:bg-white/5 hover:text-white"
                 )}
               >
@@ -206,7 +207,7 @@ export const DashboardSidebar = memo(() => {
           </nav>
 
           {/* FOOTER / LOGOUT */}
-          <div className="pt-4 border-t border-white/5 overflow-hidden">
+          <div className="pt-4 border-t border-white/5 overflow-hidden shrink-0">
             <button
               onClick={handleLogout}
               className="w-full flex items-center gap-4 px-3 h-12 rounded-xl text-destructive hover:bg-destructive/10 transition-all duration-200 group"
@@ -232,10 +233,10 @@ export const DashboardSidebar = memo(() => {
         </div>
       </aside>
 
-      {/* SPACER FOR PINNED MODE */}
+      {/* SPACER FOR PINNED MODE - PUSHES CONTENT ON DESKTOP */}
       <div 
         className={cn(
-          "hidden md:block transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
+          "hidden md:block transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] shrink-0",
           isPinned ? "w-64" : "w-20"
         )} 
       />

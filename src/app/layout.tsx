@@ -1,17 +1,20 @@
-import type { Metadata } from 'next';
-import { FirebaseClientProvider } from '@/firebase';
-import './globals.css';
+'use client';
 
-export const metadata: Metadata = {
-  title: 'PRODUÇÃO IMPACTO',
-  description: 'Sistema de gestão para Comunicação Visual',
-};
+import type { Metadata } from 'next';
+import { usePathname } from 'next/navigation';
+import { FirebaseClientProvider } from '@/firebase';
+import { DashboardSidebar } from '@/components/dashboard/Sidebar';
+import { Toaster } from '@/components/ui/toaster';
+import './globals.css';
 
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const pathname = usePathname();
+  const isLoginPage = pathname === '/login';
+
   return (
     <html lang="pt-BR" className="dark" suppressHydrationWarning>
       <head>
@@ -21,7 +24,13 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased bg-[#0A0A0A] text-white">
         <FirebaseClientProvider>
-          {children}
+          <div className="flex h-screen w-screen overflow-hidden bg-[#0A0A0A]">
+            {!isLoginPage && <DashboardSidebar />}
+            <main id="main-content" className="flex-1 h-full overflow-y-auto overflow-x-hidden relative custom-scrollbar selection:bg-primary selection:text-black">
+              {children}
+            </main>
+          </div>
+          <Toaster />
         </FirebaseClientProvider>
       </body>
     </html>
