@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -8,7 +9,8 @@ import { useRouter } from 'next/navigation';
 import { 
   TrendingUp, TrendingDown, Wallet, Target, AlertCircle, Download, Plus, Trash2, Calendar, 
   Loader2, X, CheckCircle2, Receipt, ArrowDownLeft, Box, Factory, BarChart3, PieChart as PieChartIcon, 
-  ShoppingBag, Users as UsersIcon, ChevronDown, ChevronUp, Layers, Pencil, ChevronRight, Check, Sparkles
+  ShoppingBag, Users as UsersIcon, ChevronDown, ChevronUp, Layers, Pencil, ChevronRight, Check, Sparkles,
+  FileSpreadsheet
 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Label } from 'recharts';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, addMonths } from 'date-fns';
@@ -183,7 +185,8 @@ export default function ReportsManager() {
         totalValue: biTotalValue,
         ticketMedio: filteredOrders.length > 0 ? biTotalValue / filteredOrders.length : 0,
         statusChart,
-        clientChart
+        clientChart,
+        filteredOrders
       }
     };
   }, [orders, cashflowManual, payables, selectedMonth]);
@@ -206,6 +209,42 @@ export default function ReportsManager() {
     deleteDoc(doc(firestore, coll, itemToDelete.id)).then(() => { toast({ title: "Removido" }); setItemToDelete(null); });
   };
 
+  // FUNÇÃO DE EXPORTAÇÃO CSV
+  const exportToCSV = () => {
+    if (!reportData) return;
+
+    let csvContent = "data:text/csv;charset=utf-8,";
+    let filename = `relatorio-${activeTab.toLowerCase()}-${selectedMonth}.csv`;
+
+    if (activeTab === 'FLUXO') {
+      csvContent += "Data,Descricao,Metodo,Tipo,Valor\n";
+      reportData.transactions.forEach(t => {
+        csvContent += `${format(parseISO(t.date), 'dd/MM/yyyy')},"${t.description}",${t.method},${t.type === 'income' ? 'Entrada' : 'Saida'},${t.amount}\n`;
+      });
+    } else if (activeTab === 'CONTAS') {
+      csvContent += "Fornecedor,Descricao,Vencimento,Valor,Status\n";
+      reportData.groupedPayables.forEach((g: any) => {
+        g.installments.forEach((p: any) => {
+          csvContent += `"${g.supplier}","${g.description}",${format(parseISO(p.dueDate), 'dd/MM/yyyy')},${p.amount},${p.status === 'paid' ? 'Pago' : 'Pendente'}\n`;
+        });
+      });
+    } else if (activeTab === 'PEDIDOS') {
+      csvContent += "OS,Cliente,Valor Total,Status,Entrega\n";
+      reportData.ordersBI.filteredOrders.forEach((o: any) => {
+        csvContent += `${o.id},"${o.client}",${cleanCurrency(o.total_value || o.totalValue)},${o.status},${o.delivery_date || o.deliveryDate}\n`;
+      });
+    }
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "Exportação Concluída", description: "O arquivo CSV foi gerado com sucesso." });
+  };
+
   if (!reportData) return <div className="h-full flex items-center justify-center"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>;
 
   return (
@@ -216,7 +255,13 @@ export default function ReportsManager() {
           <div className="flex items-center gap-2 text-primary"><Sparkles size={14} className="animate-pulse" /><span className="text-[10px] font-black uppercase tracking-[0.3em]">Intelligence Dashboard</span></div>
           <h1 className="text-4xl font-black text-white tracking-tighter uppercase leading-none">Gestão de <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">Resultados</span></h1>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
+           <button 
+             onClick={exportToCSV}
+             className="flex items-center gap-2 px-5 py-3 bg-zinc-800 text-zinc-300 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-zinc-700 transition-all border border-white/5"
+           >
+             <FileSpreadsheet size={16} /> Exportar
+           </button>
            <div className="relative group"><Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" size={16} /><input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white text-xs font-black uppercase outline-none focus:border-primary transition-all" /></div>
            {activeTab !== 'PEDIDOS' && (
              <button onClick={() => activeTab === 'FLUXO' ? setIsCashflowModalOpen(true) : setIsPayableModalOpen(true)} className="flex items-center gap-2 px-6 py-3 bg-primary text-black font-black text-[10px] uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(255,95,31,0.4)] hover:bg-white transition-all"><Plus size={16} strokeWidth={3} /> {activeTab === 'FLUXO' ? 'Lançamento' : 'Nova Conta'}</button>
@@ -252,19 +297,32 @@ export default function ReportsManager() {
          ))}
       </div>
 
-      {/* CONTENT AREA */}
+      {/* CONTENT AREA - OVERFLOW AUTO PROTEGIDO */}
       <div className="bg-[#09090b] border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
         {activeTab === 'FLUXO' && (
-          <div className="divide-y divide-white/5">
-            {reportData.transactions.length > 0 ? reportData.transactions.map((t) => (
-              <div key={t.id} onClick={() => t.origin === 'SISTEMA (OS)' && router.push(`/orders?edit=${t.originalId}`)} className="group flex flex-col md:flex-row md:items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-4 cursor-pointer">
-                <div className="flex items-center gap-4 flex-1">
-                   <div className="flex flex-col items-center justify-center min-w-[50px] bg-zinc-950 p-2 rounded-xl border border-zinc-900"><span className="text-[8px] font-black text-zinc-600 uppercase">{format(parseISO(t.date), 'MMM', { locale: ptBR })}</span><span className="text-lg font-black text-white leading-none">{format(parseISO(t.date), 'dd')}</span></div>
-                   <div className="min-w-0"><p className="text-sm font-bold text-white uppercase truncate group-hover:text-primary transition-colors">{t.description}</p><div className="flex items-center gap-3 mt-1"><span className="text-[8px] font-black uppercase text-zinc-600 tracking-widest bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">{t.method}</span><span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded-full border", t.type === 'income' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20")}>{t.type === 'income' ? 'Entrada' : 'Saída'}</span></div></div>
+          <div className="overflow-x-auto custom-scrollbar">
+            <div className="divide-y divide-white/5 min-w-max">
+              {reportData.transactions.length > 0 ? reportData.transactions.map((t) => (
+                <div key={t.id} onClick={() => t.origin === 'SISTEMA (OS)' && router.push(`/orders?edit=${t.originalId}`)} className="group flex items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-8 cursor-pointer">
+                  <div className="flex items-center gap-4 flex-1 min-w-[300px]">
+                     <div className="flex flex-col items-center justify-center min-w-[50px] bg-zinc-950 p-2 rounded-xl border border-zinc-900"><span className="text-[8px] font-black text-zinc-600 uppercase">{format(parseISO(t.date), 'MMM', { locale: ptBR })}</span><span className="text-lg font-black text-white leading-none">{format(parseISO(t.date), 'dd')}</span></div>
+                     <div className="min-w-0 flex-1">
+                       <p className="text-sm font-bold text-white uppercase group-hover:text-primary transition-colors whitespace-nowrap">
+                         {t.description}
+                       </p>
+                       <div className="flex items-center gap-3 mt-1">
+                         <span className="text-[8px] font-black uppercase text-zinc-600 tracking-widest bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800 whitespace-nowrap">{t.method}</span>
+                         <span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded-full border whitespace-nowrap", t.type === 'income' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20")}>{t.type === 'income' ? 'Entrada' : 'Saída'}</span>
+                       </div>
+                     </div>
+                  </div>
+                  <div className="flex items-center gap-8 shrink-0">
+                    <p className={cn("text-lg font-black font-mono tracking-tighter", t.type === 'income' ? "text-emerald-500" : "text-red-500")}>{t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    <button onClick={(e) => { e.stopPropagation(); setItemToDelete(t); }} className="p-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all border border-red-500/20"><Trash2 size={16}/></button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-8"><p className={cn("text-lg font-black font-mono tracking-tighter", t.type === 'income' ? "text-emerald-500" : "text-red-500")}>{t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p><button onClick={(e) => { e.stopPropagation(); setItemToDelete(t); }} className="p-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all border border-red-500/20"><Trash2 size={16}/></button></div>
-              </div>
-            )) : <EmptyState icon={Target} text="Sem movimentos no período" />}
+              )) : <EmptyState icon={Target} text="Sem movimentos no período" />}
+            </div>
           </div>
         )}
 
@@ -389,26 +447,45 @@ export default function ReportsManager() {
         )}
 
         {activeTab === 'CONTAS' && (
-          <div className="divide-y divide-white/5">
-            {reportData.groupedPayables.length > 0 ? reportData.groupedPayables.map((group: any) => (
-              <div key={group.groupId} className="flex flex-col">
-                <div className="flex flex-col md:flex-row md:items-center justify-between p-5 border-l-2 border-transparent">
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className={cn("p-2.5 rounded-xl border flex items-center justify-center", group.allPaid ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" : "bg-zinc-900 border-zinc-800 text-zinc-500")}><Layers size={20} /></div>
-                    <div className="min-w-0"><h4 className="text-sm font-black text-white uppercase truncate">{group.supplier}</h4><p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-0.5 truncate">{group.description}</p></div>
-                  </div>
-                  <div className="flex items-center gap-8 mt-4 md:mt-0"><div className="text-right"><p className="text-[9px] text-zinc-600 uppercase font-black">Total Contrato</p><p className="text-lg font-black font-mono text-white">{group.totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div></div>
-                </div>
-                <div className="bg-black/20 border-t border-white/5 pl-16">
-                  {group.installments.map((p: any) => (
-                    <div key={p.id} className={cn("flex flex-col md:flex-row md:items-center justify-between p-4 transition-all gap-4 border-l-4", p.status === 'paid' ? "bg-emerald-500/5 border-emerald-500" : "bg-zinc-900/30 border-transparent")}>
-                      <div className="flex items-center gap-4"><div><div className="flex items-center gap-2"><span className="text-[10px] font-black text-zinc-400 uppercase">Vencimento:</span><span className="text-[10px] font-bold text-white">{format(parseISO(p.dueDate), 'dd/MM/yyyy')}</span>{p.status === 'paid' && <span className="px-1.5 py-0.5 text-[8px] font-black bg-emerald-500 text-black rounded">PAGO</span>}</div></div></div>
-                      <div className="flex items-center gap-6"><p className="text-sm font-black text-white font-mono">{cleanCurrency(p.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>{p.status !== 'paid' && <button onClick={() => setItemToPay(p)} className="p-2.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-lg"><Check size={16}/></button>}</div>
+          <div className="overflow-x-auto custom-scrollbar">
+            <div className="divide-y divide-white/5 min-w-[600px]">
+              {reportData.groupedPayables.length > 0 ? reportData.groupedPayables.map((group: any) => (
+                <div key={group.groupId} className="flex flex-col">
+                  <div className="flex items-center justify-between p-5 border-l-2 border-transparent">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className={cn("p-2.5 rounded-xl border flex items-center justify-center shrink-0", group.allPaid ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" : "bg-zinc-900 border-zinc-800 text-zinc-500")}><Layers size={20} /></div>
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-black text-white uppercase whitespace-nowrap">{group.supplier}</h4>
+                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-0.5 whitespace-nowrap">{group.description}</p>
+                      </div>
                     </div>
-                  ))}
+                    <div className="flex items-center gap-8 shrink-0">
+                      <div className="text-right">
+                        <p className="text-[9px] text-zinc-600 uppercase font-black">Total Contrato</p>
+                        <p className="text-lg font-black font-mono text-white">{group.totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-black/20 border-t border-white/5 pl-16">
+                    {group.installments.map((p: any) => (
+                      <div key={p.id} className={cn("flex items-center justify-between p-4 transition-all gap-8 border-l-4", p.status === 'paid' ? "bg-emerald-500/5 border-emerald-500" : "bg-zinc-900/30 border-transparent")}>
+                        <div className="flex items-center gap-4 shrink-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black text-zinc-400 uppercase">Vencimento:</span>
+                            <span className="text-[10px] font-bold text-white whitespace-nowrap">{format(parseISO(p.dueDate), 'dd/MM/yyyy')}</span>
+                            {p.status === 'paid' && <span className="px-1.5 py-0.5 text-[8px] font-black bg-emerald-500 text-black rounded">PAGO</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-6 shrink-0">
+                          <p className="text-sm font-black text-white font-mono">{cleanCurrency(p.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                          {p.status !== 'paid' && <button onClick={() => setItemToPay(p)} className="p-2.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-lg"><Check size={16}/></button>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )) : <EmptyState icon={Receipt} text="Sem contas pendentes" />}
+              )) : <EmptyState icon={Receipt} text="Sem contas pendentes" />}
+            </div>
           </div>
         )}
       </div>
