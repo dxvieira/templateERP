@@ -60,7 +60,11 @@ const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | nul
     
     setLoading(true);
     try {
-      await updateOrder(order.id, formData);
+      // BACKEND REQUIREMENT: Remove deliveryDate from payload to prevent accidental re-submission
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { deliveryDate, client, ...payload } = formData;
+      
+      await updateOrder(order.id, payload);
       toast({ title: "Protocolo Atualizado" });
       onClose();
     } finally {
@@ -98,13 +102,20 @@ const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | nul
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* CAMPO CLIENTE BLOQUEADO */}
               <div className="opacity-60 pointer-events-none">
                 <label className="text-[9px] text-zinc-500 uppercase font-black tracking-widest ml-1 mb-1 block">Cliente / Projeto</label>
                 <input readOnly value={formData.client} className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-400 outline-none cursor-not-allowed" />
               </div>
-              <div>
+              
+              {/* CAMPO PRAZO DE ENTREGA BLOQUEADO (NOVO REQUISITO) */}
+              <div className="opacity-60 pointer-events-none">
                 <label className="text-[9px] text-zinc-500 uppercase font-black tracking-widest ml-1 mb-1 block">Prazo de Entrega</label>
-                <input type="date" value={formData.deliveryDate} onChange={(e) => handleFieldChange('deliveryDate', e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none" />
+                <input 
+                  readOnly 
+                  value={formData.deliveryDate} 
+                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-400 outline-none cursor-not-allowed" 
+                />
               </div>
             </div>
 

@@ -20,7 +20,14 @@ service cloud.firestore {
     }
 
     match /orders/{orderId} {
-      allow read, write: if isSignedIn();
+      allow read, create, delete: if isSignedIn();
+      
+      // Bloqueio de alteração do Prazo de Entrega durante updates
+      allow update: if isSignedIn() && 
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['delivery_date', 'deliveryDate']) ||
+          (request.resource.data.delivery_date == resource.data.delivery_date)
+        );
     }
 
     match /expenses/{expenseId} {
