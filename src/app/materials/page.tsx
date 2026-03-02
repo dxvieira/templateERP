@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   collection, 
   query, 
@@ -10,7 +10,6 @@ import {
   deleteDoc, 
   doc, 
   serverTimestamp,
-  where,
   orderBy
 } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
@@ -60,24 +59,47 @@ export default function MaterialsPage() {
     category: 'Impressão'
   });
 
-  // Query Memoizada com proteção robusta contra Race Condition
-  // A query só é gerada se o usuário estiver autenticado e o estado de carregamento finalizado
+  // Query Memoizada - Buscamos todos os itens da coleção para permitir o cleanup e visualização de pedidos
   const materialsQuery = useMemoFirebase(() => {
     if (!firestore || !user || isUserLoading) return null;
-    
-    // Proteção adicional: garante que temos um UID válido antes de tentar a listagem
     if (!user.uid) return null;
 
     return query(
       collection(firestore, 'materials'),
-      where('status', '==', 'pending'),
       orderBy('createdAt', 'desc')
     );
   }, [firestore, user, isUserLoading]);
 
-  // Hook padronizado useCollection - Desativa automaticamente se materialsQuery for null
   const { data: itemsData, isLoading: isCollectionLoading } = useCollection(materialsQuery);
   const items = itemsData || [];
+
+  // --- ROTINA DE LIMPEZA AUTOMÁTICA (LAZY AUTO-CLEANUP) ---
+  useEffect(() => {
+    if (!firestore || !user || isUserLoading || !itemsData || itemsData.length === 0) return;
+
+    const cleanupMaterials = async () => {
+      const currentDay = new Date().getDay(); // 0 = Dom, 5 = Sex, 6 = Sáb
+      const isCleanupDay = [0, 5, 6].includes(currentDay);
+
+      if (isCleanupDay) {
+        const itemsToClean = itemsData.filter(i => i.status === 'pedido');
+        if (itemsToClean.length > 0) {
+          try {
+            // Executa as deleções silenciosamente
+            await Promise.all(itemsToClean.map(item => deleteDoc(doc(firestore, 'materials', item.id))));
+            toast({ 
+              title: "Limpeza de Fim de Semana", 
+              description: `${itemsToClean.length} itens marcados como 'pedido' foram arquivados para liberar o painel.` 
+            });
+          } catch (e) {
+            console.error("Erro no Auto-Cleanup:", e);
+          }
+        }
+      }
+    };
+
+    cleanupMaterials();
+  }, [itemsData, firestore, user, isUserLoading, toast]);
 
   const handleAddRequest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +108,7 @@ export default function MaterialsPage() {
     setIsSubmitting(true);
     const payload = {
       ...formData,
-      status: 'pending',
+      status: 'pendente',
       userId: user.uid,
       createdAt: serverTimestamp()
     };
@@ -107,14 +129,14 @@ export default function MaterialsPage() {
     }
   };
 
-  const handleComplete = async (id: string) => {
+  const handleConfirmOrder = async (id: string) => {
     if (!firestore) return;
     try {
       await updateDoc(doc(firestore, 'materials', id), { 
-        status: 'completed',
+        status: 'pedido',
         completedAt: serverTimestamp()
       });
-      toast({ title: "Item Adquirido", description: "O material foi movido para o histórico." });
+      toast({ title: "Pedido Confirmado", description: "Material marcado como solicitado ao fornecedor." });
     } catch (error) {
       errorEmitter.emit('permission-error', new FirestorePermissionError({
         path: `materials/${id}`,
@@ -137,9 +159,6 @@ export default function MaterialsPage() {
     }
   };
 
-  // --- EARLY RETURN: BLOQUEIO DE ACESSO GLOBAL PREMATURO ---
-  // Impede que qualquer parte do componente que dependa do Firestore seja renderizada
-  // até que o Auth esteja resolvido.
   if (isUserLoading) {
     return (
       <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-4">
@@ -196,7 +215,6 @@ export default function MaterialsPage() {
           </button>
         </header>
 
-        {/* BANNER DE AVISO */}
         <section className="bg-orange-500/5 border border-orange-500/20 rounded-2xl p-4 flex items-center gap-4">
           <div className="p-3 bg-orange-500/10 rounded-xl">
             <Calendar className="text-orange-500" size={24} />
@@ -207,7 +225,6 @@ export default function MaterialsPage() {
           </div>
         </section>
 
-        {/* GRID DE CATEGORIAS */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {isCollectionLoading ? (
             <div className="col-span-full flex justify-center py-20">
@@ -235,21 +252,33 @@ export default function MaterialsPage() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         key={item.id} 
-                        className="group bg-[#09090b] border border-zinc-800 rounded-2xl p-4 hover:border-zinc-700 transition-all shadow-xl"
+                        className={cn(
+                          "group bg-[#09090b] border rounded-2xl p-4 transition-all shadow-xl",
+                          item.status === 'pedido' ? "border-emerald-500/20 opacity-50 grayscale-[0.5]" : "border-zinc-800 hover:border-zinc-700"
+                        )}
                       >
                         <div className="flex justify-between items-start mb-3">
                           <div className="min-w-0">
-                            <h4 className="text-sm font-bold text-white uppercase truncate">{item.name}</h4>
-                            <p className="text-[10px] text-primary font-black uppercase tracking-widest mt-1">QTD: {item.quantity}</p>
+                            <h4 className={cn(
+                              "text-sm font-bold text-white uppercase truncate",
+                              item.status === 'pedido' && "line-through text-zinc-500"
+                            )}>{item.name}</h4>
+                            <p className={cn(
+                              "text-[10px] font-black uppercase tracking-widest mt-1",
+                              item.status === 'pedido' ? "text-emerald-500/60" : "text-primary"
+                            )}>QTD: {item.quantity}</p>
                           </div>
+                          {item.status === 'pedido' && <CheckCircle2 className="text-emerald-500" size={16} />}
                         </div>
                         <div className="flex gap-2 pt-3 border-t border-white/5">
-                          <button 
-                            onClick={() => handleComplete(item.id)}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black rounded-lg transition-all text-[9px] font-black uppercase tracking-widest border border-emerald-500/20"
-                          >
-                            <Check size={12} strokeWidth={3} /> Comprado
-                          </button>
+                          {item.status !== 'pedido' && (
+                            <button 
+                              onClick={() => handleConfirmOrder(item.id)}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black rounded-lg transition-all text-[9px] font-black uppercase tracking-widest border border-emerald-500/20"
+                            >
+                              <Check size={12} strokeWidth={3} /> Confirmar Pedido
+                            </button>
+                          )}
                           <button 
                             onClick={() => handleDelete(item.id)}
                             className="p-2 bg-zinc-900 text-zinc-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all border border-zinc-800"
@@ -263,7 +292,7 @@ export default function MaterialsPage() {
                   {categoryItems.length === 0 && !isCollectionLoading && (
                     <div className="py-10 border border-dashed border-zinc-800 rounded-2xl flex flex-col items-center justify-center opacity-20">
                       <Package size={24} className="mb-2" />
-                      <span className="text-[8px] font-black uppercase tracking-widest text-center px-4">Sem solicitações pendentes</span>
+                      <span className="text-[8px] font-black uppercase tracking-widest text-center px-4">Sem solicitações</span>
                     </div>
                   )}
                 </div>
@@ -272,7 +301,6 @@ export default function MaterialsPage() {
           })}
         </div>
 
-        {/* MODAL DE SOLICITAÇÃO */}
         <AnimatePresence>
           {isModalOpen && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}>
@@ -302,7 +330,7 @@ export default function MaterialsPage() {
                     </div>
                   </div>
                   <button disabled={isSubmitting} className="w-full py-5 bg-primary text-black font-black uppercase tracking-widest rounded-2xl shadow-[0_5px_25px_-5px_rgba(255,95,31,0.5)] flex items-center justify-center gap-2">
-                    {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <><CheckCircle2 size={20} /> Enviar Solicitação</>}
+                    {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <><CheckCircle2 size={20} /> Registrar Solicitação</>}
                   </button>
                 </form>
               </motion.div>
