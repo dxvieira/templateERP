@@ -1,6 +1,7 @@
+
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Layers } from 'lucide-react';
 
@@ -24,6 +25,23 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!isUserLoading && !user) router.replace('/login');
   }, [user, isUserLoading, router]);
+
+  /**
+   * MOTOR DE ORDENAÇÃO CRONOLÓGICA (CLIENT-SIDE)
+   * Prioriza prazos mais próximos e joga nulos para o final.
+   */
+  const activeOrders = useMemo(() => {
+    return orders
+      .filter(o => !['Concluído', 'Entregue'].includes(o.status))
+      .sort((a, b) => {
+        // Normalização de Datas (String ou Timestamp)
+        const dateA = a.delivery_date || a.deliveryDate || '9999-12-31';
+        const dateB = b.delivery_date || b.deliveryDate || '9999-12-31';
+        
+        // Ordenação Ascendente (Mais antigo/próximo primeiro)
+        return dateA.localeCompare(dateB);
+      });
+  }, [orders]);
 
   const handleEditOrder = useCallback((order: any) => {
     setEditingOrder(order);
@@ -63,8 +81,8 @@ export default function DashboardPage() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-            {orders.filter(o => !['Concluído', 'Entregue'].includes(o.status)).length > 0 ? (
-              orders.filter(o => !['Concluído', 'Entregue'].includes(o.status)).map((order) => (
+            {activeOrders.length > 0 ? (
+              activeOrders.map((order) => (
                 <OrderCard key={order.id} order={order} onClick={handleEditOrder} />
               ))
             ) : !isLoading && (
