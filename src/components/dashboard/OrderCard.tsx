@@ -3,6 +3,7 @@
 import React, { memo, useMemo } from 'react';
 import { Calendar, ChevronRight, CheckCircle2, AlertTriangle, DollarSign, Layers, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { startOfDay, isBefore, parseISO, format } from 'date-fns';
 
 export interface Order {
   id: string;
@@ -28,7 +29,7 @@ interface OrderCardProps {
 }
 
 /**
- * Card de Pedido - Refatorado para cálculo dinâmico de progresso financeiro e status.
+ * Card de Pedido - Refatorado para cálculo dinâmico de progresso financeiro e status temporal cravado.
  */
 export const OrderCard = memo(({ order, onClick, onDelete }: OrderCardProps) => {
   const isDone = useMemo(() => ['Concluído', 'Entregue'].includes(order.status), [order.status]);
@@ -37,13 +38,13 @@ export const OrderCard = memo(({ order, onClick, onDelete }: OrderCardProps) => 
     const rawDate = order.delivery_date || order.deliveryDate;
     if (!rawDate) return { formatted: '--/--', isLate: false };
     
-    const [year, month, day] = rawDate.split('-').map(Number);
-    const deadline = new Date(year, month - 1, day, 23, 59, 59);
-    const now = new Date();
+    // Normalização Temporal: Ignora horas para evitar atrasos falsos
+    const todayNormalized = startOfDay(new Date());
+    const deadlineNormalized = startOfDay(parseISO(rawDate));
     
     return {
-      formatted: `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}`,
-      isLate: now > deadline && !isDone
+      formatted: format(deadlineNormalized, 'dd/MM'),
+      isLate: isBefore(deadlineNormalized, todayNormalized) && !isDone
     };
   }, [order.delivery_date, order.deliveryDate, isDone]);
 
@@ -61,7 +62,6 @@ export const OrderCard = memo(({ order, onClick, onDelete }: OrderCardProps) => 
   }, [order.status]);
 
   const financialStats = useMemo(() => {
-    // MOTOR DE CALCULO DINÂMICO (RESILIENTE)
     const total = Number(order.total_value || order.totalValue) || 0;
     const paid = Number(order.amount_paid || order.amountPaid) || 0;
     
@@ -69,12 +69,17 @@ export const OrderCard = memo(({ order, onClick, onDelete }: OrderCardProps) => 
     
     const instCount = installments.length;
     const paidCount = installments.filter(i => i.status === 'paid' || i.status === 'pago').length;
-    const hasOverdue = installments.some(i => i.status === 'overdue' || i.status === 'atrasado');
     
-    // Calcula progresso real baseado no valor pago
+    // Verificação de atraso em faturas usando normalização de meia-noite
+    const todayNormalized = startOfDay(new Date());
+    const hasOverdue = installments.some(i => {
+      if (i.status === 'paid' || i.status === 'pago') return false;
+      const dueDate = i.due_date || i.dueDate;
+      if (!dueDate) return false;
+      return isBefore(startOfDay(parseISO(dueDate)), todayNormalized);
+    });
+    
     const progress = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
-    
-    // Saldo devedor recalculado ou vindo do doc
     const balanceDue = order.balance_due !== undefined ? order.balance_due : (total - paid);
     const isFullyPaid = balanceDue <= 0 && total > 0;
     

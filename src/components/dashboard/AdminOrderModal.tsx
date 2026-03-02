@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -18,7 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { cn } from '@/lib/utils';
-import { addMonths, format, parseISO } from 'date-fns';
+import { addMonths, format, parseISO, startOfDay, isBefore } from 'date-fns';
 
 const PAYMENT_METHODS = [
   "Caixa Interno",
@@ -50,11 +49,9 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   const [activeTab, setActiveTab] = useState<'operacional' | 'financeiro'>('operacional');
   const [fullCustomerData, setFullCustomerData] = useState<any>(null);
 
-  // AUTOCOMPLETE STATES
   const [clientsList, setClientsList] = useState<any[]>([]);
   const [showClientDropdown, setShowClientDropdown] = useState(false);
 
-  // FORM STATES
   const [client, setClient] = useState('');
   const [seller, setSeller] = useState('');
   const [status, setStatus] = useState('Arte');
@@ -63,7 +60,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   const [observations, setObservations] = useState('');
   const [items, setItems] = useState<any[]>([]);
   
-  // FINANCIAL STATES (INSTALLMENTS)
   const [installments, setInstallments] = useState<any[]>([]);
   const [genConfig, setInstallmentGenConfig] = useState({
     total: 0,
@@ -74,11 +70,9 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     machine: "Máquina PAGBANK"
   });
 
-  // BAIXA INLINE STATE
   const [baixaInstallmentUid, setBaixaInstallmentUid] = useState<string | null>(null);
   const [baixaData, setBaixaData] = useState({ method: PAYMENT_METHODS[0], date: new Date().toISOString().split('T')[0] });
 
-  // BUSCA LISTA DE CLIENTES PARA AUTOCOMPLETE
   useEffect(() => {
     const fetchClients = async () => {
       if (!firestore || !isOpen) return;
@@ -94,7 +88,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     fetchClients();
   }, [firestore, isOpen]);
 
-  // BUSCA DADOS COMPLETOS DO CLIENTE SELECIONADO PARA A OP
   useEffect(() => {
     const fetchCustomerData = async () => {
       if (!order || !firestore) return;
@@ -208,8 +201,8 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     
     const newInstallments = [];
     const hoje = new Date().toISOString().split('T')[0];
+    const todayNormalized = startOfDay(new Date());
 
-    // 1. GERA A PARCELA DE ENTRADA (JÁ LIQUIDADA)
     if (entrada > 0) {
       newInstallments.push({
         id: "Entrada",
@@ -226,13 +219,15 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     const start = parseISO(genConfig.startDate);
 
     for (let i = 0; i < count; i++) {
-      const dueDate = format(addMonths(start, i), 'yyyy-MM-dd');
+      const dueDateStr = format(addMonths(start, i), 'yyyy-MM-dd');
+      const dueDateNormalized = startOfDay(parseISO(dueDateStr));
+      
       newInstallments.push({
         id: `${i + 1}/${count}`,
         uid: generateUid(),
         amount: i === count - 1 ? (saldoDevedor - (valuePerInstallment * (count - 1))) : valuePerInstallment,
-        due_date: dueDate,
-        status: parseISO(dueDate) < new Date() ? 'overdue' : 'pending',
+        due_date: dueDateStr,
+        status: isBefore(dueDateNormalized, todayNormalized) ? 'overdue' : 'pending',
         type: genConfig.type,
         payment_method: genConfig.type === 'Cartão' ? genConfig.machine : '',
         paid_date: ''
@@ -254,7 +249,9 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
         let newStatus = 'pending';
         if (dDate) {
           try {
-            newStatus = parseISO(dDate) < new Date() ? 'overdue' : 'pending';
+            const todayNormalized = startOfDay(new Date());
+            const dueDateNormalized = startOfDay(parseISO(dDate));
+            newStatus = isBefore(dueDateNormalized, todayNormalized) ? 'overdue' : 'pending';
           } catch (e) {}
         }
         return { ...i, status: newStatus, payment_method: '', paid_date: '' };
@@ -584,16 +581,32 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                         <div className="py-12 border-2 border-dashed border-zinc-800 rounded-3xl text-center"><Receipt className="mx-auto mb-3 text-zinc-700 opacity-20" size={40} /><p className="text-[10px] text-zinc-600 font-black uppercase tracking-widest">Nenhuma parcela gerada para este projeto</p></div>
                       ) : (
                         installments.map((inst, index) => {
-                          const isOverdue = inst.status === 'overdue';
+                          const todayNormalized = startOfDay(new Date());
+                          const dueDateNormalized = inst.due_date || inst.dueDate ? startOfDay(parseISO(inst.due_date || inst.dueDate)) : todayNormalized;
+                          
                           const isPaid = inst.status === 'paid' || inst.status === 'pago';
+                          const isOverdue = !isPaid && isBefore(dueDateNormalized, todayNormalized);
+                          const isToday = !isPaid && format(dueDateNormalized, 'yyyy-MM-dd') === format(todayNormalized, 'yyyy-MM-dd');
+                          
                           const isConfirming = baixaInstallmentUid === inst.uid;
+                          
                           return (
-                            <div key={inst.uid} className={cn("flex flex-col rounded-2xl border transition-all overflow-hidden", isPaid ? "bg-emerald-500/5 border-emerald-500/20" : isOverdue ? "bg-red-500/5 border-red-500/20" : "bg-zinc-900/40 border-zinc-800 hover:border-zinc-700", isConfirming && "border-primary/50 ring-1 ring-primary/20")}>
+                            <div key={inst.uid} className={cn("flex flex-col rounded-2xl border transition-all overflow-hidden", isPaid ? "bg-emerald-500/5 border-emerald-500/20" : isOverdue ? "bg-red-500/5 border-red-500/20" : isToday ? "bg-amber-500/5 border-amber-500/20" : "bg-zinc-900/40 border-zinc-800 hover:border-zinc-700", isConfirming && "border-primary/50 ring-1 ring-primary/20")}>
                                <div className="flex items-center justify-between p-4">
                                   <div className="flex items-center gap-4">
                                      <button type="button" onClick={() => handleToggleBaixa(inst.uid)} className={cn("w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all", isPaid ? "bg-emerald-500 border-emerald-500 text-black" : "border-zinc-700 hover:border-primary")}>{isPaid && <CheckCircle2 size={14} strokeWidth={3} />}</button>
                                      <div>
-                                        <div className="flex items-center gap-2"><span className="text-xs font-black text-white">{inst.id}</span><span className={cn("text-[8px] font-black uppercase px-1.5 py-0.5 rounded border", isPaid ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : isOverdue ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-zinc-800 text-zinc-500 border-zinc-700')}>{isPaid ? 'Liquidado' : isOverdue ? 'Atrasado' : 'Pendente'}</span></div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs font-black text-white">{inst.id}</span>
+                                          <span className={cn("text-[8px] font-black uppercase px-1.5 py-0.5 rounded border", 
+                                            isPaid ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
+                                            isOverdue ? 'bg-red-500/10 text-red-500 border-red-500/20' : 
+                                            isToday ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                                            'bg-zinc-800 text-zinc-500 border-zinc-700'
+                                          )}>
+                                            {isPaid ? 'Liquidado' : isOverdue ? 'Atrasado' : isToday ? 'Vence Hoje' : 'Pendente'}
+                                          </span>
+                                        </div>
                                         <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1"><span>{inst.type} &bull; VENCIMENTO:</span><input type="date" required value={inst.due_date || inst.dueDate || ''} onChange={(e) => { const updatedInstallments = installments.map(item => item.uid === inst.uid ? { ...item, due_date: e.target.value } : item); setInstallments(updatedInstallments); }} className="bg-transparent border-b border-zinc-700 hover:border-primary focus:border-primary text-zinc-300 focus:outline-none transition-colors px-1 pb-0.5 cursor-pointer [color-scheme:dark]" /></div>
                                      </div>
                                   </div>
@@ -620,20 +633,16 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
         </div>
       </motion.div>
 
-      {/* LAYOUT DE IMPRESSÃO PROFISSIONAL (A4) - CLEAN DESIGN */}
       <div className="hidden print:block print:fixed print:top-0 print:left-0 print:w-[100vw] print:h-[100vh] print:bg-white print:z-[9999999] print:p-8 box-border print:m-0 bg-white text-black font-sans">
         <style type="text/css" media="print">
           {`
             @page { size: A4 portrait; margin: 0 !important; }
             html, body { margin: 0 !important; padding: 0 !important; background-color: white !important; }
-            /* Esconde os cabeçalhos, menus e navegação global do sistema */
             header, nav, aside, [data-sidebar], .print-hidden { display: none !important; }
           `}
         </style>
 
-        {/* CABEÇALHO CLEAN */}
         <div className="flex justify-between items-center border-b border-gray-800 pb-4 mb-6">
-          {/* LOGO DA EMPRESA - IMPACTO (Tamanho Reduzido) */}
           <div className="w-32 h-12 flex items-center justify-start print:color-adjust-exact">
             <img 
               src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd" 
@@ -647,7 +656,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </div>
         </div>
 
-        {/* DADOS DO CLIENTE E DATAS */}
         <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="col-span-3 border border-gray-800 p-4 rounded-sm">
             <h2 className="font-bold text-[9px] uppercase text-gray-500 mb-1 tracking-wider">Dados do Parceiro / Cliente</h2>
@@ -673,7 +681,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </div>
         </div>
 
-        {/* TABELA DE ITENS CLEAN */}
         <div className="border border-gray-800 rounded-sm overflow-hidden mb-6">
           <div className="border-b border-gray-800 p-2 flex items-center gap-2 bg-gray-50/50">
             <Box size={12} className="text-gray-800" />
@@ -701,7 +708,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </div>
         </div>
 
-        {/* NOTAS E FLUXO */}
         <div className="grid grid-cols-12 gap-8 mt-4">
           <div className="col-span-5 flex flex-col">
             <h2 className="font-bold text-[10px] uppercase text-gray-500 mb-2 tracking-wider">Notas de Produção</h2>
@@ -754,7 +760,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </div>
         </div>
 
-        {/* RODAPÉ ASSINATURAS CLEAN */}
         <div className="mt-auto pt-8 border-t border-gray-200">
           <div className="grid grid-cols-2 gap-12 text-center">
             <div className="space-y-1">
