@@ -13,6 +13,7 @@
         "total_value": { "type": "number" },
         "amount_paid": { "type": "number" },
         "balance_due": { "type": "number" },
+        "down_payment": { "type": "number" },
         "installments": { "type": "array" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
@@ -57,6 +58,7 @@
         "amount": { "type": "number" },
         "category": { "type": "string" },
         "status": { "type": "string", "enum": ["pending", "paid"] },
+        "invoiceNumber": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       }
     },

@@ -40,7 +40,9 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
-    match /materials/{document=**} {
+    // Regra explícita para a coleção de materiais e sub-documentos
+    // Comentário para forçar redeploy: Sincronização de Suprimentos v2.0
+    match /materials/{materialId} {
       allow read, write: if isSignedIn();
     }
 
