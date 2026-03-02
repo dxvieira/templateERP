@@ -13,8 +13,8 @@ service cloud.firestore {
     // --- COLLECTION RULES ---
 
     // Regra de Suprimentos e Materiais (Prioritária para resolver erro de listagem)
-    // Deployment trigger: 2025-03-01.02 - Explicit match fix
-    match /materials/{document=**} {
+    // Deployment trigger: 2025-03-01.05 - Explicit document match for list operations
+    match /materials/{materialId} {
       allow read, write: if isSignedIn();
     }
 
