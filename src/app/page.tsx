@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -47,7 +48,7 @@ export default function DashboardPage() {
       
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
 
-      <main className="flex-1 md:ml-64 mt-16 md:mt-0 z-10 pb-24">
+      <main className="flex-1 mt-16 md:mt-0 z-10 pb-24">
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <header className="mb-8 flex flex-col justify-end items-start pt-4">
             <h1 className="text-3xl md:text-4xl font-black text-white tracking-tighter leading-none uppercase">

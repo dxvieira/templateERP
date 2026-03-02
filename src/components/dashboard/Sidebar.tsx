@@ -1,6 +1,7 @@
+
 "use client"
 
-import React, { useState, memo, useCallback } from 'react';
+import React, { useState, memo, useCallback, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   ClipboardList, 
@@ -14,13 +15,17 @@ import {
   LogOut,
   BarChart3,
   FileText,
-  Package
+  Package,
+  Pin,
+  PinOff
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useRouter, usePathname } from 'next/navigation';
-import { useAuth, initiateSignOut } from '@/firebase';
+import { useAuth, initiateSignOut, useFirestore, useUser } from '@/firebase';
+import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
+import Link from 'next/link';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -31,20 +36,57 @@ const navItems = [
   { icon: ClipboardList, label: 'Gestão de Pedidos', path: '/orders' },
   { icon: Users, label: 'Meus Clientes', path: '/clients' },
   { icon: Truck, label: 'Fornecedores', path: '/suppliers' },
+];
+
+const secondaryItems = [
   { icon: Bell, label: 'Notificações', path: '#' },
   { icon: Settings, label: 'Configurações', path: '#' },
 ];
 
 export const DashboardSidebar = memo(() => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
+  const [loadingPref, setLoadingPref] = useState(true);
+  
   const router = useRouter();
   const pathname = usePathname();
   const auth = useAuth();
+  const firestore = useFirestore();
+  const { user } = useUser();
 
-  const handleNavigation = useCallback((path: string) => {
-    if (path !== '#') router.push(path);
-    setIsOpen(false);
-  }, [router]);
+  // 1. CARREGAR PREFERÊNCIA DO FIREBASE
+  useEffect(() => {
+    async function loadPreferences() {
+      if (!user || !firestore) return;
+      try {
+        const prefRef = doc(firestore, 'user_settings', user.uid);
+        const prefSnap = await getDoc(prefRef);
+        if (prefSnap.exists()) {
+          setIsPinned(prefSnap.data().sidebarPinned || false);
+        }
+      } catch (e) {
+        console.error("Erro ao carregar preferências de UI:", e);
+      } finally {
+        setLoadingPref(false);
+      }
+    }
+    loadPreferences();
+  }, [user, firestore]);
+
+  // 2. SALVAR PREFERÊNCIA (FIXAR)
+  const togglePin = async () => {
+    const newState = !isPinned;
+    setIsPinned(newState);
+    if (!user || !firestore) return;
+
+    try {
+      const prefRef = doc(firestore, 'user_settings', user.uid);
+      await setDoc(prefRef, { sidebarPinned: newState }, { merge: true });
+    } catch (e) {
+      console.error("Falha ao salvar preferência de Pin:", e);
+    }
+  };
 
   const handleLogout = () => {
     if (auth) {
@@ -53,100 +95,154 @@ export const DashboardSidebar = memo(() => {
     }
   };
 
+  const isExpanded = isPinned || isHovered;
+
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 h-14 md:hidden bg-[#0A0A0A]/80 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between print:hidden">
+      {/* MOBILE HEADER */}
+      <header className="fixed top-0 left-0 right-0 z-[60] h-14 md:hidden bg-[#0A0A0A]/80 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between print:hidden">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shadow-[0_0_10px_rgba(255,95,31,0.5)]">
             <ClipboardList className="text-black w-4 h-4" />
           </div>
-          <span 
-            className="text-xl text-white tracking-tighter leading-none" 
-            style={{ fontFamily: 'Impact, Arial Black, sans-serif', transform: 'scaleY(1.05)' }}
-          >
-            IMPACTO
-          </span>
+          <span className="text-xl text-white tracking-tighter leading-none font-black">IMPACTO</span>
         </div>
-        
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-10 w-10 rounded-full hover:bg-white/10"
-          onClick={() => setIsOpen(!isOpen)}
-        >
-          {isOpen ? <X className="text-primary w-5 h-5" /> : <Menu className="text-primary w-5 h-5" />}
+        <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(!isMobileOpen)}>
+          {isMobileOpen ? <X className="text-primary w-5 h-5" /> : <Menu className="text-primary w-5 h-5" />}
         </Button>
       </header>
 
-      {isOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
-          onClick={() => setIsOpen(false)}
-        />
+      {/* MOBILE OVERLAY */}
+      {isMobileOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm md:hidden" onClick={() => setIsMobileOpen(false)} />
       )}
 
-      <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-60 glass border-r border-white/5 transition-transform duration-300 ease-in-out md:translate-x-0 will-change-transform shadow-2xl print:hidden",
-        isOpen ? "translate-x-0" : "-translate-x-full"
-      )}>
-        <div className="flex flex-col h-full p-5">
-          <div className="mb-8 hidden md:flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-[0_0_15px_rgba(255,95,31,0.5)] shrink-0">
-              <ClipboardList className="text-black w-6 h-6" />
+      {/* SIDEBAR CONTAINER */}
+      <aside
+        onMouseEnter={() => !isPinned && setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] print:hidden",
+          "bg-[#0A0A0A] border-r border-white/5 shadow-2xl",
+          isExpanded ? "w-64" : "w-20",
+          isMobileOpen ? "translate-x-0 w-64" : "max-md:-translate-x-full"
+        )}
+      >
+        <div className="flex flex-col h-full p-4 overflow-hidden">
+          
+          {/* LOGO AREA */}
+          <div className="flex items-center justify-between mb-8 px-2 h-10">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-[0_0_15px_rgba(255,95,31,0.5)] shrink-0">
+                <ClipboardList className="text-black w-6 h-6" />
+              </div>
+              <div className={cn(
+                "flex flex-col transition-all duration-300 origin-left",
+                isExpanded ? "opacity-100 scale-100" : "opacity-0 scale-0 w-0"
+              )}>
+                <span className="text-xl text-white font-black tracking-tighter leading-none">IMPACTO</span>
+                <span className="text-[8px] font-bold tracking-[0.2em] text-zinc-500 uppercase">Comunicação Visual</span>
+              </div>
             </div>
-            <div className="flex flex-col min-w-0">
-              <span 
-                className="text-2xl text-white tracking-tighter leading-none" 
-                style={{ fontFamily: 'Impact, Arial Black, sans-serif', transform: 'scaleY(1.05)' }}
-              >
-                IMPACTO
-              </span>
-              <span className="text-[10px] font-bold tracking-[0.2em] text-zinc-500 uppercase mt-0.5 whitespace-nowrap">
-                Comunicação Visual
-              </span>
-            </div>
+
+            {/* PIN BUTTON (Desktop Only) */}
+            <button 
+              onClick={togglePin}
+              className={cn(
+                "hidden md:flex p-2 rounded-lg transition-colors hover:bg-white/5",
+                isExpanded ? "opacity-100" : "opacity-0 pointer-events-none",
+                isPinned ? "text-primary" : "text-zinc-600"
+              )}
+            >
+              {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
+            </button>
           </div>
 
-          <nav className="flex-1 space-y-1 overflow-y-auto no-scrollbar">
+          {/* MAIN NAV */}
+          <nav className="flex-1 space-y-1.5 scrollbar-hide overflow-y-auto">
             {navItems.map((item) => (
-              <button
+              <Link
                 key={item.label}
-                onClick={() => handleNavigation(item.path)}
+                href={item.path}
+                prefetch={true}
                 className={cn(
-                  "w-full flex items-center gap-3 px-3 h-10 rounded-lg transition-all duration-200 group relative overflow-hidden",
+                  "flex items-center gap-4 px-3 h-12 rounded-xl transition-all duration-200 group relative",
                   pathname === item.path 
                     ? "bg-primary text-black font-black" 
-                    : "text-muted-foreground hover:bg-white/5 hover:text-white"
+                    : "text-zinc-500 hover:bg-white/5 hover:text-white"
                 )}
               >
-                <item.icon className={cn(
-                  "w-4 h-4",
-                  pathname === item.path ? "text-black" : "group-hover:text-primary transition-colors"
-                )} />
-                <span className="text-xs tracking-tight font-medium whitespace-nowrap">{item.label}</span>
-                {pathname === item.path && (
-                  <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                <div className="shrink-0 w-6 flex justify-center">
+                  <item.icon size={20} className={cn(pathname === item.path ? "text-black" : "group-hover:text-primary transition-colors")} />
+                </div>
+                <span className={cn(
+                  "text-xs tracking-wide whitespace-nowrap transition-all duration-300",
+                  isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 pointer-events-none"
+                )}>
+                  {item.label}
+                </span>
+                {pathname === item.path && <div className="absolute inset-0 bg-white/10 animate-pulse rounded-xl" />}
+              </Link>
+            ))}
+            
+            <Separator className="my-4 bg-white/5 mx-2" />
+
+            {secondaryItems.map((item) => (
+              <Link
+                key={item.label}
+                href={item.path}
+                className={cn(
+                  "flex items-center gap-4 px-3 h-12 rounded-xl transition-all duration-200 group",
+                  "text-zinc-500 hover:bg-white/5 hover:text-white"
                 )}
-              </button>
+              >
+                <div className="shrink-0 w-6 flex justify-center">
+                  <item.icon size={20} className="group-hover:text-zinc-300 transition-colors" />
+                </div>
+                <span className={cn(
+                  "text-xs tracking-wide whitespace-nowrap transition-all duration-300",
+                  isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 pointer-events-none"
+                )}>
+                  {item.label}
+                </span>
+              </Link>
             ))}
           </nav>
 
-          <Separator className="my-4 bg-white/5" />
-          
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 h-10 rounded-lg text-destructive hover:bg-destructive/10 transition-all duration-200 group active:scale-95"
-          >
-            <LogOut className="w-4 h-4 group-hover:scale-110 transition-transform" />
-            <span className="text-xs tracking-tight font-black uppercase">Sair</span>
-          </button>
+          {/* FOOTER / LOGOUT */}
+          <div className="pt-4 border-t border-white/5">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-4 px-3 h-12 rounded-xl text-destructive hover:bg-destructive/10 transition-all duration-200 group"
+            >
+              <div className="shrink-0 w-6 flex justify-center">
+                <LogOut size={20} className="group-hover:scale-110 transition-transform" />
+              </div>
+              <span className={cn(
+                "text-xs font-black uppercase tracking-widest transition-all duration-300",
+                isExpanded ? "opacity-100" : "opacity-0 pointer-events-none"
+              )}>
+                Encerrar
+              </span>
+            </button>
 
-          <div className="pt-4 flex flex-col items-center gap-1 opacity-30">
-            <p className="text-[7px] uppercase tracking-[0.4em] text-white font-black whitespace-nowrap">SISTEMA IMPACTO</p>
-            <p className="text-[6px] uppercase tracking-[0.1em] text-muted-foreground font-mono">Build 2025.02.09</p>
+            {isExpanded && (
+              <div className="mt-4 flex flex-col items-center gap-1 opacity-20 animate-in fade-in duration-500">
+                <p className="text-[7px] uppercase tracking-[0.4em] text-white font-black">SISTEMA IMPACTO</p>
+                <p className="text-[6px] uppercase tracking-[0.1em] text-muted-foreground font-mono">Build 2025.V3</p>
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      </aside>
+
+      {/* SPACER FOR PINNED MODE */}
+      <div 
+        className={cn(
+          "hidden md:block transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
+          isPinned ? "w-64" : "w-20"
+        )} 
+      />
     </>
   );
 });
