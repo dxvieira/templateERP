@@ -1,10 +1,10 @@
+
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   collection, 
   query, 
-  onSnapshot, 
   addDoc, 
   updateDoc, 
   deleteDoc, 
@@ -13,7 +13,7 @@ import {
   where,
   orderBy
 } from 'firebase/firestore';
-import { useFirestore, useUser } from '@/firebase';
+import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Package, 
@@ -49,8 +49,6 @@ export default function MaterialsPage() {
   const { user } = useUser();
   const { toast } = useToast();
 
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -61,29 +59,19 @@ export default function MaterialsPage() {
     category: 'Impressão'
   });
 
-  useEffect(() => {
-    if (!firestore || !user) return;
-
-    const q = query(
+  // Query Memoizada conforme diretrizes
+  const materialsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(
       collection(firestore, 'materials'),
       where('status', '==', 'pending'),
       orderBy('createdAt', 'desc')
     );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setItems(data);
-      setLoading(false);
-    }, (error) => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: 'materials',
-        operation: 'list'
-      }));
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
   }, [firestore, user]);
+
+  // Hook padronizado useCollection
+  const { data: itemsData, isLoading } = useCollection(materialsQuery);
+  const items = itemsData || [];
 
   const handleAddRequest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -184,7 +172,11 @@ export default function MaterialsPage() {
 
         {/* GRID DE CATEGORIAS */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {CATEGORIES.map(cat => {
+          {isLoading ? (
+            <div className="col-span-full flex justify-center py-20">
+              <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            </div>
+          ) : CATEGORIES.map(cat => {
             const config = CATEGORY_CONFIG[cat];
             const Icon = config.icon;
             const categoryItems = items.filter(i => i.category === cat);
@@ -231,7 +223,7 @@ export default function MaterialsPage() {
                       </motion.div>
                     ))}
                   </AnimatePresence>
-                  {categoryItems.length === 0 && !loading && (
+                  {categoryItems.length === 0 && !isLoading && (
                     <div className="py-10 border border-dashed border-zinc-800 rounded-2xl flex flex-col items-center justify-center opacity-20">
                       <Package size={24} className="mb-2" />
                       <span className="text-[8px] font-black uppercase tracking-widest text-center px-4">Sem solicitações pendentes</span>
@@ -246,7 +238,7 @@ export default function MaterialsPage() {
         {/* MODAL DE SOLICITAÇÃO */}
         <AnimatePresence>
           {isModalOpen && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md" onClick={() => setIsModalOpen(false)}>
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}>
               <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-[#09090b] border border-zinc-800 rounded-[2.5rem] shadow-2xl overflow-hidden">
                 <div className="p-8 border-b border-white/5 bg-zinc-900/30 flex justify-between items-center">
                   <div className="flex items-center gap-3">
