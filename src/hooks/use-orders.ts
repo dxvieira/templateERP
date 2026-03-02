@@ -58,7 +58,6 @@ export function useOrders() {
       total: orders.length,
       activeCount: 0,
       weeklyGoalCount: 0,
-      totalRevenue: 0,
       arte: 0,
       impressao: 0,
       serralheria: 0,
@@ -66,19 +65,16 @@ export function useOrders() {
       instalacao: 0,
       concluido: 0,
       trend: {
-        active: '+12%', // Simulação de tendência baseada em dados históricos
-        revenue: '+5.4%'
+        active: '+12%', // Simulação de tendência baseada em dados operacionais
       }
     };
 
     orders.forEach(o => {
       const isDone = ['Concluído', 'Entregue'].includes(o.status);
       const delivery = o.delivery_date || o.deliveryDate || '';
-      const val = Number(o.total_value || o.totalValue || 0);
 
       if (!isDone) {
         s.activeCount++;
-        s.totalRevenue += val;
         
         // Verifica se pertence à meta da semana
         if (delivery) {

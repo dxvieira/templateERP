@@ -71,8 +71,8 @@ export default function DashboardPage() {
             </div>
           </header>
 
-          {/* BARRA DE MÉTRICAS CRÍTICAS */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+          {/* BARRA DE MÉTRICAS CRÍTICAS - AJUSTADA PARA 3 COLUNAS */}
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
             <DashboardStatCard 
               label="Total Ativo" 
               value={stats.activeCount} 
@@ -85,13 +85,6 @@ export default function DashboardPage() {
               value={stats.weeklyGoalCount} 
               icon={Target} 
               trend="Foco"
-              isLoading={isLoading}
-            />
-            <DashboardStatCard 
-              label="Receita Prevista" 
-              value={stats.totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })} 
-              icon={Wallet} 
-              trend={stats.trend.revenue}
               isLoading={isLoading}
             />
             <DashboardStatCard 
