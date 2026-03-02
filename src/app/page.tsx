@@ -3,18 +3,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-  Activity, 
   Loader2,
-  AlertTriangle,
-  Layers,
-  CheckCircle2,
-  Target,
-  Package,
-  TrendingUp,
-  Wallet,
-  Zap
+  Layers
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 
 import { useOrders } from '@/hooks/use-orders';
 import { useUser } from '@/firebase';
@@ -24,7 +15,6 @@ import { ProductionHub } from '@/components/dashboard/ProductionHub';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { WeeklyTargetCard } from '@/components/dashboard/WeeklyTargetCard';
 import { OrderFormModal } from '@/components/dashboard/OrderFormModal';
-import { DashboardStatCard } from '@/components/dashboard/DashboardStatCard';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -59,7 +49,7 @@ export default function DashboardPage() {
 
       <main className="flex-1 md:ml-64 mt-16 md:mt-0 z-10 pb-24">
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <header className="mb-10 flex flex-col justify-end items-start pt-4">
+          <header className="mb-8 flex flex-col justify-end items-start pt-4">
             <h1 className="text-3xl md:text-4xl font-black text-white tracking-tighter leading-none uppercase">
               Central de Comando<span className="text-primary">.</span>
             </h1>
@@ -71,31 +61,7 @@ export default function DashboardPage() {
             </div>
           </header>
 
-          {/* BARRA DE MÉTRICAS CRÍTICAS - AJUSTADA PARA 3 COLUNAS */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
-            <DashboardStatCard 
-              label="Total Ativo" 
-              value={stats.activeCount} 
-              icon={Zap} 
-              trend={stats.trend.active} 
-              isLoading={isLoading}
-            />
-            <DashboardStatCard 
-              label="Meta Semanal" 
-              value={stats.weeklyGoalCount} 
-              icon={Target} 
-              trend="Foco"
-              isLoading={isLoading}
-            />
-            <DashboardStatCard 
-              label="Eficiência" 
-              value={`${stats.total > 0 ? Math.round((stats.concluido / stats.total) * 100) : 0}%`} 
-              icon={TrendingUp} 
-              trend="Status"
-              isLoading={isLoading}
-            />
-          </section>
-
+          {/* PAINÉIS OPERACIONAIS DE TOPO */}
           <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-10">
             <div className="lg:col-span-8 bg-[#0c0c0e] border border-zinc-800/60 rounded-3xl p-8 shadow-xl relative overflow-hidden">
               <ProductionHub stats={stats} />

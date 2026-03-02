@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { doc, serverTimestamp, runTransaction, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { dbService } from '@/services/db-service';
 import { startOfWeek, endOfWeek, isWithinInterval, parseISO } from 'date-fns';
@@ -55,7 +55,6 @@ export function useOrders() {
     const weekEnd = endOfWeek(now);
 
     const s = {
-      total: orders.length,
       activeCount: 0,
       weeklyGoalCount: 0,
       arte: 0,
@@ -63,10 +62,7 @@ export function useOrders() {
       serralheria: 0,
       acabamento: 0,
       instalacao: 0,
-      concluido: 0,
-      trend: {
-        active: '+12%', // Simulação de tendência baseada em dados operacionais
-      }
+      concluido: 0
     };
 
     orders.forEach(o => {
@@ -86,13 +82,14 @@ export function useOrders() {
         }
       }
 
-      // Distribuição por status
+      // Distribuição por status (Alimenta o ProductionHub)
       const status = o.status;
       if (status === 'Arte') s.arte++;
       else if (status === 'Impressão') s.impressao++;
       else if (status === 'Serralheria') s.serralheria++;
       else if (status === 'Acabamento') s.acabamento++;
       else if (status === 'Instalação') s.instalacao++;
+      
       if (isDone) s.concluido++;
     });
 
