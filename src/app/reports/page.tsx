@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -24,6 +23,8 @@ import { ptBR } from 'date-fns/locale';
 import { DashboardSidebar } from '@/components/dashboard/Sidebar';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 // Configuração de Cores para Gráficos (Neon VisComm)
 const PRODUCTION_COLORS: Record<string, string> = {
@@ -164,7 +165,6 @@ export default function ReportsManager() {
           // Tenta encontrar parcelas se for pagamento de conta
           let associatedParcelas = [];
           if (entry.origin === 'CONTAS A PAGAR') {
-             // Busca no grupo de payables que tenha o mesmo fornecedor/descrição aproximada (simplificado)
              const group = Object.values(groups).find((g: any) => entry.description.includes(g.supplier) || entry.description.includes(g.description));
              if (group) {
                associatedParcelas = group.installments.map((p: any) => ({
@@ -210,7 +210,8 @@ export default function ReportsManager() {
     filteredOrders.forEach(o => {
       const val = Number(o.total_value ?? o.totalValue) || 0;
       biTotalValue += val;
-      biStatus[o.status] = (biStatus[o.status] || 0) + 1;
+      const statusName = String(o.status || 'Outros').toUpperCase();
+      biStatus[statusName] = (biStatus[statusName] || 0) + 1;
       biClients[o.client] = (biClients[o.client] || 0) + val;
     });
 
@@ -261,62 +262,115 @@ export default function ReportsManager() {
 
   const handleConfirmPayment = async () => {
     if (!itemToPay || !firestore || !user) return;
-    try {
-      await updateDoc(doc(firestore, 'accounts_payable', itemToPay.id), { status: 'paid', paidAt: serverTimestamp(), paymentDate: new Date().toISOString() });
-      await addDoc(collection(firestore, 'cashflow_manual'), {
-        description: `PGTO: ${itemToPay.supplier || itemToPay.description}`,
-        amount: Number(itemToPay.amount), type: 'expense', date: format(new Date(), 'yyyy-MM-dd'),
-        method: itemToPay.method || 'Boleto', origin: 'CONTAS A PAGAR', createdAt: serverTimestamp(), userId: user.uid
+    
+    const payableRef = doc(firestore, 'accounts_payable', itemToPay.id);
+    const updateData = { status: 'paid', paidAt: serverTimestamp(), paymentDate: new Date().toISOString() };
+    
+    updateDoc(payableRef, updateData)
+      .then(async () => {
+        const cashflowData = {
+          description: `PGTO: ${itemToPay.supplier || itemToPay.description}`,
+          amount: Number(itemToPay.amount), type: 'expense', date: format(new Date(), 'yyyy-MM-dd'),
+          method: itemToPay.method || 'Boleto', origin: 'CONTAS A PAGAR', createdAt: serverTimestamp(), userId: user.uid
+        };
+        await addDoc(collection(firestore, 'cashflow_manual'), cashflowData);
+        toast({ title: "Baixa Confirmada" });
+        setItemToPay(null);
+      })
+      .catch(async () => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: payableRef.path,
+          operation: 'update',
+          requestResourceData: updateData
+        }));
       });
-      toast({ title: "Baixa Confirmada" });
-      setItemToPay(null);
-    } catch (e) { alert("Erro: " + e); }
   };
 
   const handleConfirmDelete = async () => {
     if (!itemToDelete || !firestore) return;
-    try {
-      const collectionName = (itemToDelete.hasOwnProperty('supplier') || itemToDelete.status === 'pending') ? 'accounts_payable' : 'cashflow_manual';
-      await deleteDoc(doc(firestore, collectionName, itemToDelete.id));
-      toast({ title: "Registro Removido" });
-      setItemToDelete(null);
-    } catch (error: any) { alert("Erro ao excluir: " + error.message); }
+    const collectionName = (itemToDelete.hasOwnProperty('supplier') || itemToDelete.status === 'pending') ? 'accounts_payable' : 'cashflow_manual';
+    const itemRef = doc(firestore, collectionName, itemToDelete.id);
+    
+    deleteDoc(itemRef)
+      .then(() => {
+        toast({ title: "Registro Removido" });
+        setItemToDelete(null);
+      })
+      .catch(async () => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: itemRef.path,
+          operation: 'delete'
+        }));
+      });
   };
 
   const handleSaveManualEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firestore || !user) return;
     setIsSubmitting(true);
-    try {
-      await addDoc(collection(firestore, 'cashflow_manual'), { ...cashflowFormData, amount: Number(cashflowFormData.amount), createdAt: serverTimestamp(), userId: user.uid });
-      toast({ title: "Lançamento Efetuado" });
-      setIsCashflowModalOpen(false);
-    } catch (e) { toast({ variant: 'destructive', title: "Erro ao salvar" }); }
-    finally { setIsSubmitting(false); }
+    const entryData = { ...cashflowFormData, amount: Number(cashflowFormData.amount), createdAt: serverTimestamp(), userId: user.uid };
+    
+    addDoc(collection(firestore, 'cashflow_manual'), entryData)
+      .then(() => {
+        toast({ title: "Lançamento Efetuado" });
+        setIsCashflowModalOpen(false);
+      })
+      .catch(async () => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: 'cashflow_manual',
+          operation: 'create',
+          requestResourceData: entryData
+        }));
+      })
+      .finally(() => setIsSubmitting(false));
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!itemToEdit || !itemToEdit.id || !firestore) return;
     setIsSubmitting(true);
-    try {
-      await updateDoc(doc(firestore, 'cashflow_manual', itemToEdit.id), { description: itemToEdit.description, amount: Number(itemToEdit.amount), date: itemToEdit.date, method: itemToEdit.method });
-      toast({ title: "Lançamento Atualizado" });
-      setItemToEdit(null);
-    } catch (e: any) { alert("Erro: " + e.message); } 
-    finally { setIsSubmitting(false); }
+    const entryRef = doc(firestore, 'cashflow_manual', itemToEdit.id);
+    const updateData = { description: itemToEdit.description, amount: Number(itemToEdit.amount), date: itemToEdit.date, method: itemToEdit.method };
+    
+    updateDoc(entryRef, updateData)
+      .then(() => {
+        toast({ title: "Lançamento Atualizado" });
+        setItemToEdit(null);
+      })
+      .catch(async () => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: entryRef.path,
+          operation: 'update',
+          requestResourceData: updateData
+        }));
+      })
+      .finally(() => setIsSubmitting(false));
   };
 
   const handleSaveInstallmentEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!installmentToEdit || !installmentToEdit.id || !firestore) return;
     setIsSubmitting(true);
-    try {
-      await updateDoc(doc(firestore, 'accounts_payable', installmentToEdit.id), { description: installmentToEdit.description || '', amount: Number(installmentToEdit.amount), dueDate: installmentToEdit.dueDate || installmentToEdit.date });
-      toast({ title: "Parcela Atualizada" });
-      setInstallmentToEdit(null);
-    } catch (e: any) { alert("Erro: " + e.message); } 
-    finally { setIsSubmitting(false); }
+    const installmentRef = doc(firestore, 'accounts_payable', installmentToEdit.id);
+    const updateData = { 
+      description: installmentToEdit.description || '', 
+      amount: Number(installmentToEdit.amount), 
+      dueDate: installmentToEdit.dueDate || installmentToEdit.date 
+    };
+    
+    updateDoc(installmentRef, updateData)
+      .then(() => {
+        toast({ title: "Parcela Atualizada" });
+        setInstallmentToEdit(null);
+      })
+      .catch(async () => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: installmentRef.path,
+          operation: 'update',
+          requestResourceData: updateData
+        }));
+      })
+      .finally(() => setIsSubmitting(false));
   };
 
   if (ordersLoading || cashflowLoading || payablesLoading) {
@@ -546,20 +600,22 @@ export default function ReportsManager() {
                 <div className="bg-zinc-950/50 border border-zinc-800 p-6 rounded-3xl relative overflow-hidden flex flex-col items-center">
                   <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-6 flex items-center gap-2 self-start"><PieChartIcon size={14}/> Distribuição de Produção</h3>
                   <div className="h-[320px] w-full relative">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={ordersBI.statusChart} cx="50%" cy="50%" innerRadius={80} outerRadius={100} paddingAngle={5} cornerRadius={10} dataKey="value" strokeWidth={2} onMouseEnter={(_, index) => setActivePieIndex(index)} onMouseLeave={() => setActivePieIndex(null)} labelLine={false} className="outline-none">
-                          {ordersBI.statusChart.map((entry, index) => {
-                            const statusName = entry.name ? String(entry.name).toUpperCase() : '';
-                            const sliceColor = PRODUCTION_COLORS[statusName] || PRODUCTION_COLORS['DEFAULT'];
-                            const isActive = activePieIndex === index;
-                            return <Cell key={`cell-${index}`} fill={sliceColor} fillOpacity={activePieIndex !== null ? (isActive ? 1 : 0.4) : 0.8} stroke={sliceColor} strokeWidth={isActive ? 4 : 2} style={{ filter: isActive ? `drop-shadow(0 0 12px ${sliceColor})` : 'none', transition: 'all 0.3s ease' }} className="outline-none cursor-pointer" />;
-                          })}
-                          <Label content={({ viewBox }) => { if (viewBox && "cx" in viewBox && "cy" in viewBox) { const activeItem = activePieIndex !== null ? ordersBI.statusChart[activePieIndex] : null; const statusName = activeItem?.name ? String(activeItem.name).toUpperCase() : ''; const color = activeItem ? (PRODUCTION_COLORS[statusName] || PRODUCTION_COLORS['DEFAULT']) : '#fff'; return ( <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle"> <tspan x={viewBox.cx} y={viewBox.cy - 20} fill={activeItem ? color : "#71717a"} className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ transition: 'fill 0.3s ease' }}> {activeItem ? statusName : 'TOTAL GERAL'} </tspan> <tspan x={viewBox.cx} y={viewBox.cy + 15} fill="#fff" className="text-5xl font-black tracking-tighter"> {activeItem ? activeItem.value : ordersBI.totalCount} </tspan> <tspan x={viewBox.cx} y={viewBox.cy + 42} fill="#71717a" className="text-[9px] font-bold uppercase tracking-widest"> {activeItem ? `${activeItem.percent}% DO FLUXO` : 'PEDIDOS REGISTRADOS'} </tspan> </text> ) } }} />
-                        </Pie>
-                        <Tooltip content={() => null} />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    {ordersBI.statusChart.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={ordersBI.statusChart} cx="50%" cy="50%" innerRadius={80} outerRadius={100} paddingAngle={5} cornerRadius={10} dataKey="value" strokeWidth={2} onMouseEnter={(_, index) => setActivePieIndex(index)} onMouseLeave={() => setActivePieIndex(null)} labelLine={false} className="outline-none">
+                            {ordersBI.statusChart.map((entry, index) => {
+                              const statusName = entry.name ? String(entry.name).toUpperCase() : '';
+                              const sliceColor = PRODUCTION_COLORS[statusName] || PRODUCTION_COLORS['DEFAULT'];
+                              const isActive = activePieIndex === index;
+                              return <Cell key={`cell-${index}`} fill={sliceColor} fillOpacity={activePieIndex !== null ? (isActive ? 1 : 0.4) : 0.8} stroke={sliceColor} strokeWidth={isActive ? 4 : 2} style={{ filter: isActive ? `drop-shadow(0 0 12px ${sliceColor})` : 'none', transition: 'all 0.3s ease' }} className="outline-none cursor-pointer" />;
+                            })}
+                            <Label content={({ viewBox }) => { if (viewBox && "cx" in viewBox && "cy" in viewBox) { const activeItem = activePieIndex !== null ? ordersBI.statusChart[activePieIndex] : null; const statusName = activeItem?.name ? String(activeItem.name).toUpperCase() : ''; const color = activeItem ? (PRODUCTION_COLORS[statusName] || PRODUCTION_COLORS['DEFAULT']) : '#fff'; return ( <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle"> <tspan x={viewBox.cx} y={viewBox.cy - 20} fill={activeItem ? color : "#71717a"} className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ transition: 'fill 0.3s ease' }}> {activeItem ? statusName : 'TOTAL GERAL'} </tspan> <tspan x={viewBox.cx} y={viewBox.cy + 15} fill="#fff" className="text-5xl font-black tracking-tighter"> {activeItem ? activeItem.value : ordersBI.totalCount} </tspan> <tspan x={viewBox.cx} y={viewBox.cy + 42} fill="#71717a" className="text-[9px] font-bold uppercase tracking-widest"> {activeItem ? `${activePieIndex !== null ? Math.round((ordersBI.statusChart[activePieIndex].value / ordersBI.totalCount) * 100) : 0}% DO FLUXO` : 'PEDIDOS REGISTRADOS'} </tspan> </text> ) } }} />
+                          </Pie>
+                          <Tooltip content={() => null} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : <EmptyState icon={PieChartIcon} text="Dados insuficientes para gráfico" />}
                   </div>
                   <div className="flex flex-wrap justify-center gap-3 mt-6">
                     {ordersBI.statusChart.map((item, index) => {
@@ -572,15 +628,17 @@ export default function ReportsManager() {
                 <div className="bg-zinc-950/50 border border-zinc-800 p-6 rounded-3xl">
                   <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-6 flex items-center gap-2"><UsersIcon size={14}/> Top 5 Clientes (Faturamento)</h3>
                   <div className="h-[250px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={ordersBI.clientChart} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" stroke="#18181b" horizontal={false} />
-                        <XAxis type="number" hide />
-                        <YAxis dataKey="name" type="category" width={100} axisLine={false} tickLine={false} style={{ fontSize: '9px', fontWeight: 'bold', fill: '#71717a', textTransform: 'uppercase' }} />
-                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#09090b', border: '1px solid #27272a', borderRadius: '12px' }} formatter={(value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />
-                        <Bar dataKey="value" fill="#FF5F1F" radius={[0, 4, 4, 0]} barSize={20} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    {ordersBI.clientChart.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={ordersBI.clientChart} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" stroke="#18181b" horizontal={false} />
+                          <XAxis type="number" hide />
+                          <YAxis dataKey="name" type="category" width={100} axisLine={false} tickLine={false} style={{ fontSize: '9px', fontWeight: 'bold', fill: '#71717a', textTransform: 'uppercase' }} />
+                          <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#09090b', border: '1px solid #27272a', borderRadius: '12px' }} formatter={(value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />
+                          <Bar dataKey="value" fill="#FF5F1F" radius={[0, 4, 4, 0]} barSize={20} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : <EmptyState icon={BarChart3} text="Dados insuficientes para ranking" />}
                   </div>
                 </div>
               </div>
@@ -712,7 +770,37 @@ export default function ReportsManager() {
                   )}
                 </div>
                 <div className="p-8 border-t border-white/5">
-                  <button onClick={async () => { setIsSubmitting(true); const groupId = Date.now().toString(); try { for(let i=0; i<previewInstallments.length; i++) { const inst = previewInstallments[i]; await addDoc(collection(firestore, 'accounts_payable'), { supplier: payableFormData.supplier, description: payableFormData.description, amount: Number(inst.amount), dueDate: inst.dueDate, invoiceNumber: payableFormData.numeroNF, status: 'pending', userId: user.uid, groupId: groupId, installmentNumber: i + 1, totalInstallments: previewInstallments.length, createdAt: serverTimestamp() }); } setIsPayableModalOpen(false); setPreviewInstallments([]); setPayableFormData({ supplier: '', description: '', category: 'Suprimentos', amountTotal: '', installments: 1, method: 'Boleto', numeroNF: '' }); toast({title: "Pauta Salva"}); } catch(e) { alert(e); } finally { setIsSubmitting(false); } }} disabled={isSubmitting} className="w-full py-5 bg-primary text-black font-black uppercase tracking-widest rounded-2xl">Efetivar Compromissos</button>
+                  <button onClick={async () => { 
+                    setIsSubmitting(true); 
+                    const groupId = Date.now().toString(); 
+                    try { 
+                      for(let i=0; i<previewInstallments.length; i++) { 
+                        const inst = previewInstallments[i]; 
+                        const payload = { 
+                          supplier: payableFormData.supplier, 
+                          description: payableFormData.description, 
+                          amount: Number(inst.amount), 
+                          dueDate: inst.dueDate, 
+                          invoiceNumber: payableFormData.numeroNF, 
+                          status: 'pending', 
+                          userId: user.uid, 
+                          groupId: groupId, 
+                          installmentNumber: i + 1, 
+                          totalInstallments: previewInstallments.length, 
+                          createdAt: serverTimestamp() 
+                        };
+                        await addDoc(collection(firestore, 'accounts_payable'), payload); 
+                      } 
+                      setIsPayableModalOpen(false); 
+                      setPreviewInstallments([]); 
+                      setPayableFormData({ supplier: '', description: '', category: 'Suprimentos', amountTotal: '', installments: 1, method: 'Boleto', numeroNF: '' }); 
+                      toast({title: "Pauta Salva"}); 
+                    } catch(e) { 
+                      alert(e); 
+                    } finally { 
+                      setIsSubmitting(false); 
+                    } 
+                  }} disabled={isSubmitting} className="w-full py-5 bg-primary text-black font-black uppercase tracking-widest rounded-2xl">Efetivar Compromissos</button>
                 </div>
               </motion.div>
             </div>

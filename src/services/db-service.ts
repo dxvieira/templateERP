@@ -9,6 +9,8 @@ import {
   QuerySnapshot, 
   DocumentData 
 } from 'firebase/firestore';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 /**
  * @fileOverview dbService - Gerenciador de conexão em tempo real com Firestore.
@@ -29,8 +31,12 @@ export const dbService = {
     // O onSnapshot retorna automaticamente a função de cancelamento (unsubscribe)
     return onSnapshot(q, (snapshot) => {
       callback(snapshot);
-    }, (error) => {
-      console.error("Erro no Listener do Firebase:", error);
+    }, async (error) => {
+      const permissionError = new FirestorePermissionError({
+        path: ordersRef.path,
+        operation: 'list',
+      });
+      errorEmitter.emit('permission-error', permissionError);
     });
   }
 };
