@@ -1,88 +1,322 @@
 'use client';
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Target, ChevronLeft, Trophy, Zap, CheckCircle2, ListTodo, Loader2, Plus, Search, X, ArrowRight, Box } from 'lucide-react';
+import { 
+  Target, ChevronLeft, Trophy, Search, X, Loader2, Plus, 
+  CheckCircle2, AlertTriangle, Filter, Calendar, LayoutGrid, ListTodo
+} from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
-import { query, collection, where, doc, updateDoc } from 'firebase/firestore';
+import { query, collection, where, doc, updateDoc, or, and, onSnapshot } from 'firebase/firestore';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { Button } from '@/components/ui/button';
 import { OrderFormModal } from '@/components/dashboard/OrderFormModal';
 import { useToast } from '@/hooks/use-toast';
+import { startOfWeek, endOfWeek, format } from 'date-fns';
+import { cn } from '@/lib/utils';
+
+/**
+ * Utilitário para calcular a janela da semana atual (Segunda a Domingo)
+ */
+const getWeekRange = () => {
+  const now = new Date();
+  const start = startOfWeek(now, { weekStartsOn: 1 });
+  const end = endOfWeek(now, { weekStartsOn: 1 });
+  return {
+    start: format(start, 'yyyy-MM-dd'),
+    end: format(end, 'yyyy-MM-dd')
+  };
+};
 
 export default function WeeklyGoalsPage() {
   const router = useRouter();
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
+  
   const [editingOrder, setEditingOrder] = useState<any>(null);
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // 1. QUERY HÍBRIDA (Firestore v9+)
+  // Busca pedidos por TAG manual OU por DATA na semana atual
   const weeklyQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(collection(firestore, 'orders'), where('weekly_priority', '==', true));
+    const { start, end } = getWeekRange();
+    
+    return query(
+      collection(firestore, 'orders'),
+      or(
+        where('weekly_priority', '==', true),
+        and(
+          where('delivery_date', '>=', start),
+          where('delivery_date', '<=', end)
+        )
+      )
+    );
   }, [firestore, user]);
 
-  const { data: orders, isLoading } = useCollection(weeklyQuery);
-  const availableOrdersQuery = useMemoFirebase(() => {
-    if (!firestore || !user || !isImportModalOpen) return null;
-    return query(collection(firestore, 'orders'), where('status', '!=', 'Entregue'));
-  }, [firestore, user, isImportModalOpen]);
+  const { data: rawOrders, isLoading } = useCollection(weeklyQuery);
 
-  const { data: availableOrders, isLoading: isLoadingAvailable } = useCollection(availableOrdersQuery);
-
-  const handleAddToGoal = useCallback(async (orderId: string) => {
-    if (!firestore) return;
-    updateDoc(doc(firestore, 'orders', orderId), { weekly_priority: true }).then(() => toast({ title: "Adicionado" }));
-  }, [firestore, toast]);
+  // 2. FILTRAGEM EM MEMÓRIA (Client-side)
+  // Remove pedidos finalizados e aplica busca local
+  const { pendingOrders, completedOrders, progress } = useMemo(() => {
+    if (!rawOrders) return { pendingOrders: [], completedOrders: [], progress: 0 };
+    
+    // Filtra apenas o que não está entregue para a lista de "A Fazer"
+    const active = rawOrders.filter(o => !['Entregue'].includes(o.status));
+    const completed = active.filter(o => o.status === 'Concluído');
+    const pending = active.filter(o => o.status !== 'Concluído');
+    
+    const percentage = active.length > 0 ? Math.round((completed.length / active.length) * 100) : 0;
+    
+    return { pendingOrders: pending, completedOrders: completed, progress: percentage };
+  }, [rawOrders]);
 
   const handleRemoveFromGoal = useCallback(async (e: any, orderId: string) => {
     if (e) { e.stopPropagation(); e.preventDefault(); }
     if (!firestore) return;
-    updateDoc(doc(firestore, 'orders', orderId), { weekly_priority: false }).then(() => toast({ title: "Removido" }));
+    
+    updateDoc(doc(firestore, 'orders', orderId), { 
+      weekly_priority: false 
+    }).then(() => {
+      toast({ title: "Prioridade Removida", description: "O item saiu da lista manual." });
+    });
   }, [firestore, toast]);
 
-  const { pendingOrders, completedOrders, progress, totalValue } = useMemo(() => {
-    if (!orders) return { pendingOrders: [], completedOrders: [], progress: 0, totalValue: 0 };
-    const pending = orders.filter(o => !['Concluído', 'Entregue'].includes(o.status));
-    const completed = orders.filter(o => ['Concluído', 'Entregue'].includes(o.status));
-    const percentage = orders.length > 0 ? Math.round((completed.length / orders.length) * 100) : 0;
-    const total = orders.reduce((acc, o) => acc + (Number(o.totalValue || o.total_value) || 0), 0);
-    return { pendingOrders: pending, completedOrders: completed, progress: percentage, totalValue: total };
-  }, [orders]);
-
-  if (isLoading) return <div className="h-full flex items-center justify-center"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>;
+  if (isLoading) return (
+    <div className="h-full flex items-center justify-center">
+      <Loader2 className="w-10 h-10 text-primary animate-spin" />
+    </div>
+  );
 
   return (
-    <div className="p-4 md:p-6 space-y-6 mt-14 md:mt-0 pb-24">
+    <div className="p-4 md:p-8 space-y-8 mt-14 md:mt-0 pb-24 relative">
       <header className="space-y-4">
-        <Button variant="ghost" onClick={() => router.push('/')} className="text-zinc-500 uppercase text-[9px] font-black"><ChevronLeft size={12} /> Terminal</Button>
+        <Button 
+          variant="ghost" 
+          onClick={() => router.push('/')} 
+          className="text-zinc-500 uppercase text-[9px] font-black hover:text-white p-0 h-auto"
+        >
+          <ChevronLeft size={12} /> Voltar ao Terminal
+        </Button>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-          <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600 uppercase">Meta da Semana</h1>
-          <Button onClick={() => setIsImportModalOpen(true)} className="bg-primary text-black font-black px-6 h-12 rounded-full uppercase text-[10px]">Gerenciar Lista</Button>
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Target size={16} className="text-primary" />
+              <span className="text-primary text-[10px] font-black uppercase tracking-[0.3em]">Missão Semanal</span>
+            </div>
+            <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tighter">
+              Meta da <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">Semana</span>
+            </h1>
+          </div>
+          <Button 
+            onClick={() => setIsManageModalOpen(true)} 
+            className="bg-primary text-black font-black px-8 h-14 rounded-2xl uppercase text-[10px] tracking-widest shadow-[0_0_25px_rgba(255,95,31,0.4)] transition-all hover:scale-105 active:scale-95"
+          >
+            <LayoutGrid size={16} className="mr-2" /> Gerenciar Lista
+          </Button>
         </div>
       </header>
 
-      <section className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6">
-        <div className="flex justify-between items-end mb-5">
-          <div className="flex items-baseline gap-2"><span className="text-5xl font-black text-white">{completedOrders.length}</span><span className="text-xl text-zinc-600 font-black">/ {orders?.length || 0}</span></div>
-          <div className="p-4 rounded-xl bg-primary text-black"><Trophy size={24} /></div>
+      {/* PAINEL DE PROGRESSO */}
+      <section className="bg-zinc-900/40 border border-zinc-800 rounded-3xl p-8 relative overflow-hidden group">
+        <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+          <Trophy size={120} strokeWidth={1} />
         </div>
-        <div className="h-6 w-full bg-[#050505] rounded-lg overflow-hidden border border-zinc-800"><motion.div initial={{ width: 0 }} animate={{ width: `${progress}%` }} className="h-full bg-gradient-to-r from-orange-900 to-primary" /></div>
+        
+        <div className="flex justify-between items-end mb-6 relative z-10">
+          <div>
+            <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.3em] mb-1">Status da Expedição</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-6xl font-black text-white tracking-tighter">{completedOrders.length}</span>
+              <span className="text-2xl text-zinc-600 font-black">/ {pendingOrders.length + completedOrders.length}</span>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="text-2xl font-black text-primary font-mono">{progress}%</span>
+            <p className="text-[9px] text-zinc-500 font-bold uppercase">Eficiência</p>
+          </div>
+        </div>
+        
+        <div className="h-4 w-full bg-black/40 rounded-full overflow-hidden border border-zinc-800 p-0.5 relative z-10">
+          <motion.div 
+            initial={{ width: 0 }} 
+            animate={{ width: `${progress}%` }} 
+            className="h-full bg-gradient-to-r from-orange-600 to-primary rounded-full shadow-[0_0_15px_rgba(255,95,31,0.5)]" 
+          />
+        </div>
       </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {pendingOrders.map(order => (
-          <div key={order.id} className="relative group/card">
-            <OrderCard order={order} onClick={setEditingOrder} />
-            <button onClick={(e) => handleRemoveFromGoal(e, order.id)} className="absolute -top-2 -right-2 p-1.5 bg-zinc-900 border border-zinc-800 rounded-full text-zinc-500 hover:text-red-500 opacity-0 group-hover/card:opacity-100"><X size={12} /></button>
-          </div>
-        ))}
+      {/* LISTA DE PEDIDOS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <AnimatePresence mode='popLayout'>
+          {pendingOrders.length > 0 ? pendingOrders.map(order => (
+            <motion.div 
+              layout 
+              initial={{ opacity: 0, scale: 0.95 }} 
+              animate={{ opacity: 1, scale: 1 }} 
+              exit={{ opacity: 0, scale: 0.95 }}
+              key={order.id} 
+              className="relative group/card"
+            >
+              <OrderCard order={order} onClick={setEditingOrder} />
+              <button 
+                onClick={(e) => handleRemoveFromGoal(e, order.id)} 
+                className="absolute -top-2 -right-2 p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-500 hover:text-red-500 opacity-0 group-hover/card:opacity-100 transition-all hover:scale-110 shadow-xl"
+                title="Remover da lista manual"
+              >
+                <X size={14} strokeWidth={3} />
+              </button>
+            </motion.div>
+          )) : (
+            <div className="col-span-full py-20 text-center border-2 border-dashed border-zinc-800 rounded-[2.5rem] bg-zinc-900/10">
+              <CheckCircle2 size={48} className="mx-auto mb-4 text-emerald-500/20" />
+              <p className="text-[10px] text-zinc-600 font-black uppercase tracking-[0.4em]">Fila da Semana Concluída</p>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
 
-      <OrderFormModal isOpen={!!editingOrder} order={editingOrder} onClose={() => setEditingOrder(null)} />
+      <OrderFormModal 
+        isOpen={!!editingOrder} 
+        order={editingOrder} 
+        onClose={() => setEditingOrder(null)} 
+      />
+
+      <ManageGoalsModal 
+        isOpen={isManageModalOpen} 
+        onClose={() => setIsManageModalOpen(false)} 
+      />
+    </div>
+  );
+}
+
+/**
+ * COMPONENTE: MODAL DE GERENCIAMENTO DE LISTA
+ */
+function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const firestore = useFirestore();
+  const { user } = useUser();
+  const [search, setSearch] = useState('');
+  const [allOrders, setAllOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Busca todos os pedidos ativos para seleção
+  useEffect(() => {
+    if (!firestore || !user || !isOpen) return;
+    
+    setLoading(true);
+    const q = query(collection(firestore, 'orders'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Filtra apenas o que não está entregue
+      setAllOrders(docs.filter(o => o.status !== 'Entregue'));
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [firestore, user, isOpen]);
+
+  const filtered = useMemo(() => {
+    const term = search.toLowerCase();
+    return allOrders.filter(o => 
+      o.client?.toLowerCase().includes(term) || 
+      o.id?.toLowerCase().includes(term)
+    ).sort((a, b) => (a.client || '').localeCompare(b.client || ''));
+  }, [allOrders, search]);
+
+  const togglePriority = async (order: any) => {
+    if (!firestore) return;
+    const newState = !order.weekly_priority;
+    updateDoc(doc(firestore, 'orders', order.id), { 
+      weekly_priority: newState 
+    });
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+      <motion.div 
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-[#09090b] w-full max-w-2xl border border-zinc-800 rounded-[2.5rem] shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
+      >
+        <div className="p-6 border-b border-zinc-800 bg-zinc-900/30 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-black text-white uppercase tracking-tighter">Gerenciar Produção</h2>
+            <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Selecione pedidos para prioridade semanal</p>
+          </div>
+          <button onClick={onClose} className="p-2 text-zinc-500 hover:text-white bg-white/5 rounded-full"><X size={20}/></button>
+        </div>
+
+        <div className="p-6 space-y-6 flex-1 overflow-hidden flex flex-col">
+          <div className="relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-primary transition-colors" size={18} />
+            <input 
+              type="text" 
+              placeholder="Buscar Cliente ou OS..." 
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl py-4 pl-12 pr-4 text-white text-sm focus:border-primary/50 outline-none transition-all"
+            />
+          </div>
+
+          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2">
+            {loading ? (
+              <div className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-zinc-700" /></div>
+            ) : filtered.length > 0 ? filtered.map(order => {
+              const isPriority = order.weekly_priority === true;
+              return (
+                <div 
+                  key={order.id} 
+                  className={cn(
+                    "flex items-center justify-between p-4 rounded-2xl border transition-all group",
+                    isPriority ? "bg-primary/5 border-primary/20" : "bg-zinc-900/30 border-zinc-800 hover:border-zinc-700"
+                  )}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono font-bold text-zinc-500">#{order.id.slice(-6)}</span>
+                      <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">{order.status}</span>
+                    </div>
+                    <h4 className="text-sm font-bold text-white uppercase truncate mt-0.5">{order.client}</h4>
+                  </div>
+                  
+                  <button 
+                    onClick={() => togglePriority(order)}
+                    className={cn(
+                      "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                      isPriority 
+                        ? "bg-primary text-black shadow-[0_0_15px_rgba(255,95,31,0.3)]" 
+                        : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white"
+                    )}
+                  >
+                    {isPriority ? 'Prioridade' : 'Adicionar'}
+                  </button>
+                </div>
+              );
+            }) : (
+              <div className="py-20 text-center text-zinc-600">
+                <AlertTriangle size={32} className="mx-auto mb-3 opacity-20" />
+                <p className="text-[10px] font-black uppercase tracking-widest">Nenhum pedido ativo encontrado</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-zinc-800 bg-zinc-900/30 text-center">
+          <button 
+            onClick={onClose} 
+            className="w-full py-4 bg-white text-black font-black uppercase text-[10px] tracking-widest rounded-2xl hover:bg-primary transition-all active:scale-95"
+          >
+            Concluir Ajustes
+          </button>
+        </div>
+      </motion.div>
     </div>
   );
 }
