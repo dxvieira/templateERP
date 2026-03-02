@@ -209,40 +209,74 @@ export default function ReportsManager() {
     deleteDoc(doc(firestore, coll, itemToDelete.id)).then(() => { toast({ title: "Removido" }); setItemToDelete(null); });
   };
 
-  // FUNÇÃO DE EXPORTAÇÃO CSV
+  /**
+   * FUNÇÃO DE EXPORTAÇÃO CSV OTIMIZADA PARA EXCEL (PT-BR)
+   */
   const exportToCSV = () => {
     if (!reportData) return;
 
-    let csvContent = "data:text/csv;charset=utf-8,";
-    let filename = `relatorio-${activeTab.toLowerCase()}-${selectedMonth}.csv`;
+    // Helper para escapar strings no CSV (Aspas duplas e substituição de aspas internas)
+    const escapeCSV = (val: any) => {
+      if (val === null || val === undefined) return '';
+      const str = String(val).replace(/\n/g, ' ').replace(/\r/g, '');
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    let csvContent = "";
+    const delimiter = ";"; // Obrigatório para Excel pt-BR separar colunas automaticamente
+    let filename = `impacto-relatorio-${activeTab.toLowerCase()}-${selectedMonth}.csv`;
 
     if (activeTab === 'FLUXO') {
-      csvContent += "Data,Descricao,Metodo,Tipo,Valor\n";
+      csvContent += `Data${delimiter}Descrição${delimiter}Método${delimiter}Tipo${delimiter}Valor\n`;
       reportData.transactions.forEach(t => {
-        csvContent += `${format(parseISO(t.date), 'dd/MM/yyyy')},"${t.description}",${t.method},${t.type === 'income' ? 'Entrada' : 'Saida'},${t.amount}\n`;
+        const date = format(parseISO(t.date), 'dd/MM/yyyy');
+        const desc = escapeCSV(t.description);
+        const method = escapeCSV(t.method);
+        const type = t.type === 'income' ? 'Entrada' : 'Saída';
+        const amount = t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        csvContent += `${date}${delimiter}${desc}${delimiter}${method}${delimiter}${type}${delimiter}${amount}\n`;
       });
     } else if (activeTab === 'CONTAS') {
-      csvContent += "Fornecedor,Descricao,Vencimento,Valor,Status\n";
+      csvContent += `Fornecedor${delimiter}Descrição${delimiter}Vencimento${delimiter}Valor${delimiter}Status\n`;
       reportData.groupedPayables.forEach((g: any) => {
         g.installments.forEach((p: any) => {
-          csvContent += `"${g.supplier}","${g.description}",${format(parseISO(p.dueDate), 'dd/MM/yyyy')},${p.amount},${p.status === 'paid' ? 'Pago' : 'Pendente'}\n`;
+          const supplier = escapeCSV(g.supplier);
+          const desc = escapeCSV(g.description || p.description);
+          const dueDate = format(parseISO(p.dueDate), 'dd/MM/yyyy');
+          const amount = cleanCurrency(p.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+          const status = p.status === 'paid' ? 'Pago' : 'Pendente';
+          csvContent += `${supplier}${delimiter}${desc}${delimiter}${dueDate}${delimiter}${amount}${delimiter}${status}\n`;
         });
       });
     } else if (activeTab === 'PEDIDOS') {
-      csvContent += "OS,Cliente,Valor Total,Status,Entrega\n";
+      csvContent += `OS${delimiter}Cliente${delimiter}Valor Total${delimiter}Status${delimiter}Entrega\n`;
       reportData.ordersBI.filteredOrders.forEach((o: any) => {
-        csvContent += `${o.id},"${o.client}",${cleanCurrency(o.total_value || o.totalValue)},${o.status},${o.delivery_date || o.deliveryDate}\n`;
+        const os = escapeCSV(o.id);
+        const client = escapeCSV(o.client);
+        const total = cleanCurrency(o.total_value || o.totalValue).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        const status = escapeCSV(o.status);
+        const delivery = o.delivery_date || o.deliveryDate || '--';
+        csvContent += `${os}${delimiter}${client}${delimiter}${total}${delimiter}${status}${delimiter}${delivery}\n`;
       });
     }
 
-    const encodedUri = encodeURI(csvContent);
+    // Adiciona o BOM (Byte Order Mark) para UTF-8 para que o Excel reconheça acentuação pt-BR
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", url);
     link.setAttribute("download", filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast({ title: "Exportação Concluída", description: "O arquivo CSV foi gerado com sucesso." });
+    URL.revokeObjectURL(url);
+
+    toast({ 
+      title: "Exportação Concluída", 
+      description: "O arquivo CSV foi otimizado para o Microsoft Excel." 
+    });
   };
 
   if (!reportData) return <div className="h-full flex items-center justify-center"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>;
