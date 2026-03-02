@@ -44,10 +44,6 @@ export interface UserHookResult {
   userError: Error | null;
 }
 
-/**
- * FirebaseContext - Single Source of Truth para Autenticação e Serviços.
- * Centraliza o estado para evitar re-checks de Auth em cada navegação.
- */
 export const FirebaseContext = createContext<FirebaseContextState | undefined>(undefined);
 
 export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
@@ -63,19 +59,15 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   });
 
   useEffect(() => {
-    if (!auth) {
-      setUserAuthState({ user: null, isUserLoading: false, userError: new Error("Auth service not provided.") });
-      return;
-    }
+    if (!auth) return;
 
-    // O onAuthStateChanged é registrado apenas UMA vez no ciclo de vida da aplicação
+    // Persistência de Auth instantânea via Contexto Global
     const unsubscribe = onAuthStateChanged(
       auth,
       (firebaseUser) => {
         setUserAuthState({ user: firebaseUser, isUserLoading: false, userError: null });
       },
       (error) => {
-        console.error("FirebaseProvider: onAuthStateChanged error:", error);
         setUserAuthState({ user: null, isUserLoading: false, userError: error });
       }
     );
@@ -99,6 +91,11 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   return (
     <FirebaseContext.Provider value={contextValue}>
       <FirebaseErrorListener />
+      {/* 
+        Renderização imediata: 
+        O children é montado sem aguardar o Auth, permitindo que o cache do Firestore 
+        popule a tela instantaneamente.
+      */}
       {children}
     </FirebaseContext.Provider>
   );
@@ -124,9 +121,6 @@ export const useAuth = (): Auth => useFirebase().auth;
 export const useFirestore = (): Firestore => useFirebase().firestore;
 export const useFirebaseApp = (): FirebaseApp => useFirebase().firebaseApp;
 
-/**
- * Hook para memoizar referências do Firestore com a flag necessária para useCollection/useDoc.
- */
 export function useMemoFirebase<T>(factory: () => T, deps: DependencyList): T {
   return useMemo(() => {
     const result = factory();

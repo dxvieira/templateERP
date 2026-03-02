@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, memo, useEffect } from 'react';
+import React, { useState, memo, useEffect, useCallback } from 'react';
 import { 
   LayoutDashboard, 
   ClipboardList, 
@@ -42,10 +42,6 @@ const secondaryItems = [
   { icon: Settings, label: 'Configurações', path: '#' },
 ];
 
-/**
- * Sidebar Otimizada para Performance.
- * Utiliza next/link com prefetch agressivo e router prefetch em hover.
- */
 export const DashboardSidebar = memo(() => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -66,9 +62,7 @@ export const DashboardSidebar = memo(() => {
         if (prefSnap.exists()) {
           setIsPinned(prefSnap.data().sidebarPinned || false);
         }
-      } catch (e) {
-        // Erro silencioso em produção para não bloquear UI
-      }
+      } catch (e) {}
     }
     loadPreferences();
   }, [user, firestore]);
@@ -77,7 +71,6 @@ export const DashboardSidebar = memo(() => {
     const newState = !isPinned;
     setIsPinned(newState);
     if (!user || !firestore) return;
-
     try {
       const prefRef = doc(firestore, 'user_settings', user.uid);
       await setDoc(prefRef, { sidebarPinned: newState }, { merge: true });
@@ -93,13 +86,18 @@ export const DashboardSidebar = memo(() => {
     }
   };
 
+  const handleMouseEnter = useCallback((path: string) => {
+    if (path !== '#') {
+      router.prefetch(path);
+    }
+  }, [router]);
+
   const isExpanded = isPinned || isHovered;
 
   if (pathname === '/login') return null;
 
   return (
     <>
-      {/* MOBILE HEADER */}
       <header className="fixed top-0 left-0 right-0 z-[110] h-14 md:hidden bg-[#0A0A0A]/80 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between print:hidden">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shadow-[0_0_10px_rgba(255,95,31,0.5)]">
@@ -112,12 +110,10 @@ export const DashboardSidebar = memo(() => {
         </Button>
       </header>
 
-      {/* MOBILE OVERLAY */}
       {isMobileOpen && (
         <div className="fixed inset-0 z-[105] bg-black/60 backdrop-blur-sm md:hidden" onClick={() => setIsMobileOpen(false)} />
       )}
 
-      {/* SIDEBAR CONTAINER */}
       <aside
         onMouseEnter={() => !isPinned && setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -129,7 +125,6 @@ export const DashboardSidebar = memo(() => {
         )}
       >
         <div className="flex flex-col h-full p-4 overflow-x-hidden scrollbar-hide">
-          
           <div className="flex items-center justify-between mb-8 px-2 h-10 overflow-hidden shrink-0">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-[0_0_15px_rgba(255,95,31,0.5)] shrink-0">
@@ -143,15 +138,7 @@ export const DashboardSidebar = memo(() => {
                 <span className="text-[8px] font-bold tracking-[0.2em] text-zinc-500 uppercase whitespace-nowrap">Comunicação Visual</span>
               </div>
             </div>
-
-            <button 
-              onClick={togglePin}
-              className={cn(
-                "hidden md:flex p-2 rounded-lg transition-colors hover:bg-white/5",
-                isExpanded ? "opacity-100" : "opacity-0 pointer-events-none",
-                isPinned ? "text-primary" : "text-zinc-600"
-              )}
-            >
+            <button onClick={togglePin} className={cn("hidden md:flex p-2 rounded-lg transition-colors hover:bg-white/5", isExpanded ? "opacity-100" : "opacity-0 pointer-events-none", isPinned ? "text-primary" : "text-zinc-600")}>
               {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
             </button>
           </div>
@@ -163,7 +150,7 @@ export const DashboardSidebar = memo(() => {
                 href={item.path}
                 prefetch={true}
                 onClick={() => setIsMobileOpen(false)}
-                onMouseEnter={() => router.prefetch(item.path)}
+                onMouseEnter={() => handleMouseEnter(item.path)}
                 className={cn(
                   "flex items-center gap-4 px-3 h-12 rounded-xl transition-all duration-200 group relative shrink-0",
                   pathname === item.path 
@@ -174,36 +161,25 @@ export const DashboardSidebar = memo(() => {
                 <div className="shrink-0 w-6 flex justify-center">
                   <item.icon size={20} className={cn(pathname === item.path ? "text-black" : "group-hover:text-primary transition-colors")} />
                 </div>
-                <span className={cn(
-                  "text-xs tracking-wide whitespace-nowrap transition-all duration-300",
-                  isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 pointer-events-none"
-                )}>
+                <span className={cn("text-xs tracking-wide whitespace-nowrap transition-all duration-300", isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 pointer-events-none")}>
                   {item.label}
                 </span>
                 {pathname === item.path && <div className="absolute inset-0 bg-white/10 animate-pulse rounded-xl" />}
               </Link>
             ))}
-            
             <Separator className="my-4 bg-white/5 mx-2" />
-
             {secondaryItems.map((item) => (
               <Link
                 key={item.label}
                 href={item.path}
                 prefetch={true}
-                onMouseEnter={() => router.prefetch(item.path)}
-                className={cn(
-                  "flex items-center gap-4 px-3 h-12 rounded-xl transition-all duration-200 group shrink-0",
-                  "text-zinc-500 hover:bg-white/5 hover:text-white"
-                )}
+                onMouseEnter={() => handleMouseEnter(item.path)}
+                className={cn("flex items-center gap-4 px-3 h-12 rounded-xl transition-all duration-200 group shrink-0", "text-zinc-500 hover:bg-white/5 hover:text-white")}
               >
                 <div className="shrink-0 w-6 flex justify-center">
                   <item.icon size={20} className="group-hover:text-zinc-300 transition-colors" />
                 </div>
-                <span className={cn(
-                  "text-xs tracking-wide whitespace-nowrap transition-all duration-300",
-                  isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 pointer-events-none"
-                )}>
+                <span className={cn("text-xs tracking-wide whitespace-nowrap transition-all duration-300", isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 pointer-events-none")}>
                   {item.label}
                 </span>
               </Link>
@@ -211,38 +187,15 @@ export const DashboardSidebar = memo(() => {
           </nav>
 
           <div className="pt-4 border-t border-white/5 overflow-hidden shrink-0">
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center gap-4 px-3 h-12 rounded-xl text-destructive hover:bg-destructive/10 transition-all duration-200 group"
-            >
-              <div className="shrink-0 w-6 flex justify-center">
-                <LogOut size={20} className="group-hover:scale-110 transition-transform" />
-              </div>
-              <span className={cn(
-                "text-xs font-black uppercase tracking-widest transition-all duration-300",
-                isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-10 pointer-events-none"
-              )}>
-                Encerrar
-              </span>
+            <button onClick={handleLogout} className="w-full flex items-center gap-4 px-3 h-12 rounded-xl text-destructive hover:bg-destructive/10 transition-all duration-200 group">
+              <div className="shrink-0 w-6 flex justify-center"><LogOut size={20} className="group-hover:scale-110 transition-transform" /></div>
+              <span className={cn("text-xs font-black uppercase tracking-widest transition-all duration-300", isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-10 pointer-events-none")}>Encerrar</span>
             </button>
-
-            {isExpanded && (
-              <div className="mt-4 flex flex-col items-center gap-1 opacity-20 animate-in fade-in duration-500">
-                <p className="text-[7px] uppercase tracking-[0.4em] text-white font-black">SISTEMA IMPACTO</p>
-                <p className="text-[6px] uppercase tracking-[0.1em] text-muted-foreground font-mono">Build 2025.V3</p>
-              </div>
-            )}
           </div>
         </div>
       </aside>
 
-      {/* SPACER FOR PINNED MODE */}
-      <div 
-        className={cn(
-          "hidden md:block transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] shrink-0",
-          isPinned ? "w-64" : "w-20"
-        )} 
-      />
+      <div className={cn("hidden md:block transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] shrink-0", isPinned ? "w-64" : "w-20")} />
     </>
   );
 });

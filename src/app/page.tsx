@@ -2,10 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-  Loader2,
-  Layers
-} from 'lucide-react';
+import { Layers } from 'lucide-react';
 
 import { useOrders } from '@/hooks/use-orders';
 import { useUser } from '@/firebase';
@@ -23,6 +20,7 @@ export default function DashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
 
+  // Redirecionamento silencioso em background
   useEffect(() => {
     if (!isUserLoading && !user) router.replace('/login');
   }, [user, isUserLoading, router]);
@@ -31,14 +29,6 @@ export default function DashboardPage() {
     setEditingOrder(order);
     setIsModalOpen(true);
   }, []);
-
-  if (isUserLoading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-primary animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="p-4 md:p-8 space-y-8 mt-14 md:mt-0">
@@ -56,7 +46,6 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* PAINÉIS OPERACIONAIS DE TOPO */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 bg-[#0c0c0e] border border-zinc-800/60 rounded-3xl p-8 shadow-xl relative overflow-hidden">
           <ProductionHub stats={stats} />
@@ -66,7 +55,6 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* LISTAGEM DE PROTOCOLOS */}
       <div className="space-y-10">
         <section className="space-y-4">
           <div className="flex items-center gap-3 px-2 border-b border-white/5 pb-3">
@@ -75,15 +63,11 @@ export default function DashboardPage() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-            {isLoading ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-32 bg-zinc-900/50 border border-zinc-800 rounded-2xl animate-pulse" />
-              ))
-            ) : orders.filter(o => !['Concluído', 'Entregue'].includes(o.status)).length > 0 ? (
+            {orders.filter(o => !['Concluído', 'Entregue'].includes(o.status)).length > 0 ? (
               orders.filter(o => !['Concluído', 'Entregue'].includes(o.status)).map((order) => (
                 <OrderCard key={order.id} order={order} onClick={handleEditOrder} />
               ))
-            ) : (
+            ) : !isLoading && (
               <div className="col-span-full py-12 text-center border-2 border-dashed border-zinc-800 rounded-3xl bg-zinc-900/10">
                 <p className="text-[10px] text-zinc-600 font-black uppercase tracking-[0.4em]">Fila Nominal Desimpedida</p>
               </div>
