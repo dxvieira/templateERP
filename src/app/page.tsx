@@ -53,16 +53,16 @@ export default function DashboardPage() {
     <div className="p-4 md:p-8 space-y-8 mt-14 md:mt-0">
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
 
-      {/* HEADER REFATORADO: ALINHAMENTO COM COLUNA DA DIREITA */}
+      {/* HEADER REFATORADO: ALINHAMENTO À DIREITA DO CARD */}
       <header className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="hidden lg:block lg:col-span-8" />
-        <div className="lg:col-span-4 flex justify-start items-center">
+        <div className="lg:col-span-4 flex justify-end items-center">
           <div className="relative w-48 h-12">
             <Image 
               src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd"
               alt="Logo IMPACTO"
               fill
-              className="object-contain object-left"
+              className="object-contain object-right"
               priority
             />
           </div>
