@@ -13,7 +13,8 @@ import {
   Users,
   LogOut,
   BarChart3,
-  FileText
+  FileText,
+  Package
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,7 @@ const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: Target, label: 'Meta da Semana', path: '/goals' },
   { icon: BarChart3, label: 'Relatórios Flux', path: '/reports' },
+  { icon: Package, label: 'Suprimentos', path: '/materials' },
   { icon: FileText, label: 'Central Fiscal', path: '/fiscal' },
   { icon: ClipboardList, label: 'Gestão de Pedidos', path: '/orders' },
   { icon: Users, label: 'Meus Clientes', path: '/clients' },
