@@ -206,6 +206,22 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     const valuePerInstallment = Number((saldoDevedor / count).toFixed(2));
     
     const newInstallments = [];
+    const hoje = new Date().toISOString().split('T')[0];
+
+    // 1. GERA A PARCELA DE ENTRADA (JÁ LIQUIDADA)
+    if (entrada > 0) {
+      newInstallments.push({
+        id: "Entrada",
+        uid: generateUid(),
+        amount: entrada,
+        due_date: hoje,
+        status: 'paid',
+        type: genConfig.type === 'Dinheiro/Pix' ? 'Dinheiro/Pix' : 'Pix',
+        payment_method: "Caixa Interno",
+        paid_date: hoje
+      });
+    }
+
     const start = parseISO(genConfig.startDate);
 
     for (let i = 0; i < count; i++) {
