@@ -60,9 +60,14 @@ export default function MaterialsPage() {
     category: 'Impressão'
   });
 
-  // Query Memoizada com proteção contra Race Condition
+  // Query Memoizada com proteção robusta contra Race Condition
+  // A query só é gerada se o usuário estiver autenticado e o estado de carregamento finalizado
   const materialsQuery = useMemoFirebase(() => {
     if (!firestore || !user || isUserLoading) return null;
+    
+    // Proteção adicional: garante que temos um UID válido antes de tentar a listagem
+    if (!user.uid) return null;
+
     return query(
       collection(firestore, 'materials'),
       where('status', '==', 'pending'),
@@ -70,7 +75,7 @@ export default function MaterialsPage() {
     );
   }, [firestore, user, isUserLoading]);
 
-  // Hook padronizado useCollection
+  // Hook padronizado useCollection - Desativa automaticamente se materialsQuery for null
   const { data: itemsData, isLoading: isCollectionLoading } = useCollection(materialsQuery);
   const items = itemsData || [];
 
@@ -132,7 +137,9 @@ export default function MaterialsPage() {
     }
   };
 
-  // --- EARLY RETURN: AGUARDANDO AUTENTICAÇÃO ---
+  // --- EARLY RETURN: BLOQUEIO DE ACESSO GLOBAL PREMATURO ---
+  // Impede que qualquer parte do componente que dependa do Firestore seja renderizada
+  // até que o Auth esteja resolvido.
   if (isUserLoading) {
     return (
       <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-4">
