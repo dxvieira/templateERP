@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Target, ChevronLeft, Trophy, Search, X, Loader2, Plus, 
-  CheckCircle2, AlertTriangle, Filter, Calendar, LayoutGrid, ListTodo
+  CheckCircle2, AlertTriangle, LayoutGrid
 } from 'lucide-react';
-import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
-import { query, collection, where, doc, updateDoc, or, and, onSnapshot } from 'firebase/firestore';
+import { useFirestore, useUser } from '@/firebase';
+import { query, collection, where, doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { Button } from '@/components/ui/button';
 import { OrderFormModal } from '@/components/dashboard/OrderFormModal';
@@ -23,9 +23,13 @@ const getWeekRange = () => {
   const now = new Date();
   const start = startOfWeek(now, { weekStartsOn: 1 });
   const end = endOfWeek(now, { weekStartsOn: 1 });
+  // Ajuste para garantir que o fim da semana seja o domingo
+  const sunday = new Date(end);
+  sunday.setDate(sunday.getDate() + 6);
+  
   return {
     start: format(start, 'yyyy-MM-dd'),
-    end: format(end, 'yyyy-MM-dd')
+    end: format(sunday, 'yyyy-MM-dd')
   };
 };
 
@@ -37,42 +41,67 @@ export default function WeeklyGoalsPage() {
   
   const [editingOrder, setEditingOrder] = useState<any>(null);
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // ESTADO DE ORDENS CONSOLIDADO (DEDUP)
+  const [ordersMap, setOrdersMap] = useState<Record<string, any>>({});
 
-  // 1. QUERY HÍBRIDA (Firestore v9+)
-  // Busca pedidos por TAG manual OU por DATA na semana atual
-  const weeklyQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+  /**
+   * ESTRATÉGIA FAN-OUT / MERGE
+   * Executa duas queries simples e mescla os resultados no Front-end para evitar erros de índice composto.
+   */
+  useEffect(() => {
+    if (!firestore || !user) return;
+
+    setIsLoading(true);
     const { start, end } = getWeekRange();
+    const ordersRef = collection(firestore, 'orders');
+
+    // 1. QUERY DE PRIORIDADE MANUAL
+    const qManual = query(ordersRef, where('weekly_priority', '==', true));
     
-    return query(
-      collection(firestore, 'orders'),
-      or(
-        where('weekly_priority', '==', true),
-        and(
-          where('delivery_date', '>=', start),
-          where('delivery_date', '<=', end)
-        )
-      )
+    // 2. QUERY DE JANELA TEMPORAL
+    const qTemporal = query(
+      ordersRef, 
+      where('delivery_date', '>=', start),
+      where('delivery_date', '<=', end)
     );
+
+    const results: Record<string, any> = {};
+
+    const handleSnapshot = (snapshot: any) => {
+      snapshot.docs.forEach((doc: any) => {
+        results[doc.id] = { id: doc.id, ...doc.data() };
+      });
+      // Atualiza o estado consolidado (O React lida com a desduplicação ao sobrescrever chaves iguais)
+      setOrdersMap({ ...results });
+      setIsLoading(false);
+    };
+
+    const unsubManual = onSnapshot(qManual, handleSnapshot);
+    const unsubTemporal = onSnapshot(qTemporal, handleSnapshot);
+
+    return () => {
+      unsubManual();
+      unsubTemporal();
+    };
   }, [firestore, user]);
 
-  const { data: rawOrders, isLoading } = useCollection(weeklyQuery);
-
-  // 2. FILTRAGEM EM MEMÓRIA (Client-side)
-  // Remove pedidos finalizados e aplica busca local
+  // 2. FILTRAGEM E BI (Client-side)
   const { pendingOrders, completedOrders, progress } = useMemo(() => {
-    if (!rawOrders) return { pendingOrders: [], completedOrders: [], progress: 0 };
+    const allOrders = Object.values(ordersMap);
     
-    // Filtra apenas o que não está entregue para a lista de "A Fazer"
-    const active = rawOrders.filter(o => !['Entregue'].includes(o.status));
+    // Filtra apenas o que não está entregue para a pauta ativa
+    // E remove itens que não deveriam estar aqui (segurança de filtragem local)
+    const active = allOrders.filter(o => !['Entregue'].includes(o.status));
+    
     const completed = active.filter(o => o.status === 'Concluído');
     const pending = active.filter(o => o.status !== 'Concluído');
     
     const percentage = active.length > 0 ? Math.round((completed.length / active.length) * 100) : 0;
     
     return { pendingOrders: pending, completedOrders: completed, progress: percentage };
-  }, [rawOrders]);
+  }, [ordersMap]);
 
   const handleRemoveFromGoal = useCallback(async (e: any, orderId: string) => {
     if (e) { e.stopPropagation(); e.preventDefault(); }
@@ -85,7 +114,7 @@ export default function WeeklyGoalsPage() {
     });
   }, [firestore, toast]);
 
-  if (isLoading) return (
+  if (isLoading && Object.keys(ordersMap).length === 0) return (
     <div className="h-full flex items-center justify-center">
       <Loader2 className="w-10 h-10 text-primary animate-spin" />
     </div>
