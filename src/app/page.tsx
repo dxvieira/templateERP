@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -129,12 +128,7 @@ export default function DashboardPage() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
               {completedOrders.map((order) => (
-                <div 
-                  key={order.id} 
-                  className="opacity-60 grayscale-[50%] hover:opacity-100 hover:grayscale-0 transition-all duration-300"
-                >
-                  <OrderCard order={order} onClick={handleEditOrder} />
-                </div>
+                <OrderCard key={order.id} order={order} onClick={handleEditOrder} />
               ))}
             </div>
           </section>
