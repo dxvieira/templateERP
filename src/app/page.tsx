@@ -1,8 +1,9 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Layers } from 'lucide-react';
+import { Layers, CheckCircle2 } from 'lucide-react';
 import Image from 'next/image';
 
 import { useOrders } from '@/hooks/use-orders';
@@ -27,19 +28,29 @@ export default function DashboardPage() {
   }, [user, isUserLoading, router]);
 
   /**
-   * MOTOR DE ORDENAÇÃO CRONOLÓGICA (CLIENT-SIDE)
-   * Prioriza prazos mais próximos e joga nulos para o final.
+   * MOTOR DE ORDENAÇÃO CRONOLÓGICA (ATIVOS)
    */
   const activeOrders = useMemo(() => {
     return orders
       .filter(o => !['Concluído', 'Entregue'].includes(o.status))
       .sort((a, b) => {
-        // Normalização de Datas (String ou Timestamp)
         const dateA = a.delivery_date || a.deliveryDate || '9999-12-31';
         const dateB = b.delivery_date || b.deliveryDate || '9999-12-31';
-        
-        // Ordenação Ascendente (Mais antigo/próximo primeiro)
         return dateA.localeCompare(dateB);
+      });
+  }, [orders]);
+
+  /**
+   * MOTOR DE ORDENAÇÃO (CONCLUÍDOS)
+   * Exibe os mais recentes primeiro
+   */
+  const completedOrders = useMemo(() => {
+    return orders
+      .filter(o => ['Concluído', 'Entregue'].includes(o.status))
+      .sort((a, b) => {
+        const dateA = a.updatedAt?.seconds || 0;
+        const dateB = b.updatedAt?.seconds || 0;
+        return dateB - dateA;
       });
   }, [orders]);
 
@@ -49,10 +60,10 @@ export default function DashboardPage() {
   }, []);
 
   return (
-    <div className="p-4 md:p-8 space-y-8 mt-14 md:mt-0">
+    <div className="p-4 md:p-8 space-y-8 mt-14 md:mt-0 pb-20">
       <div className="fixed top-[-10%] left-[-5%] w-[40%] h-[40%] bg-primary opacity-[0.03] blur-[150px] pointer-events-none rounded-full z-0" />
 
-      {/* HEADER REFATORADO: ALINHAMENTO À DIREITA DO CARD */}
+      {/* HEADER: LOGO ALINHADA À DIREITA */}
       <header className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="hidden lg:block lg:col-span-8" />
         <div className="lg:col-span-4 flex justify-end items-center">
@@ -77,11 +88,17 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <div className="space-y-10">
-        <section className="space-y-4">
-          <div className="flex items-center gap-3 px-2 border-b border-white/5 pb-3">
-            <div className="p-1.5 bg-primary/10 rounded-lg"><Layers className="text-primary w-4 h-4" /></div>
-            <h3 className="text-[10px] font-black text-white uppercase tracking-[0.3em]">Fluxo de Produção Real-Time ({stats.activeCount})</h3>
+      <div className="space-y-12">
+        {/* SEÇÃO: FLUXO ATIVO */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-3 px-2 border-b border-white/5 pb-4">
+            <div className="p-1.5 bg-primary/10 rounded-lg border border-primary/20">
+              <Layers className="text-primary w-4 h-4" />
+            </div>
+            <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em]">Fluxo de Produção</h3>
+            <span className="bg-primary/20 text-primary px-2.5 py-0.5 rounded-full text-[10px] font-black shadow-[0_0_10px_rgba(255,95,31,0.2)]">
+              {activeOrders.length}
+            </span>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
@@ -96,6 +113,32 @@ export default function DashboardPage() {
             )}
           </div>
         </section>
+
+        {/* SEÇÃO: CONCLUÍDOS */}
+        {completedOrders.length > 0 && (
+          <section className="space-y-6 pt-4">
+            <div className="flex items-center gap-3 px-2 border-b border-white/5 pb-4">
+              <div className="p-1.5 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                <CheckCircle2 className="text-emerald-500 w-4 h-4" />
+              </div>
+              <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em]">Pedidos Concluídos</h3>
+              <span className="bg-emerald-500/20 text-emerald-500 px-2.5 py-0.5 rounded-full text-[10px] font-black">
+                {completedOrders.length}
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
+              {completedOrders.map((order) => (
+                <div 
+                  key={order.id} 
+                  className="opacity-60 grayscale-[50%] hover:opacity-100 hover:grayscale-0 transition-all duration-300"
+                >
+                  <OrderCard order={order} onClick={handleEditOrder} />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
 
       <OrderFormModal 
