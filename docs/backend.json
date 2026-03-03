@@ -71,7 +71,8 @@
         "name": { "type": "string" },
         "quantity": { "type": "string" },
         "category": { "type": "string", "enum": ["Impressão", "Serralheria", "Acabamento", "Instalação"] },
-        "status": { "type": "string", "enum": ["pendente", "pedido"] },
+        "status": { "type": "string", "enum": ["pendente", "comprado"] },
+        "urgente": { "type": "boolean" },
         "userId": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "completedAt": { "type": "string", "format": "date-time" }
