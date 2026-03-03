@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, Box, ChevronDown, Activity, Loader2 } from 'lucide-react';
+import { X, Save, Box, ChevronDown, Activity, Loader2, Calendar } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useOrders } from '@/hooks/use-orders';
 import { useToast } from '@/hooks/use-toast';
+import { format, parseISO, isValid } from 'date-fns';
 
 const PRODUCTION_STAGES = ['Arte', 'Serralheria', 'Impressão', 'Acabamento', 'Instalação', 'Concluído'];
 
@@ -23,7 +24,6 @@ const getStatusColor = (currentStatus: string) => {
 };
 
 const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | null; isOpen: boolean; onClose: () => void }) => {
-  const router = useRouter();
   const { updateOrder } = useOrders();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -50,6 +50,18 @@ const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | nul
 
   const currentColor = getStatusColor(formData.status);
 
+  const formattedDeliveryDate = useMemo(() => {
+    if (!formData.deliveryDate) return 'NÃO INFORMADO';
+    try {
+      // Tenta parsear a string YYYY-MM-DD
+      const date = parseISO(formData.deliveryDate);
+      if (!isValid(date)) return formData.deliveryDate;
+      return format(date, 'dd/MM/yyyy');
+    } catch (e) {
+      return formData.deliveryDate;
+    }
+  }, [formData.deliveryDate]);
+
   const handleFieldChange = useCallback((field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   }, []);
@@ -60,7 +72,6 @@ const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | nul
     
     setLoading(true);
     try {
-      // BACKEND REQUIREMENT: Remove deliveryDate from payload to prevent accidental re-submission
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { deliveryDate, client, ...payload } = formData;
       
@@ -119,20 +130,21 @@ const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | nul
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* CAMPO CLIENTE BLOQUEADO */}
-              <div className="opacity-60 pointer-events-none">
-                <label className="text-[9px] text-zinc-500 uppercase font-black tracking-widest ml-1 mb-1 block">Cliente / Projeto</label>
-                <input readOnly value={formData.client} className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-400 outline-none cursor-not-allowed" />
+              {/* CAMPO CLIENTE - MELHORADO PARA QUEBRA DE LINHA */}
+              <div className="space-y-1.5">
+                <label className="text-[9px] text-zinc-500 uppercase font-black tracking-widest ml-1 block">Cliente / Projeto</label>
+                <div className="w-full min-h-[46px] bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-400 break-words leading-relaxed font-bold uppercase">
+                  {formData.client || 'NÃO IDENTIFICADO'}
+                </div>
               </div>
               
-              {/* CAMPO PRAZO DE ENTREGA BLOQUEADO (NOVO REQUISITO) */}
-              <div className="opacity-60 pointer-events-none">
-                <label className="text-[9px] text-zinc-500 uppercase font-black tracking-widest ml-1 mb-1 block">Prazo de Entrega</label>
-                <input 
-                  readOnly 
-                  value={formData.deliveryDate} 
-                  className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-400 outline-none cursor-not-allowed" 
-                />
+              {/* CAMPO PRAZO DE ENTREGA - FORMATADO PT-BR */}
+              <div className="space-y-1.5">
+                <label className="text-[9px] text-zinc-500 uppercase font-black tracking-widest ml-1 block">Prazo de Entrega</label>
+                <div className="w-full min-h-[46px] bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-400 flex items-center gap-2 font-mono">
+                  <Calendar size={14} className="text-zinc-600" />
+                  {formattedDeliveryDate}
+                </div>
               </div>
             </div>
 
