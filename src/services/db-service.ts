@@ -13,30 +13,36 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
 /**
- * @fileOverview dbService - Gerenciador de conexão em tempo real com Firestore.
- * Implementa o padrão Observer para escutar mudanças na base de dados.
+ * @fileOverview dbService - Camada de Acesso a Dados (DAL).
+ * Centraliza as interações com o Firestore utilizando a sintaxe modular v9.
  */
 
 export const dbService = {
   /**
-   * Escuta a coleção de pedidos em tempo real.
-   * @param db Instância do Firestore.
-   * @param callback Função executada a cada atualização.
-   * @returns Função de unsubscribe para cleanup.
+   * Estabelece uma conexão em tempo real com a coleção de ordens.
+   * @param db Instância injetada do Firestore.
+   * @param onUpdate Callback acionado a cada mudança nos documentos.
+   * @returns Unsubscribe function para limpeza de memória.
    */
-  subscribeToOrders: (db: Firestore, callback: (snapshot: QuerySnapshot<DocumentData>) => void) => {
+  subscribeToOrders: (db: Firestore, onUpdate: (snapshot: QuerySnapshot<DocumentData>) => void) => {
     const ordersRef = collection(db, 'orders');
+    
+    // Query otimizada por data de criação para manter o fluxo cronológico
     const q = query(ordersRef, orderBy('createdAt', 'desc'));
     
-    // O onSnapshot retorna automaticamente a função de cancelamento (unsubscribe)
-    return onSnapshot(q, (snapshot) => {
-      callback(snapshot);
-    }, async (error) => {
-      const permissionError = new FirestorePermissionError({
-        path: ordersRef.path,
-        operation: 'list',
-      });
-      errorEmitter.emit('permission-error', permissionError);
-    });
+    // Retorno do listener em tempo real com tratamento de erro contextual
+    return onSnapshot(q, 
+      (snapshot) => {
+        onUpdate(snapshot);
+      }, 
+      async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: ordersRef.path,
+          operation: 'list',
+        });
+        // Emite erro para o listener global de segurança
+        errorEmitter.emit('permission-error', permissionError);
+      }
+    );
   }
 };

@@ -7,8 +7,8 @@ import { dbService } from '@/services/db-service';
 import { startOfWeek, endOfWeek, isWithinInterval, parseISO } from 'date-fns';
 
 /**
- * Hook useOrders - Motor de métricas e CRUD do Dashboard.
- * Sincronizado em tempo real via dbService.
+ * Hook useOrders - Camada de Lógica de Negócio (Controller).
+ * Gerencia o estado dos pedidos e deriva métricas para o Dashboard.
  */
 export function useOrders() {
   const firestore = useFirestore();
@@ -16,6 +16,11 @@ export function useOrders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  /**
+   * EFEITO DE SINCRONIZAÇÃO:
+   * Conecta ao Firestore apenas se o usuário estiver autenticado.
+   * Implementa rigorosamente o Unsubscribe para evitar memory leaks.
+   */
   useEffect(() => {
     if (!firestore || !user) {
       setIsLoading(false);
@@ -23,7 +28,8 @@ export function useOrders() {
     }
 
     setIsLoading(true);
-    // Inicia a escuta em tempo real
+    
+    // Inicia a escuta via serviço modular
     const unsubscribe = dbService.subscribeToOrders(firestore, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -33,29 +39,34 @@ export function useOrders() {
       setIsLoading(false);
     });
 
-    // Cleanup: Remove o listener quando o componente desmonta
+    // CLEANUP: Executado ao desmontar o componente ou trocar de usuário
     return () => unsubscribe();
   }, [firestore, user]);
 
-  // --- CRUD OPERATIONS ---
+  /**
+   * Operação de atualização de status (Etapa da OS).
+   */
   const updateOrder = useCallback(async (orderId: string, data: any) => {
     if (!firestore) return;
     const orderRef = doc(firestore, 'orders', orderId);
     try {
       await updateDoc(orderRef, { ...data, updatedAt: serverTimestamp() });
     } catch (err) {
-      console.error("Erro ao atualizar OS:", err);
+      console.error("Falha na mutação do documento:", err);
     }
   }, [firestore]);
 
-  // --- ENGINE DE MÉTRICAS (MEMOIZADA) ---
+  /**
+   * ENGINE DE MÉTRICAS (MEMOIZADA):
+   * Processa a distribuição de status e metas sem re-cálculos desnecessários.
+   */
   const stats = useMemo(() => {
     const now = new Date();
-    // Consistência: Semana começa na Segunda-feira (weekStartsOn: 1)
     const weekStart = startOfWeek(now, { weekStartsOn: 1 });
     const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
 
     const s = {
+      total: orders.length,
       activeCount: 0,
       weeklyGoalCount: 0,
       arte: 0,
@@ -74,7 +85,6 @@ export function useOrders() {
       if (!isDone) {
         s.activeCount++;
         
-        // Verifica se pertence à meta da semana (POR DATA OU POR TAG MANUAL)
         if (isManualPriority) {
           s.weeklyGoalCount++;
         } else if (delivery) {
@@ -86,7 +96,7 @@ export function useOrders() {
         }
       }
 
-      // Distribuição por status (Alimenta o ProductionHub)
+      // Filtro de distribuição para o gráfico do Reator
       const status = o.status;
       if (status === 'Arte') s.arte++;
       else if (status === 'Impressão') s.impressao++;
