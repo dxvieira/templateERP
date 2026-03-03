@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useState, memo, useEffect, useCallback } from 'react';
@@ -93,13 +94,15 @@ export const DashboardSidebar = memo(() => {
     }
   }, [router]);
 
+  // Lógica unificada para expansão: Desktop (Hover/Pin) ou Mobile (Aberto)
   const isExpanded = isPinned || isHovered;
+  const showLabels = isExpanded || isMobileOpen;
 
   if (pathname === '/login') return null;
 
   return (
     <>
-      {/* Header Mobile - Mantido em Z-Index intermediário */}
+      {/* Header Mobile */}
       <header className="fixed top-0 left-0 right-0 z-[110] h-14 md:hidden bg-[#0A0A0A]/80 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between print:hidden">
         <div className="flex items-center gap-3">
           <div className="relative w-32 h-8">
@@ -117,7 +120,7 @@ export const DashboardSidebar = memo(() => {
         </Button>
       </header>
 
-      {/* Overlay de Fundo - Z-Index 140 para isolar o Dashboard mas ficar ABAIXO da Sidebar */}
+      {/* Overlay de Fundo Mobile */}
       {isMobileOpen && (
         <div 
           className="fixed inset-0 z-[140] bg-black/60 backdrop-blur-sm md:hidden transition-all duration-300" 
@@ -125,7 +128,7 @@ export const DashboardSidebar = memo(() => {
         />
       )}
 
-      {/* Sidebar Principal - Z-Index 150 para garantir interatividade e nitidez total no mobile */}
+      {/* Sidebar Principal */}
       <aside
         onMouseEnter={() => !isPinned && setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -139,10 +142,10 @@ export const DashboardSidebar = memo(() => {
         <div className="flex flex-col h-full p-4 overflow-x-hidden scrollbar-hide">
           <div className="flex items-center justify-between mb-8 px-2 h-14 overflow-hidden shrink-0">
             <div className="flex items-center min-w-0 flex-1 relative h-full">
-              {/* Logo Full - Visível apenas quando expandido */}
+              {/* Logo Full */}
               <div className={cn(
                 "absolute inset-0 transition-all duration-500 flex items-center",
-                isExpanded ? "opacity-100 scale-100 translate-x-0" : "opacity-0 scale-95 -translate-x-4 pointer-events-none"
+                showLabels ? "opacity-100 scale-100 translate-x-0" : "opacity-0 scale-95 -translate-x-4 pointer-events-none"
               )}>
                 <div className="relative w-40 h-10">
                   <Image 
@@ -155,10 +158,10 @@ export const DashboardSidebar = memo(() => {
                 </div>
               </div>
 
-              {/* Ícone Minimalista / Fallback - Visível apenas quando recolhido */}
+              {/* Ícone Minimalista */}
               <div className={cn(
                 "w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-[0_0_15px_rgba(255,95,31,0.5)] shrink-0 transition-all duration-500",
-                isExpanded ? "opacity-0 scale-0 -translate-x-10 pointer-events-none" : "opacity-100 scale-100"
+                showLabels ? "opacity-0 scale-0 -translate-x-10 pointer-events-none" : "opacity-100 scale-100"
               )}>
                 <ClipboardList className="text-black w-6 h-6" />
               </div>
@@ -187,7 +190,10 @@ export const DashboardSidebar = memo(() => {
                 <div className="shrink-0 w-6 flex justify-center">
                   <item.icon size={20} className={cn(pathname === item.path ? "text-black" : "group-hover:text-primary transition-colors")} />
                 </div>
-                <span className={cn("text-xs tracking-wide whitespace-nowrap transition-all duration-300", isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 pointer-events-none")}>
+                <span className={cn(
+                  "text-xs tracking-wide whitespace-nowrap transition-all duration-300", 
+                  showLabels ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 pointer-events-none"
+                )}>
                   {item.label}
                 </span>
                 {pathname === item.path && <div className="absolute inset-0 bg-white/10 animate-pulse rounded-xl" />}
@@ -205,7 +211,10 @@ export const DashboardSidebar = memo(() => {
                 <div className="shrink-0 w-6 flex justify-center">
                   <item.icon size={20} className="group-hover:text-zinc-300 transition-colors" />
                 </div>
-                <span className={cn("text-xs tracking-wide whitespace-nowrap transition-all duration-300", isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 pointer-events-none")}>
+                <span className={cn(
+                  "text-xs tracking-wide whitespace-nowrap transition-all duration-300", 
+                  showLabels ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 pointer-events-none"
+                )}>
                   {item.label}
                 </span>
               </Link>
@@ -215,7 +224,12 @@ export const DashboardSidebar = memo(() => {
           <div className="pt-4 border-t border-white/5 overflow-hidden shrink-0">
             <button onClick={handleLogout} className="w-full flex items-center gap-4 px-3 h-12 rounded-xl text-destructive hover:bg-destructive/10 transition-all duration-200 group">
               <div className="shrink-0 w-6 flex justify-center"><LogOut size={20} className="group-hover:scale-110 transition-transform" /></div>
-              <span className={cn("text-xs font-black uppercase tracking-widest transition-all duration-300", isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-10 pointer-events-none")}>Encerrar</span>
+              <span className={cn(
+                "text-xs font-black uppercase tracking-widest transition-all duration-300", 
+                showLabels ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-10 pointer-events-none"
+              )}>
+                Encerrar
+              </span>
             </button>
           </div>
         </div>
