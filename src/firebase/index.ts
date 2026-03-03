@@ -32,15 +32,24 @@ export function initializeFirebase() {
 
 export function getSdks(firebaseApp: FirebaseApp) {
   let firestore: Firestore;
+  
+  // Verificação de ambiente para evitar crash no SSR do Next.js
+  const isServer = typeof window === 'undefined';
+
   try {
-    // Ativa o Cache Local Persistente para carregamento instantâneo (Offline-First)
-    firestore = initializeFirestore(firebaseApp, {
-      localCache: persistentLocalCache({ 
-        tabManager: persistentMultipleTabManager() 
-      })
-    });
+    if (isServer) {
+      // No servidor, usamos o Firestore básico sem cache local persistente
+      firestore = getFirestore(firebaseApp);
+    } else {
+      // No cliente, ativamos o Cache Local Persistente para carregamento instantâneo
+      firestore = initializeFirestore(firebaseApp, {
+        localCache: persistentLocalCache({ 
+          tabManager: persistentMultipleTabManager() 
+        })
+      });
+    }
   } catch (e) {
-    // Caso já tenha sido inicializado, recupera a instância existente
+    // Caso já tenha sido inicializado ou ocorra erro, recupera a instância existente
     firestore = getFirestore(firebaseApp);
   }
 

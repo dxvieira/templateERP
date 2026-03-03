@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -7,9 +6,9 @@ import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebas
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { 
-  TrendingUp, TrendingDown, Wallet, Target, AlertCircle, Download, Plus, Trash2, Calendar, 
-  Loader2, X, CheckCircle2, Receipt, ArrowDownLeft, Box, Factory, BarChart3, PieChart as PieChartIcon, 
-  ShoppingBag, Users as UsersIcon, ChevronDown, ChevronUp, Layers, Pencil, ChevronRight, Check, Sparkles,
+  TrendingUp, TrendingDown, Wallet, Target, AlertCircle, Plus, Trash2, Calendar, 
+  Loader2, X, CheckCircle2, Receipt, ArrowDownLeft, Box, Factory, PieChart as PieChartIcon, 
+  ShoppingBag, Users as UsersIcon, ChevronRight, Sparkles,
   FileSpreadsheet, ClipboardList
 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Label } from 'recharts';
@@ -17,8 +16,6 @@ import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'da
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 import * as XLSX from 'xlsx';
 
 // MAPEAMENTO DE CORES INDUSTRIAIS
@@ -163,7 +160,9 @@ export default function ReportsManager() {
       biTotalValue += val;
       const statusName = String(o.status || 'Outros').toUpperCase();
       biStatus[statusName] = (biStatus[statusName] || 0) + 1;
-      biClients[o.client] = (biClients[o.client] || 0) + val;
+      if (o.client) {
+        biClients[o.client] = (biClients[o.client] || 0) + val;
+      }
     });
 
     const statusChart = Object.entries(biStatus).map(([name, value]) => ({ 
@@ -214,15 +213,12 @@ export default function ReportsManager() {
     deleteDoc(doc(firestore, coll, itemToDelete.id)).then(() => { toast({ title: "Removido" }); setItemToDelete(null); });
   };
 
-  /**
-   * EXPORTAÇÃO EXCEL (.XLSX) PROFISSIONAL COM AUTO-FIT
-   */
   const exportToExcel = () => {
     if (!reportData) return;
 
     let dataToExport: any[] = [];
     let cols: any[] = [];
-    let filename = `impacto-relatorio-${activeTab.toLowerCase()}-${selectedMonth}.xlsx`;
+    const filename = `impacto-relatorio-${activeTab.toLowerCase()}-${selectedMonth}.xlsx`;
 
     if (activeTab === 'FLUXO') {
       dataToExport = reportData.transactions.map(t => ({
@@ -257,22 +253,15 @@ export default function ReportsManager() {
       cols = [{ wch: 12 }, { wch: 45 }, { wch: 20 }, { wch: 25 }, { wch: 15 }];
     }
 
-    // CRIA A PLANILHA
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-    
-    // DEFINE LARGURAS DAS COLUNAS (MAGIC WIDTHS)
     worksheet['!cols'] = cols;
-
-    // CRIA O LIVRO (WORKBOOK)
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, activeTab);
-
-    // DISPARA O DOWNLOAD NATIVO
     XLSX.writeFile(workbook, filename);
 
     toast({ 
       title: "Exportação Concluída", 
-      description: "Relatório gerado em formato nativo Excel (.xlsx)." 
+      description: "Relatório gerado em formato Excel (.xlsx)." 
     });
   };
 
@@ -280,7 +269,6 @@ export default function ReportsManager() {
 
   return (
     <div className="p-4 md:p-8 space-y-8 mt-14 md:mt-0 pb-24">
-      {/* HEADER PREMIUM */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-white/5 pb-8">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-primary"><Sparkles size={14} className="animate-pulse" /><span className="text-[10px] font-black uppercase tracking-[0.3em]">Intelligence Dashboard</span></div>
@@ -300,7 +288,6 @@ export default function ReportsManager() {
         </div>
       </header>
 
-      {/* KPI CARDS */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {activeTab === 'PEDIDOS' ? (
           <>
@@ -321,14 +308,12 @@ export default function ReportsManager() {
         )}
       </section>
 
-      {/* TABS SELECTOR */}
       <div className="flex gap-2 p-1 bg-zinc-900/50 rounded-2xl w-fit border border-zinc-800">
          {['FLUXO', 'CONTAS', 'PEDIDOS'].map((tab) => (
            <button key={tab} onClick={() => setActiveTab(tab as any)} className={cn("px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", activeTab === tab ? "bg-primary text-black shadow-lg" : "text-zinc-500 hover:text-white")}>{tab}</button>
          ))}
       </div>
 
-      {/* CONTENT AREA - OVERFLOW AUTO PROTEGIDO */}
       <div className="bg-[#09090b] border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
         {activeTab === 'FLUXO' && (
           <div className="overflow-x-auto custom-scrollbar">
@@ -360,11 +345,9 @@ export default function ReportsManager() {
         {activeTab === 'PEDIDOS' && (
           <div className="p-8 space-y-12">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-              {/* DONUT CHART INDUSTRIAL */}
               <div className="lg:col-span-7 bg-zinc-950/30 border border-zinc-800 p-8 rounded-[2.5rem] relative overflow-hidden flex flex-col items-center">
                 <div className="absolute top-0 right-0 p-6 opacity-10"><PieChartIcon size={80} strokeWidth={1} /></div>
                 <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.4em] mb-8 flex items-center gap-2 self-start"><div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> Distribuição de Produção</h3>
-                
                 <div className="flex flex-col md:flex-row items-center gap-12 w-full">
                   <div className="relative w-[320px] h-[320px] shrink-0">
                     <ResponsiveContainer width="100%" height="100%">
@@ -405,8 +388,6 @@ export default function ReportsManager() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-
-                  {/* LEGENDA DINÂMICA COM NEON HOVER */}
                   <div className="flex-1 w-full space-y-2">
                     {reportData.ordersBI.statusChart.map((entry, index) => (
                       <div 
@@ -417,9 +398,7 @@ export default function ReportsManager() {
                           "flex items-center justify-between p-3 rounded-xl border border-transparent transition-all duration-300 cursor-pointer",
                           activePieIndex === index ? "bg-white/5 border-white/10 translate-x-2" : "opacity-60"
                         )}
-                        style={{ 
-                          boxShadow: activePieIndex === index ? `0 0 20px -5px ${entry.color}40` : 'none'
-                        }}
+                        style={{ boxShadow: activePieIndex === index ? `0 0 20px -5px ${entry.color}40` : 'none' }}
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color, boxShadow: `0 0 10px ${entry.color}` }} />
@@ -431,8 +410,6 @@ export default function ReportsManager() {
                   </div>
                 </div>
               </div>
-
-              {/* TOP CLIENTES */}
               <div className="lg:col-span-5 bg-zinc-950/30 border border-zinc-800 p-8 rounded-[2.5rem]">
                 <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.4em] mb-8 flex items-center gap-2"><UsersIcon size={14}/> Top 5 Clientes (Faturamento)</h3>
                 <div className="h-[350px]">
@@ -459,12 +436,7 @@ export default function ReportsManager() {
                           return null;
                         }}
                       />
-                      <Bar 
-                        dataKey="value" 
-                        fill="#FF5F1F" 
-                        radius={[0, 8, 8, 0]} 
-                        barSize={30}
-                      >
+                      <Bar dataKey="value" fill="#FF5F1F" radius={[0, 8, 8, 0]} barSize={30}>
                         {reportData.ordersBI.clientChart.map((_, index) => (
                           <Cell key={`bar-${index}`} fillOpacity={0.8} className="hover:fill-opacity-100 transition-opacity" />
                         ))}
@@ -475,13 +447,11 @@ export default function ReportsManager() {
               </div>
             </div>
 
-            {/* LISTAGEM DETALHADA DE PEDIDOS (NOVA SEÇÃO) */}
             <div className="space-y-6">
               <div className="flex items-center justify-between border-b border-white/5 pb-4">
                 <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.4em] flex items-center gap-2"><ClipboardList size={14}/> Detalhamento de Protocolos (Cronologia do Mês)</h3>
                 <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">{reportData.ordersBI.filteredOrders.length} Registros Encontrados</span>
               </div>
-
               <div className="bg-zinc-950/30 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
                 <div className="overflow-x-auto custom-scrollbar">
                   <div className="min-w-[800px] divide-y divide-white/5">
@@ -489,61 +459,34 @@ export default function ReportsManager() {
                       const orderDate = order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000) : parseISO(order.emission_date || order.delivery_date || '');
                       const statusUpper = String(order.status || 'Outros').toUpperCase();
                       const statusColor = PRODUCTION_COLORS[statusUpper] || PRODUCTION_COLORS['OUTROS'];
-
                       return (
                         <div key={order.id} className="group flex items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-8">
                           <div className="flex items-center gap-6 flex-1">
-                            {/* DATA */}
                             <div className="flex flex-col items-center justify-center min-w-[50px] bg-zinc-900 p-2 rounded-xl border border-zinc-800">
                               <span className="text-[8px] font-black text-zinc-600 uppercase">{format(orderDate, 'MMM', { locale: ptBR })}</span>
                               <span className="text-lg font-black text-white leading-none">{format(orderDate, 'dd')}</span>
                             </div>
-
-                            {/* CLIENTE E OS */}
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-bold text-white uppercase group-hover:text-primary transition-colors whitespace-nowrap truncate max-w-[300px]">
-                                {order.client}
-                              </p>
+                              <p className="text-sm font-bold text-white uppercase group-hover:text-primary transition-colors whitespace-nowrap truncate max-w-[300px]">{order.client}</p>
                               <div className="flex items-center gap-2 mt-1">
                                 <span className="text-[8px] font-mono font-black text-zinc-600 bg-zinc-950 px-1.5 py-0.5 rounded border border-zinc-900">OS #{order.id.slice(-6)}</span>
                                 <span className="text-[8px] font-black uppercase text-zinc-500 tracking-widest">Aberto em {format(orderDate, 'HH:mm')}</span>
                               </div>
                             </div>
-
-                            {/* BADGE DE STATUS */}
                             <div className="w-[140px] shrink-0">
-                              <div 
-                                className="flex items-center gap-2 px-3 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-widest text-center justify-center"
-                                style={{ 
-                                  backgroundColor: `${statusColor}10`, 
-                                  borderColor: `${statusColor}30`, 
-                                  color: statusColor,
-                                  boxShadow: `0 0 10px ${statusColor}15`
-                                }}
-                              >
+                              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-widest text-center justify-center" style={{ backgroundColor: `${statusColor}10`, borderColor: `${statusColor}30`, color: statusColor, boxShadow: `0 0 10px ${statusColor}15` }}>
                                 <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: statusColor }} />
                                 {order.status}
                               </div>
                             </div>
                           </div>
-
-                          {/* VALOR E AÇÃO */}
                           <div className="flex items-center gap-8 shrink-0">
-                            <p className="text-lg font-black font-mono tracking-tighter text-white">
-                              {cleanCurrency(order.total_value || order.totalValue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            </p>
-                            <button 
-                              onClick={() => router.push(`/orders?edit=${order.id}`)}
-                              className="p-3 bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-xl transition-all border border-zinc-800"
-                            >
-                              <ChevronRight size={16}/>
-                            </button>
+                            <p className="text-lg font-black font-mono tracking-tighter text-white">{cleanCurrency(order.total_value || order.totalValue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                            <button onClick={() => router.push(`/orders?edit=${order.id}`)} className="p-3 bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-xl transition-all border border-zinc-800"><ChevronRight size={16}/></button>
                           </div>
                         </div>
                       );
-                    }) : (
-                      <EmptyState icon={ShoppingBag} text="Nenhum protocolo neste mês" />
-                    )}
+                    }) : <EmptyState icon={ShoppingBag} text="Nenhum protocolo neste mês" />}
                   </div>
                 </div>
               </div>
@@ -558,7 +501,7 @@ export default function ReportsManager() {
                 <div key={group.groupId} className="flex flex-col">
                   <div className="flex items-center justify-between p-5 border-l-2 border-transparent">
                     <div className="flex items-center gap-4 flex-1">
-                      <div className={cn("p-2.5 rounded-xl border flex items-center justify-center shrink-0", group.allPaid ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" : "bg-zinc-900 border-zinc-800 text-zinc-500")}><Layers size={20} /></div>
+                      <div className={cn("p-2.5 rounded-xl border flex items-center justify-center shrink-0", group.allPaid ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" : "bg-zinc-900 border-zinc-800 text-zinc-500")}><Box size={20} /></div>
                       <div className="min-w-0">
                         <h4 className="text-sm font-black text-white uppercase whitespace-nowrap">{group.supplier}</h4>
                         <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-0.5 whitespace-nowrap">{group.description}</p>
@@ -583,7 +526,7 @@ export default function ReportsManager() {
                         </div>
                         <div className="flex items-center gap-6 shrink-0">
                           <p className="text-sm font-black text-white font-mono">{cleanCurrency(p.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                          {p.status !== 'paid' && <button onClick={() => setItemToPay(p)} className="p-2.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-lg"><Check size={16}/></button>}
+                          {p.status !== 'paid' && <button onClick={() => setItemToPay(p)} className="p-2.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-lg"><CheckCircle2 size={16}/></button>}
                         </div>
                       </div>
                     ))}
@@ -595,7 +538,6 @@ export default function ReportsManager() {
         )}
       </div>
 
-      {/* MODAIS DE CONFIRMAÇÃO */}
       <AnimatePresence>
         {itemToDelete && (
           <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 p-4">
@@ -617,29 +559,17 @@ export default function ReportsManager() {
 
 function KPICard({ label, value, color, icon: Icon, glow, isCurrency = true }: any) {
   return (
-    <div className={cn(
-      "relative bg-[#09090b] border border-zinc-800 p-5 rounded-2xl overflow-hidden group transition-all duration-500", 
-      glow && "border-primary/30 shadow-[0_0_40px_-10px_rgba(255,95,31,0.2)]"
-    )}>
+    <div className={cn("relative bg-[#09090b] border border-zinc-800 p-5 rounded-2xl overflow-hidden group transition-all duration-500", glow && "border-primary/30 shadow-[0_0_40px_-10px_rgba(255,95,31,0.2)]")}>
       <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-24 h-24 bg-white/5 rounded-full blur-2xl group-hover:bg-primary/5 transition-colors" />
       <div className="flex justify-between items-start mb-2 relative z-10">
         <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">{label}</span>
-        <div className={cn("p-2 rounded-lg bg-zinc-950 border border-zinc-800", color)}>
-          <Icon size={14} className="opacity-80" />
-        </div>
+        <div className={cn("p-2 rounded-lg bg-zinc-950 border border-zinc-800", color)}><Icon size={14} className="opacity-80" /></div>
       </div>
-      <p className={cn("text-2xl font-black font-mono tracking-tighter truncate relative z-10", color)}>
-        {isCurrency ? (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : (value || 0)}
-      </p>
+      <p className={cn("text-2xl font-black font-mono tracking-tighter truncate relative z-10", color)}>{isCurrency ? (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : (value || 0)}</p>
     </div>
   );
 }
 
 function EmptyState({ icon: Icon, text }: any) {
-  return (
-    <div className="py-24 text-center opacity-20 group">
-      <Icon size={48} className="mx-auto mb-4 group-hover:scale-110 transition-transform" />
-      <p className="text-[10px] font-black uppercase tracking-[0.4em]">{text}</p>
-    </div>
-  );
+  return <div className="py-24 text-center opacity-20 group"><Icon size={48} className="mx-auto mb-4 group-hover:scale-110 transition-transform" /><p className="text-[10px] font-black uppercase tracking-[0.4em]">{text}</p></div>;
 }
