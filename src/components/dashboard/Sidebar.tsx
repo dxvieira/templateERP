@@ -99,6 +99,7 @@ export const DashboardSidebar = memo(() => {
 
   return (
     <>
+      {/* Header Mobile - Mantido em Z-Index intermediário */}
       <header className="fixed top-0 left-0 right-0 z-[110] h-14 md:hidden bg-[#0A0A0A]/80 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between print:hidden">
         <div className="flex items-center gap-3">
           <div className="relative w-32 h-8">
@@ -116,18 +117,23 @@ export const DashboardSidebar = memo(() => {
         </Button>
       </header>
 
+      {/* Overlay de Fundo - Z-Index 140 para isolar o Dashboard mas ficar ABAIXO da Sidebar */}
       {isMobileOpen && (
-        <div className="fixed inset-0 z-[105] bg-black/60 backdrop-blur-sm md:hidden" onClick={() => setIsMobileOpen(false)} />
+        <div 
+          className="fixed inset-0 z-[140] bg-black/60 backdrop-blur-sm md:hidden transition-all duration-300" 
+          onClick={() => setIsMobileOpen(false)} 
+        />
       )}
 
+      {/* Sidebar Principal - Z-Index 150 para garantir interatividade e nitidez total no mobile */}
       <aside
         onMouseEnter={() => !isPinned && setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={cn(
-          "fixed inset-y-0 left-0 z-[100] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] print:hidden",
+          "fixed inset-y-0 left-0 z-[150] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] print:hidden",
           "bg-[#0A0A0A] border-r border-white/5 shadow-2xl overflow-x-hidden",
           isExpanded ? "w-64" : "w-20",
-          isMobileOpen ? "translate-x-0 w-64" : "max-md:-translate-x-full"
+          isMobileOpen ? "translate-x-0 w-64 shadow-[20px_0_50px_rgba(0,0,0,0.8)]" : "max-md:-translate-x-full"
         )}
       >
         <div className="flex flex-col h-full p-4 overflow-x-hidden scrollbar-hide">
@@ -215,6 +221,7 @@ export const DashboardSidebar = memo(() => {
         </div>
       </aside>
 
+      {/* Spacer para layout desktop desktop */}
       <div className={cn("hidden md:block transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] shrink-0", isPinned ? "w-64" : "w-20")} />
     </>
   );
