@@ -4,7 +4,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
   collection, query, addDoc, updateDoc, deleteDoc, doc, 
-  serverTimestamp, orderBy, where, writeBatch 
+  serverTimestamp, orderBy, writeBatch 
 } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -36,30 +36,38 @@ export default function MaterialsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({ name: '', quantity: '', category: 'Impressão', urgente: false });
 
-  // QUERY 1: LISTA DE COMPRAS (PENDENTES)
-  const pendentesQuery = useMemoFirebase(() => {
+  /**
+   * CONSULTA OTIMIZADA: 
+   * Buscamos apenas por data de criação. A filtragem por status e urgência 
+   * é feita em memória para evitar erros de índice composto no Firestore.
+   */
+  const materialsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    // Nota: Esta query com múltiplos orderBy pode exigir criação de índice no Firebase Console
     return query(
       collection(firestore, 'materials'), 
-      where('status', '==', 'pendente'),
-      orderBy('urgente', 'desc'),
       orderBy('createdAt', 'desc')
     );
   }, [firestore, user]);
 
-  // QUERY 2: HISTÓRICO (COMPRADOS)
-  const historicoQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return query(
-      collection(firestore, 'materials'), 
-      where('status', '==', 'comprado'),
-      orderBy('createdAt', 'desc')
-    );
-  }, [firestore, user]);
+  const { data: allItems, isLoading } = useCollection(materialsQuery);
 
-  const { data: itemsPendentes, isLoading: loadingPendentes } = useCollection(pendentesQuery);
-  const { data: itemsHistorico, isLoading: loadingHistorico } = useCollection(historicoQuery);
+  // MOTOR DE FILTRAGEM E ORDENAÇÃO EM MEMÓRIA
+  const { itemsPendentes, itemsHistorico } = useMemo(() => {
+    if (!allItems) return { itemsPendentes: [], itemsHistorico: [] };
+
+    const pendentes = allItems
+      .filter(item => item.status === 'pendente')
+      .sort((a, b) => {
+        // Prioridade para itens urgentes no topo
+        if (a.urgente && !b.urgente) return -1;
+        if (!a.urgente && b.urgente) return 1;
+        return 0;
+      });
+
+    const historico = allItems.filter(item => item.status === 'comprado');
+
+    return { itemsPendentes: pendentes, itemsHistorico: historico };
+  }, [allItems]);
 
   const handleAddRequest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,9 +95,6 @@ export default function MaterialsPage() {
     }
   };
 
-  /**
-   * AÇÃO EM MASSA: writeBatch (Otimização Industrial)
-   */
   const handleApproveAll = async () => {
     if (!firestore || !itemsPendentes || itemsPendentes.length === 0) return;
     if (!confirm(`Confirmar a compra de todos os ${itemsPendentes.length} itens da lista?`)) return;
@@ -107,12 +112,9 @@ export default function MaterialsPage() {
 
     try {
       await batch.commit();
-      toast({ 
-        title: "Missão Cumprida", 
-        description: "Toda a lista foi movida para o histórico de compras." 
-      });
+      toast({ title: "Missão Cumprida", description: "Toda a lista foi movida para o histórico." });
     } catch (error) {
-      toast({ variant: 'destructive', title: "Erro no Batch", description: "Falha ao processar atualização em massa." });
+      toast({ variant: 'destructive', title: "Erro no Processamento", description: "Falha ao processar atualização em massa." });
     } finally {
       setIsSubmitting(false);
     }
@@ -137,8 +139,7 @@ export default function MaterialsPage() {
 
   if (!user && !isUserLoading) return <div className="h-full flex items-center justify-center"><Lock className="w-12 h-12 text-destructive opacity-50" /></div>;
 
-  const currentItems = activeTab === 'compras' ? (itemsPendentes || []) : (itemsHistorico || []);
-  const isLoading = activeTab === 'compras' ? loadingPendentes : loadingHistorico;
+  const currentItems = activeTab === 'compras' ? itemsPendentes : itemsHistorico;
 
   return (
     <div className="p-4 md:p-8 space-y-8 mt-14 md:mt-0 pb-24">
@@ -159,7 +160,7 @@ export default function MaterialsPage() {
           >
             <Plus size={16} /> Solicitar
           </button>
-          {activeTab === 'compras' && itemsPendentes && itemsPendentes.length > 0 && (
+          {activeTab === 'compras' && itemsPendentes.length > 0 && (
             <button 
               onClick={handleApproveAll}
               disabled={isSubmitting}
@@ -171,7 +172,6 @@ export default function MaterialsPage() {
         </div>
       </header>
 
-      {/* SISTEMA DE ABAS TÁTICO */}
       <div className="flex gap-2 p-1 bg-zinc-900/50 rounded-2xl w-fit border border-zinc-800">
          <button 
            onClick={() => setActiveTab('compras')} 
@@ -180,7 +180,7 @@ export default function MaterialsPage() {
              activeTab === 'compras' ? "bg-primary text-black shadow-lg" : "text-zinc-500 hover:text-white"
            )}
          >
-           <ShoppingCart size={14} /> Lista de Compras
+           <ShoppingCart size={14} /> Lista de Compras ({itemsPendentes.length})
          </button>
          <button 
            onClick={() => setActiveTab('historico')} 
@@ -189,7 +189,7 @@ export default function MaterialsPage() {
              activeTab === 'historico' ? "bg-primary text-black shadow-lg" : "text-zinc-500 hover:text-white"
            )}
          >
-           <History size={14} /> Histórico
+           <History size={14} /> Histórico ({itemsHistorico.length})
          </button>
       </div>
 

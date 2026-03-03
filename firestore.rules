@@ -22,7 +22,7 @@ service cloud.firestore {
     }
 
     // Regra de Suprimentos e Materiais
-    match /materials/{document=**} {
+    match /materials/{materialId} {
       allow read, write: if isSignedIn();
     }
 
