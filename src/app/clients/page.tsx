@@ -248,11 +248,32 @@ function ClientsContent() {
                   </section>
                 </form>
               </div>
-              <div className="p-6 border-t border-zinc-800 bg-zinc-900/30 flex justify-between items-center gap-4">
-                {editingClient && <button type="button" onClick={() => handleDelete(editingClient.id)} className="flex items-center gap-2 px-4 py-3 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-colors font-black text-[10px] uppercase tracking-widest"><Trash2 size={16} /> Excluir</button>} 
-                <div className="flex gap-3 w-full sm:w-auto ml-auto">
-                   <button type="button" onClick={closeModal} className="px-6 py-3 rounded-xl border border-zinc-700 text-white hover:bg-zinc-800 font-black text-[10px] uppercase tracking-widest">Cancelar</button>
-                   <button form="clientForm" type="submit" disabled={isSubmitting} className="px-10 py-3 rounded-xl bg-primary text-black hover:bg-white transition-all font-black text-[10px] uppercase tracking-widest shadow-[0_0_20px_rgba(255,95,31,0.4)] disabled:opacity-50 flex items-center gap-2">{isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> Gravar</>}</button>
+              <div className="p-6 border-t border-zinc-800 bg-zinc-900/30 flex flex-col sm:flex-row justify-between items-center gap-4">
+                {editingClient && (
+                  <button 
+                    type="button" 
+                    onClick={() => handleDelete(editingClient.id)} 
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-colors font-black text-[10px] uppercase tracking-widest"
+                  >
+                    <Trash2 size={16} /> Excluir
+                  </button>
+                )} 
+                <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto sm:ml-auto">
+                   <button 
+                     type="button" 
+                     onClick={closeModal} 
+                     className="w-full sm:w-auto px-6 py-3 rounded-xl border border-zinc-700 text-white hover:bg-zinc-800 font-black text-[10px] uppercase tracking-widest"
+                   >
+                     Cancelar
+                   </button>
+                   <button 
+                     form="clientForm" 
+                     type="submit" 
+                     disabled={isSubmitting} 
+                     className="w-full sm:w-auto px-10 py-3 rounded-xl bg-primary text-black hover:bg-white transition-all font-black text-[10px] uppercase tracking-widest shadow-[0_0_20px_rgba(255,95,31,0.4)] disabled:opacity-50 flex items-center justify-center gap-2"
+                   >
+                     {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> Gravar</>}
+                   </button>
                 </div>
               </div>
             </motion.div>

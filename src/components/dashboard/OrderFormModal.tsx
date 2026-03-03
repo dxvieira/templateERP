@@ -193,9 +193,9 @@ const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | nul
           </form>
         </div>
 
-        <div className="p-5 border-t border-zinc-800 bg-zinc-900/30 flex justify-end gap-4">
-          <button type="button" onClick={onClose} className="px-6 py-3 rounded-xl border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-colors">Fechar</button>
-          <button form="orderForm" type="submit" disabled={loading} className="px-10 py-3 rounded-xl bg-primary text-black text-[10px] font-black uppercase tracking-widest shadow-[0_0_25px_-5px_rgba(255,95,31,0.5)] flex items-center gap-2 transition-all active:scale-95">
+        <div className="p-5 border-t border-zinc-800 bg-zinc-900/30 flex flex-col sm:flex-row justify-end gap-4">
+          <button type="button" onClick={onClose} className="w-full sm:w-auto px-6 py-3 rounded-xl border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-colors">Fechar</button>
+          <button form="orderForm" type="submit" disabled={loading} className="w-full sm:w-auto px-10 py-3 rounded-xl bg-primary text-black text-[10px] font-black uppercase tracking-widest shadow-[0_0_25px_-5px_rgba(255,95,31,0.5)] flex items-center justify-center gap-2 transition-all active:scale-95">
             {loading ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> Salvar Etapa</>}
           </button>
         </div>
