@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { memo, useMemo } from 'react';
@@ -113,7 +114,7 @@ export const OrderCard = memo(({ order, onClick, onDelete }: OrderCardProps) => 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="min-w-0 space-y-1">
               <div className="flex items-center gap-2.5">
-                <span className="text-[10px] font-mono font-black text-zinc-100 bg-zinc-800 px-2 py-0.5 rounded-lg border border-zinc-700 uppercase tracking-tight shadow-sm">
+                <span className="text-[13px] font-mono font-bold text-zinc-100 bg-zinc-800 px-2 py-0.5 rounded-lg border border-zinc-700 uppercase tracking-tight shadow-sm">
                   #{order.id.slice(-6)}
                 </span>
                 <div className="flex items-center gap-1.5">
