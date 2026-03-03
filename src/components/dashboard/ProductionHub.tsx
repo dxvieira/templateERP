@@ -1,9 +1,11 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, Fingerprint, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import Image from 'next/image';
 
 interface ProductionHubProps {
   stats: {
@@ -19,6 +21,7 @@ interface ProductionHubProps {
 
 /**
  * Componente do Reator de Produção - Refatorado para ocupar o container pai sem bordas duplicadas.
+ * Inclui inteligência responsiva para exibição da logo apenas em desktops.
  */
 export function ProductionHub({ stats }: ProductionHubProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -83,6 +86,16 @@ export function ProductionHub({ stats }: ProductionHubProps) {
 
       <div className="flex justify-between items-start mb-8 relative z-10 gap-4">
         <div>
+          {/* LOGO DO CARD: VISÍVEL APENAS EM DESKTOP PARA EVITAR REDUNDÂNCIA NO MOBILE */}
+          <div className="hidden md:block relative w-32 h-8 mb-4 opacity-60">
+            <Image 
+              src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd"
+              alt="Logo IMPACTO"
+              fill
+              className="object-contain object-left"
+            />
+          </div>
+
           <div className="flex items-center gap-2 mb-1.5">
              <Activity size={12} className="text-[#FF5F1F] animate-pulse" />
              <span className="text-[#FF5F1F] text-[9px] font-bold uppercase tracking-[0.3em]">

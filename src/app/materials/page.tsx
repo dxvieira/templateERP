@@ -66,10 +66,6 @@ export default function MaterialsPage() {
   const materialsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     
-    // NOTA TÁTICA: Para filtrar apenas os da semana corrente no servidor:
-    // const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-    // return query(collection(firestore, 'materials'), where('createdAt', '>=', weekStart), orderBy('createdAt', 'desc'));
-    
     return query(
       collection(firestore, 'materials'), 
       orderBy('createdAt', 'desc')
@@ -90,9 +86,9 @@ export default function MaterialsPage() {
         return 0;
       });
 
-    const historico = allItems.filter(item => item.status === 'comprado');
+    const itemsHistorico = allItems.filter(item => item.status === 'comprado');
 
-    return { itemsPendentes: pendentes, itemsHistorico: historico };
+    return { itemsPendentes: pendentes, itemsHistorico };
   }, [allItems]);
 
   const handleAddRequest = async (e: React.FormEvent) => {
@@ -404,6 +400,18 @@ export default function MaterialsPage() {
               Cancelar Operação
             </AlertDialogCancel>
           </AlertDialogFooter>
+          
+          {/* ASSINATURA DE MARCA DISCRETA */}
+          <div className="flex justify-center mt-8 opacity-20 hover:opacity-40 transition-opacity grayscale brightness-200">
+            <div className="relative w-24 h-6">
+              <Image 
+                src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd"
+                alt="Logo IMPACTO"
+                fill
+                className="object-contain"
+              />
+            </div>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
 
@@ -434,6 +442,18 @@ export default function MaterialsPage() {
               Manter Registro
             </AlertDialogCancel>
           </AlertDialogFooter>
+
+          {/* ASSINATURA DE MARCA DISCRETA */}
+          <div className="flex justify-center mt-8 opacity-20 hover:opacity-40 transition-opacity grayscale brightness-200">
+            <div className="relative w-24 h-6">
+              <Image 
+                src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd"
+                alt="Logo IMPACTO"
+                fill
+                className="object-contain"
+              />
+            </div>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
     </div>
