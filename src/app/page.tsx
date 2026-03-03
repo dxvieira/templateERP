@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -85,7 +84,7 @@ export default function DashboardPage() {
             <h3 className="text-[10px] font-black text-white uppercase tracking-[0.3em]">Fluxo de Produção Real-Time ({stats.activeCount})</h3>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
             {activeOrders.length > 0 ? (
               activeOrders.map((order) => (
                 <OrderCard key={order.id} order={order} onClick={handleEditOrder} />

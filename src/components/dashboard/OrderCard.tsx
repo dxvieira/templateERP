@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { memo, useMemo } from 'react';
@@ -30,22 +29,25 @@ interface OrderCardProps {
 }
 
 /**
- * Card de Pedido - Refatorado para cálculo dinâmico de progresso financeiro e status temporal cravado.
+ * Card de Pedido - Refatorado para cálculo dinâmico de progresso financeiro e alertas temporais 'Hoje'.
  */
 export const OrderCard = memo(({ order, onClick, onDelete }: OrderCardProps) => {
   const isDone = useMemo(() => ['Concluído', 'Entregue'].includes(order.status), [order.status]);
   
   const dateInfo = useMemo(() => {
     const rawDate = order.delivery_date || order.deliveryDate;
-    if (!rawDate) return { formatted: '--/--', isLate: false };
+    if (!rawDate) return { formatted: '--/--', isLate: false, isToday: false };
     
     // Normalização Temporal: Ignora horas para evitar atrasos falsos
     const todayNormalized = startOfDay(new Date());
     const deadlineNormalized = startOfDay(parseISO(rawDate));
     
+    const isToday = format(deadlineNormalized, 'yyyy-MM-dd') === format(todayNormalized, 'yyyy-MM-dd');
+    
     return {
-      formatted: format(deadlineNormalized, 'dd/MM'),
-      isLate: isBefore(deadlineNormalized, todayNormalized) && !isDone
+      formatted: isToday ? 'HOJE' : format(deadlineNormalized, 'dd/MM'),
+      isLate: isBefore(deadlineNormalized, todayNormalized) && !isDone,
+      isToday: isToday && !isDone
     };
   }, [order.delivery_date, order.deliveryDate, isDone]);
 
@@ -91,35 +93,35 @@ export const OrderCard = memo(({ order, onClick, onDelete }: OrderCardProps) => 
     <div 
       onClick={() => onClick?.(order)}
       className={cn(
-        "group relative w-full cursor-pointer bg-[#0c0c0e] border border-zinc-800 rounded-xl overflow-hidden p-5 transition-all duration-300 ease-out",
-        "hover:border-zinc-700 hover:shadow-lg hover:-translate-y-0.5",
-        isDone ? "opacity-80" : ""
+        "group relative w-full cursor-pointer bg-[#0c0c0e] border rounded-xl overflow-hidden p-5 transition-all duration-300 ease-out",
+        "hover:shadow-lg hover:-translate-y-0.5",
+        isDone ? "opacity-80 border-zinc-800" : dateInfo.isToday ? "border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.5)] animate-pulse-neon-red" : "border-zinc-800 hover:border-zinc-700"
       )}
     >
       <div 
         className="absolute inset-0 border border-transparent rounded-xl pointer-events-none transition-opacity duration-300 opacity-0 group-hover:opacity-100"
-        style={{ borderColor: `${statusConfig.color}20` }}
+        style={{ borderColor: dateInfo.isToday ? 'transparent' : `${statusConfig.color}20` }}
       />
 
       <div className="flex items-stretch h-full gap-4">
         <div 
           className="w-1 shrink-0 transition-all duration-500 rounded-full"
           style={{ 
-            backgroundColor: statusConfig.color, 
-            boxShadow: !isDone ? `0 0 15px ${statusConfig.color}40` : 'none' 
+            backgroundColor: dateInfo.isToday ? '#ef4444' : statusConfig.color, 
+            boxShadow: (!isDone && !dateInfo.isToday) ? `0 0 15px ${statusConfig.color}40` : dateInfo.isToday ? '0 0 15px rgba(239,68,68,0.6)' : 'none' 
           }}
         />
 
-        <div className="flex-1 flex flex-col justify-between gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex-1 flex flex-col justify-between gap-4 min-w-0">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
             <div className="min-w-0 space-y-1">
               <div className="flex items-center gap-2.5">
-                <span className="text-[13px] font-mono font-bold text-zinc-100 bg-zinc-800 px-2 py-0.5 rounded-lg border border-zinc-700 uppercase tracking-tight shadow-sm">
+                <span className="text-[13px] font-mono font-bold text-zinc-100 bg-zinc-800 px-2 py-0.5 rounded-lg border border-zinc-700 uppercase tracking-tight shadow-sm shrink-0">
                   #{order.id.slice(-6)}
                 </span>
-                <div className="flex items-center gap-1.5">
-                   <div className={cn("w-1.5 h-1.5 rounded-full", !isDone && "animate-pulse")} style={{ backgroundColor: statusConfig.color }} />
-                   <span className="text-[9px] font-black uppercase tracking-[0.15em]" style={{ color: statusConfig.color }}>
+                <div className="flex items-center gap-1.5 min-w-0">
+                   <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", !isDone && "animate-pulse")} style={{ backgroundColor: dateInfo.isToday ? '#ef4444' : statusConfig.color }} />
+                   <span className="text-[9px] font-black uppercase tracking-[0.15em] truncate" style={{ color: dateInfo.isToday ? '#ef4444' : statusConfig.color }}>
                      {statusConfig.label}
                    </span>
                 </div>
@@ -132,17 +134,17 @@ export const OrderCard = memo(({ order, onClick, onDelete }: OrderCardProps) => 
 
             <div className="flex items-center gap-4 shrink-0 border-t sm:border-t-0 border-zinc-800/50 pt-2 sm:pt-0">
               <div className={cn(
-                "flex flex-col items-end px-2.5 py-1 rounded-lg border transition-colors",
-                dateInfo.isLate ? "bg-red-500/10 border-red-500/30" : "bg-zinc-900/50 border-zinc-800"
+                "flex flex-col items-end px-2.5 py-1 rounded-lg border transition-colors min-w-[65px]",
+                dateInfo.isLate || dateInfo.isToday ? "bg-red-500/10 border-red-500/30" : "bg-zinc-900/50 border-zinc-800"
               )}>
                 <span className="text-[7px] text-zinc-500 uppercase font-black tracking-[0.2em]">
                   {isDone ? 'Finalizado' : 'Deadline'}
                 </span>
                 <div className={cn(
                   "flex items-center gap-1 font-mono font-bold text-xs",
-                  dateInfo.isLate ? "text-red-500 animate-pulse" : "text-white"
+                  (dateInfo.isLate || dateInfo.isToday) ? "text-red-500 animate-pulse" : "text-white"
                 )}>
-                  {dateInfo.isLate ? <AlertTriangle size={10} /> : (isDone ? <CheckCircle2 size={10} className="text-emerald-500" /> : <Calendar size={10} className="text-zinc-500" />)}
+                  {(dateInfo.isLate || dateInfo.isToday) ? <AlertTriangle size={10} /> : (isDone ? <CheckCircle2 size={10} className="text-emerald-500" /> : <Calendar size={10} className="text-zinc-500" />)}
                   {dateInfo.formatted}
                 </div>
               </div>
