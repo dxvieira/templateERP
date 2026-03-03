@@ -11,12 +11,30 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Package, Plus, Trash2, X, Printer, Layers, Truck, 
   Hammer, Loader2, Lock, Flame, CheckCircle2, ShoppingCart, 
-  History, AlertTriangle, ArrowRight 
+  History, AlertTriangle, ArrowRight, Calendar, Info
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { cn } from '@/lib/utils';
+import { 
+  format, 
+  startOfWeek, 
+  isToday, 
+  parseISO 
+} from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import Image from 'next/image';
 
 const CATEGORIES = ['Impressão', 'Serralheria', 'Acabamento', 'Instalação'];
 const CATEGORY_CONFIG: Record<string, { icon: any, color: string, bg: string }> = {
@@ -36,6 +54,10 @@ export default function MaterialsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({ name: '', quantity: '', category: 'Impressão', urgente: false });
 
+  // Estados dos Novos Modais de Confirmação
+  const [isApproveAllConfirmOpen, setIsApproveAllConfirmOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<any>(null);
+
   /**
    * CONSULTA OTIMIZADA: 
    * Buscamos apenas por data de criação. A filtragem por status e urgência 
@@ -43,6 +65,11 @@ export default function MaterialsPage() {
    */
   const materialsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
+    
+    // NOTA TÁTICA: Para filtrar apenas os da semana corrente no servidor:
+    // const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+    // return query(collection(firestore, 'materials'), where('createdAt', '>=', weekStart), orderBy('createdAt', 'desc'));
+    
     return query(
       collection(firestore, 'materials'), 
       orderBy('createdAt', 'desc')
@@ -58,7 +85,6 @@ export default function MaterialsPage() {
     const pendentes = allItems
       .filter(item => item.status === 'pendente')
       .sort((a, b) => {
-        // Prioridade para itens urgentes no topo
         if (a.urgente && !b.urgente) return -1;
         if (!a.urgente && b.urgente) return 1;
         return 0;
@@ -95,9 +121,8 @@ export default function MaterialsPage() {
     }
   };
 
-  const handleApproveAll = async () => {
+  const executeApproveAll = async () => {
     if (!firestore || !itemsPendentes || itemsPendentes.length === 0) return;
-    if (!confirm(`Confirmar a compra de todos os ${itemsPendentes.length} itens da lista?`)) return;
 
     setIsSubmitting(true);
     const batch = writeBatch(firestore);
@@ -113,6 +138,7 @@ export default function MaterialsPage() {
     try {
       await batch.commit();
       toast({ title: "Missão Cumprida", description: "Toda a lista foi movida para o histórico." });
+      setIsApproveAllConfirmOpen(false);
     } catch (error) {
       toast({ variant: 'destructive', title: "Erro no Processamento", description: "Falha ao processar atualização em massa." });
     } finally {
@@ -130,11 +156,18 @@ export default function MaterialsPage() {
     });
   };
 
-  const handleDelete = async (id: string) => {
-    if (!firestore || !confirm("Remover solicitação permanentemente?")) return;
-    deleteDoc(doc(firestore, 'materials', id)).then(() => {
+  const executeDelete = async () => {
+    if (!firestore || !itemToDelete) return;
+    deleteDoc(doc(firestore, 'materials', itemToDelete.id)).then(() => {
       toast({ title: "Registro Removido" });
+      setItemToDelete(null);
     });
+  };
+
+  const formatItemDate = (timestamp: any) => {
+    if (!timestamp) return '--/--/--';
+    const date = timestamp.seconds ? new Date(timestamp.seconds * 1000) : timestamp;
+    return format(date, "dd 'de' MMM, yy", { locale: ptBR });
   };
 
   if (!user && !isUserLoading) return <div className="h-full flex items-center justify-center"><Lock className="w-12 h-12 text-destructive opacity-50" /></div>;
@@ -156,13 +189,13 @@ export default function MaterialsPage() {
         <div className="flex gap-3">
           <button 
             onClick={() => setIsModalOpen(true)} 
-            className="flex items-center gap-2 px-6 py-3 bg-zinc-800 text-white font-black text-[10px] uppercase rounded-xl hover:bg-zinc-700 transition-all"
+            className="flex items-center gap-2 px-6 py-3 bg-zinc-800 text-white font-black text-[10px] uppercase rounded-xl hover:bg-zinc-700 transition-all border border-white/5"
           >
             <Plus size={16} /> Solicitar
           </button>
           {activeTab === 'compras' && itemsPendentes.length > 0 && (
             <button 
-              onClick={handleApproveAll}
+              onClick={() => setIsApproveAllConfirmOpen(true)}
               disabled={isSubmitting}
               className="flex items-center gap-2 px-6 py-3 bg-primary text-black font-black text-[10px] uppercase rounded-xl shadow-[0_0_20px_rgba(255,95,31,0.4)] hover:bg-white transition-all disabled:opacity-50"
             >
@@ -225,39 +258,44 @@ export default function MaterialsPage() {
                     )}
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <h4 className={cn("text-sm font-bold uppercase", item.urgente && activeTab === 'compras' ? "text-red-400" : "text-white")}>
+                      <h4 className={cn("text-sm font-bold uppercase truncate pr-2", item.urgente && activeTab === 'compras' ? "text-red-400" : "text-white")}>
                         {item.name}
                       </h4>
                       {item.urgente && activeTab === 'compras' && (
-                        <div className="flex items-center gap-1 bg-red-500/10 text-red-500 px-2 py-0.5 rounded-full border border-red-500/20">
+                        <div className="flex items-center gap-1 bg-red-500/10 text-red-500 px-2 py-0.5 rounded-full border border-red-500/20 shrink-0">
                           <Flame size={10} className="animate-pulse" />
                           <span className="text-[8px] font-black uppercase">Crítico</span>
                         </div>
                       )}
                     </div>
                     
-                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
-                      Quantidade: <span className="text-white">{item.quantity}</span>
-                    </p>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                        Quantidade: <span className="text-white">{item.quantity}</span>
+                      </p>
+                      <p className="text-[8px] font-bold text-zinc-600 uppercase flex items-center gap-1">
+                        <Calendar size={10} /> {formatItemDate(item.createdAt)}
+                      </p>
+                    </div>
 
                     <div className="flex gap-2 pt-3 mt-3 border-t border-white/5">
                       {activeTab === 'compras' ? (
                         <button 
                           onClick={() => handleIndividualAction(item.id, 'comprado')} 
-                          className="flex-1 py-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black rounded-lg text-[9px] font-black uppercase transition-all flex items-center justify-center gap-1"
+                          className="flex-1 py-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black rounded-lg text-[9px] font-black uppercase transition-all flex items-center justify-center gap-1 border border-emerald-500/20"
                         >
                           <CheckCircle2 size={12} /> Baixar
                         </button>
                       ) : (
                         <button 
                           onClick={() => handleIndividualAction(item.id, 'pendente')} 
-                          className="flex-1 py-2 bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-[9px] font-black uppercase transition-all"
+                          className="flex-1 py-2 bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-[9px] font-black uppercase transition-all border border-white/5"
                         >
                           Restaurar
                         </button>
                       )}
                       <button 
-                        onClick={() => handleDelete(item.id)} 
+                        onClick={() => setItemToDelete(item)} 
                         className="p-2 bg-zinc-950 text-zinc-700 hover:text-red-500 rounded-lg border border-zinc-800 transition-colors"
                       >
                         <Trash2 size={14} />
@@ -280,6 +318,7 @@ export default function MaterialsPage() {
         )}
       </div>
 
+      {/* MODAL DE SOLICITAÇÃO */}
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}>
@@ -339,6 +378,64 @@ export default function MaterialsPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* ALERT MODAL: APROVAR TUDO */}
+      <AlertDialog open={isApproveAllConfirmOpen} onOpenChange={setIsApproveAllConfirmOpen}>
+        <AlertDialogContent className="bg-[#0c0c0e] border border-zinc-800 rounded-[2.5rem] p-8 max-w-md">
+          <AlertDialogHeader className="flex flex-col items-center text-center space-y-4">
+            <div className="w-16 h-16 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-2xl">
+              <ShoppingCart className="w-8 h-8 text-primary" />
+            </div>
+            <div className="space-y-2">
+              <AlertDialogTitle className="text-xl font-black text-white uppercase tracking-tighter">Aprovação em Lote</AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-zinc-500 uppercase tracking-widest leading-relaxed">
+                Deseja confirmar a compra de todos os <span className="text-white font-bold">{itemsPendentes.length} itens</span> da pauta atual? Esta ação moverá os registros para o histórico.
+              </AlertDialogDescription>
+            </div>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-col gap-3 mt-8">
+            <AlertDialogAction 
+              onClick={executeApproveAll}
+              className="w-full h-14 bg-primary text-black hover:bg-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-[0_0_20px_rgba(255,95,31,0.3)] transition-all"
+            >
+              Confirmar Recebimento
+            </AlertDialogAction>
+            <AlertDialogCancel className="w-full h-12 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white font-black uppercase tracking-widest text-[10px] rounded-2xl">
+              Cancelar Operação
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ALERT MODAL: EXCLUSÃO */}
+      <AlertDialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
+        <AlertDialogContent className="bg-[#0c0c0e] border border-red-500/20 rounded-[2.5rem] p-8 max-w-md">
+          <AlertDialogHeader className="flex flex-col items-center text-center space-y-4">
+            <div className="w-16 h-16 rounded-3xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shadow-2xl">
+              <AlertTriangle className="w-8 h-8 text-red-500" />
+            </div>
+            <div className="space-y-2">
+              <AlertDialogTitle className="text-xl font-black text-white uppercase tracking-tighter">Excluir Solicitação?</AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-zinc-500 uppercase tracking-widest leading-relaxed">
+                Você está prestes a remover permanentemente o registro de <br/>
+                <span className="text-red-400 font-bold">"{itemToDelete?.name}"</span>. 
+                <br />Esta ação é irreversível.
+              </AlertDialogDescription>
+            </div>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-col gap-3 mt-8">
+            <AlertDialogAction 
+              onClick={executeDelete}
+              className="w-full h-14 bg-red-600 text-white hover:bg-red-500 font-black uppercase tracking-widest text-xs rounded-2xl shadow-[0_0_20px_rgba(239,68,68,0.3)]"
+            >
+              Confirmar Exclusão
+            </AlertDialogAction>
+            <AlertDialogCancel className="w-full h-12 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white font-black uppercase tracking-widest text-[10px] rounded-2xl">
+              Manter Registro
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
