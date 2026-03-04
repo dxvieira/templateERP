@@ -3,18 +3,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ClipboardList, LogIn, Mail, Lock, UserPlus, Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { ClipboardList, LogIn, Mail, Lock, UserPlus, Loader2, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { useAuth, useUser, initiateEmailSignIn, initiateEmailSignUp, useFirestore } from '@/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { useAuth, useUser, initiateEmailSignIn, initiateEmailSignUp } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
   const router = useRouter();
   const auth = useAuth();
-  const db = useFirestore();
   const { user, isUserLoading } = useUser();
   const { toast } = useToast();
 
@@ -31,27 +29,11 @@ export default function LoginPage() {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth || !db) return;
+    if (!auth) return;
 
     setLoading(true);
 
     try {
-      // 1. VALIDAÇÃO DE WHITELIST (Obrigatória)
-      const emailKey = email.toLowerCase().trim();
-      const whitelistRef = doc(db, 'authorized_emails', emailKey);
-      const whitelistSnap = await getDoc(whitelistRef);
-
-      if (!whitelistSnap.exists()) {
-        toast({
-          variant: 'destructive',
-          title: 'Acesso Negado',
-          description: 'Este e-mail não consta na lista de identidades autorizadas.',
-        });
-        setLoading(false);
-        return;
-      }
-
-      // 2. EXECUÇÃO DA AUTENTICAÇÃO
       if (mode === 'signup') {
         await initiateEmailSignUp(auth, email, password);
         toast({ title: 'Identidade Criada', description: 'Bem-vindo ao terminal IMPACTO.' });
@@ -67,7 +49,7 @@ export default function LoginPage() {
       toast({
         variant: 'destructive',
         title: 'Falha de Autenticação',
-        description: msg,
+        description: error.message || msg,
       });
     } finally {
       setLoading(false);
@@ -108,7 +90,7 @@ export default function LoginPage() {
               {mode === 'login' ? 'Identificação' : 'Novo Registro'}
             </CardTitle>
             <CardDescription className="text-[9px] text-zinc-500 uppercase tracking-[0.2em] font-bold">
-              {mode === 'login' ? 'Insira suas credenciais autorizadas' : 'O cadastro requer autorização prévia na whitelist'}
+              {mode === 'login' ? 'Insira suas credenciais' : 'Defina seus dados de acesso'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 pb-12 px-8">
@@ -119,7 +101,7 @@ export default function LoginPage() {
                   <input
                     required
                     type="email"
-                    placeholder="E-mail Corporativo"
+                    placeholder="E-mail"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full h-14 bg-zinc-950 border border-zinc-800 rounded-2xl pl-12 pr-4 text-white text-sm outline-none focus:border-primary/50 transition-all placeholder:text-zinc-800"
@@ -145,7 +127,7 @@ export default function LoginPage() {
                 {loading ? <Loader2 className="animate-spin w-5 h-5" /> : (
                   <>
                     {mode === 'login' ? <LogIn className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
-                    {mode === 'login' ? 'Entrar no Sistema' : 'Validar Identidade'}
+                    {mode === 'login' ? 'Entrar no Sistema' : 'Criar Conta'}
                   </>
                 )}
               </Button>
@@ -161,7 +143,7 @@ export default function LoginPage() {
 
               <div className="flex items-center justify-center gap-2 opacity-40 mt-4">
                 <ShieldCheck size={12} className="text-primary" />
-                <p className="text-[8px] text-zinc-500 uppercase tracking-widest">Acesso Restrito via Whitelist</p>
+                <p className="text-[8px] text-zinc-500 uppercase tracking-widest">Acesso Industrial Protegido</p>
               </div>
             </div>
           </CardContent>

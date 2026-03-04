@@ -2,41 +2,19 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { doc, setDoc, serverTimestamp, collection, query, orderBy, limit, getDocs, where, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, getDocs, updateDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { 
   X, Save, Plus, Trash2, Box, 
-  User, CreditCard, DollarSign, 
   Calculator, Loader2,
-  History, Wallet, Receipt,
-  CheckCircle2, AlertTriangle, RefreshCw, FileText,
-  ArrowDownLeft, ArrowRight, Download, Printer,
-  Search
+  History, FileText,
+  Printer
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import Image from 'next/image';
+import { motion } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { cn } from '@/lib/utils';
-import { addMonths, format, parseISO, startOfDay, isBefore } from 'date-fns';
-
-const PAYMENT_METHODS = [
-  "Caixa Interno",
-  "SICOOB - Lindóia",
-  "SICOOB - Serra Negra",
-  "Máquina PAGBANK",
-  "Máquina SIPAG"
-];
-
-const INSTALLMENT_TYPES = ["Boleto", "Cartão", "Dinheiro/Pix"];
-
-const generateUid = () => {
-  if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
-    return window.crypto.randomUUID();
-  }
-  return Math.random().toString(36).substring(2, 15);
-};
 
 interface AdminOrderModalProps {
   order?: any | null;
@@ -49,65 +27,31 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'operacional' | 'financeiro'>('operacional');
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  const [clientsList, setClientsList] = useState<any[]>([]);
-  const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const [isUnlocked, setIsUnlocked] = useState(false);
 
   const [client, setClient] = useState('');
-  const [seller, setSeller] = useState('');
   const [status, setStatus] = useState('Arte');
   const [emissionDate, setEmissionDate] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [observations, setObservations] = useState('');
   const [items, setItems] = useState<any[]>([]);
-  
   const [installments, setInstallments] = useState<any[]>([]);
-  const [genConfig, setInstallmentGenConfig] = useState({
-    total: 0,
-    downPayment: 0,
-    count: 1,
-    type: "Boleto",
-    startDate: new Date().toISOString().split('T')[0],
-    machine: "Máquina PAGBANK"
-  });
-
-  const [baixaInstallmentUid, setBaixaInstallmentUid] = useState<string | null>(null);
-  const [baixaData, setBaixaData] = useState({ method: PAYMENT_METHODS[0], date: new Date().toISOString().split('T')[0] });
 
   useEffect(() => {
     if (isOpen) {
-      setIsAdmin(sessionStorage.getItem('is_admin_unlocked') === 'true');
+      setIsUnlocked(sessionStorage.getItem('page_unlocked') === 'true');
     }
   }, [isOpen]);
 
   useEffect(() => {
-    const fetchClients = async () => {
-      if (!firestore || !isOpen) return;
-      try {
-        const querySnapshot = await getDocs(collection(firestore, 'clients'));
-        const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        data.sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''));
-        setClientsList(data);
-      } catch (error) {}
-    };
-    fetchClients();
-  }, [firestore, isOpen]);
-
-  useEffect(() => {
     if (order) {
       setClient(order.client || '');
-      setSeller(order.seller || '');
       setStatus(order.status || 'Arte');
       setEmissionDate(order.emission_date || order.emissionDate || new Date().toISOString().split('T')[0]);
       setDeliveryDate(order.delivery_date || order.deliveryDate || '');
       setObservations(order.observations || '');
-      setItems(order.items?.map((item: any) => ({ ...item })) || [{ productCode: '', desc: '', quantity: 1, unitValue: 0, observation: '' }]);
+      setItems(order.items?.map((item: any) => ({ ...item })) || [{ desc: '', quantity: 1, unitValue: 0 }]);
       setInstallments(Array.isArray(order.installments) ? order.installments : []);
-      setInstallmentGenConfig(prev => ({
-        ...prev,
-        downPayment: order.down_payment || order.downPayment || 0
-      }));
     } else {
       resetForm();
     }
@@ -116,21 +60,12 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
   const resetForm = () => {
     setClient('');
-    setSeller('');
     setStatus('Arte');
     setEmissionDate(new Date().toISOString().split('T')[0]);
     setDeliveryDate('');
     setObservations('');
-    setItems([{ productCode: '', desc: '', quantity: 1, unitValue: 0, observation: '' }]);
+    setItems([{ desc: '', quantity: 1, unitValue: 0 }]);
     setInstallments([]);
-    setInstallmentGenConfig({
-      total: 0,
-      downPayment: 0,
-      count: 1,
-      type: "Boleto",
-      startDate: new Date().toISOString().split('T')[0],
-      machine: "Máquina PAGBANK"
-    });
   };
 
   const totalValue = useMemo(() => {
@@ -156,12 +91,11 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
     const payload = {
       id: finalId,
-      client, seller, status, 
+      client, status, 
       emission_date: emissionDate, 
       delivery_date: deliveryDate, 
       observations, items, 
       total_value: totalValue,
-      down_payment: genConfig.downPayment,
       amount_paid: amountPaid, 
       balance_due: balanceDue, 
       installments,
@@ -186,10 +120,6 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       .finally(() => setLoading(false));
   };
 
-  const handleEmitNFe = () => {
-    toast({ title: "Módulo Fiscal", description: "Processando transmissão para o SEFAZ..." });
-  };
-
   if (!isOpen) return null;
 
   const labelClass = "text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-1.5 ml-1 block";
@@ -197,7 +127,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
-      <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }} className="bg-[#09090b] w-full max-w-5xl border border-zinc-800 rounded-3xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden">
+      <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-[#09090b] w-full max-w-5xl border border-zinc-800 rounded-3xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden">
         
         <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-zinc-900/50">
           <div className="flex items-center gap-4">
@@ -209,9 +139,9 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </div>
           
           <div className="flex items-center gap-4">
-             {isAdmin && (
+             {isUnlocked && (
                <div className="flex items-center gap-6 border-r border-zinc-800 pr-6 mr-2">
-                 <button onClick={handleEmitNFe} className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-xl hover:bg-emerald-500 hover:text-black transition-all">
+                 <button onClick={() => toast({ title: "Módulo Fiscal Ativo" })} className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-xl hover:bg-emerald-500 hover:text-black transition-all">
                    <FileText size={14} /><span className="text-[10px] font-black uppercase">Emitir NF-e</span>
                  </button>
                  <div className="text-right">
@@ -256,7 +186,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                 <section className="space-y-4">
                    <div className="flex justify-between items-center border-b border-white/5 pb-2">
                       <h3 className="text-[10px] text-primary font-black uppercase tracking-[0.2em] flex items-center gap-2"><Box size={14}/> Itens da Ordem</h3>
-                      <button type="button" onClick={() => setItems([...items, { productCode: '', desc: '', quantity: 1, unitValue: 0, observation: '' }])} className="bg-zinc-800 text-white rounded-lg px-3 py-1.5 text-[9px] font-black uppercase transition-all flex items-center gap-1"><Plus size={12}/> Adicionar</button>
+                      <button type="button" onClick={() => setItems([...items, { desc: '', quantity: 1, unitValue: 0 }])} className="bg-zinc-800 text-white rounded-lg px-3 py-1.5 text-[9px] font-black uppercase transition-all flex items-center gap-1"><Plus size={12}/> Adicionar</button>
                    </div>
                    <div className="space-y-3">
                       {items.map((item, index) => (
@@ -275,7 +205,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
             ) : (
               <div className="space-y-10">
                 <section className="bg-zinc-900/30 border border-zinc-800 rounded-3xl p-6 text-center">
-                   <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.3em] mb-4">Resumo Financeiro Industrial</p>
+                   <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.3em] mb-4">Resumo Financeiro</p>
                    <div className="flex flex-wrap justify-center gap-8">
                       <div><p className="text-[9px] text-zinc-600 uppercase font-black">Valor Total</p><p className="text-2xl font-black text-white font-mono">{totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div>
                       <div><p className="text-[9px] text-zinc-600 uppercase font-black">Total Pago</p><p className="text-2xl font-black text-emerald-500 font-mono">{amountPaid.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div>
@@ -285,18 +215,22 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                 <section className="space-y-4">
                    <h3 className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] border-b border-white/5 pb-2 flex items-center gap-2"><History size={14}/> Histórico de Parcelas</h3>
                    <div className="grid grid-cols-1 gap-2">
-                      {installments.map((inst) => (
-                        <div key={inst.uid} className={cn("flex items-center justify-between p-4 rounded-2xl border transition-all", inst.status === 'paid' ? "bg-emerald-500/5 border-emerald-500/20" : "bg-zinc-900/40 border-zinc-800")}>
+                      {installments.length > 0 ? installments.map((inst, i) => (
+                        <div key={i} className={cn("flex items-center justify-between p-4 rounded-2xl border transition-all", inst.status === 'paid' ? "bg-emerald-500/5 border-emerald-500/20" : "bg-zinc-900/40 border-zinc-800")}>
                            <div className="flex items-center gap-4">
                               <div className={cn("w-2 h-2 rounded-full", inst.status === 'paid' ? "bg-emerald-500 shadow-[0_0_10px_#10b981]" : "bg-zinc-700")} />
                               <div>
-                                <p className="text-xs font-black text-white uppercase">{inst.id} &bull; {inst.due_date}</p>
-                                <p className="text-[9px] text-zinc-500 font-bold uppercase">{inst.type} {inst.payment_method && ` via ${inst.payment_method}`}</p>
+                                <p className="text-xs font-black text-white uppercase">{inst.due_date}</p>
+                                <p className="text-[9px] text-zinc-500 font-bold uppercase">{inst.payment_method || 'PIX/Dinheiro'}</p>
                               </div>
                            </div>
-                           <p className="text-sm font-black text-white font-mono">{inst.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                           <p className="text-sm font-black text-white font-mono">{Number(inst.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                         </div>
-                      ))}
+                      )) : (
+                        <div className="text-center py-10 border border-dashed border-zinc-800 rounded-2xl">
+                          <p className="text-[10px] text-zinc-600 font-black uppercase">Nenhuma parcela registrada</p>
+                        </div>
+                      )}
                    </div>
                 </section>
               </div>

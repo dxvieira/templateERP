@@ -2,21 +2,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Função para verificar se o e-mail do usuário autenticado está na whitelist
-    function isEmailAuthorized() {
-      return request.auth != null && exists(/databases/$(database)/documents/authorized_emails/$(request.auth.token.email));
-    }
-
-    // Permite que qualquer pessoa verifique se seu e-mail está na whitelist para poder se cadastrar/logar
-    match /authorized_emails/{email} {
-      allow get: if true;
-      allow list, write: if false; 
-    }
-
-    // Documentos operacionais: acessíveis apenas por usuários autenticados e presentes na whitelist
     match /{document=**} {
-      allow read, write: if isEmailAuthorized();
+      allow read, write: if request.auth != null;
     }
   }
 }

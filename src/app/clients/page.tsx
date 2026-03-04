@@ -7,13 +7,13 @@ import { useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Users, Search, Plus, Phone, Building2, Mail, X, Save, Trash2, 
+  Users, Search, Plus, Building2, Mail, X, Save, Trash2, 
   ChevronRight, FileBadge, MapPin, Smartphone, MessageCircle, Loader2 
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-import { AdminGate } from '@/components/auth/AdminGate';
+import { ProtectedGate } from '@/components/auth/ProtectedGate';
 
 function ClientsContent() {
   const firestore = useFirestore();
@@ -136,7 +136,7 @@ function ClientsContent() {
   const inputClass = "w-full bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none transition-colors";
 
   return (
-    <AdminGate>
+    <ProtectedGate>
       <div className="p-4 md:p-8 space-y-8 mt-14 md:mt-0">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div>
@@ -250,7 +250,7 @@ function ClientsContent() {
           )}
         </AnimatePresence>
       </div>
-    </AdminGate>
+    </ProtectedGate>
   );
 }
 
