@@ -21,6 +21,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { OrderPaymentModal } from '@/components/dashboard/OrderPaymentModal';
 
 /**
  * Utilitário para sanitização de valores monetários.
@@ -40,6 +41,7 @@ function ReportsContent() {
   const [activeTab, setActiveTab] = useState<'FLUXO' | 'CONTAS' | 'PEDIDOS'>('FLUXO');
   const [selectedMonth, setSelectedMonth] = useState('');
   const [itemToPay, setItemToPay] = useState<any>(null);
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<any>(null);
 
   useEffect(() => {
     setSelectedMonth(format(new Date(), 'yyyy-MM'));
@@ -361,7 +363,8 @@ function ReportsContent() {
                   <motion.div 
                     variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
                     key={order.id}
-                    className="group relative bg-zinc-900/20 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-5 hover:bg-zinc-900/40 hover:border-primary/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-[0_0_30px_-10px_rgba(255,95,31,0.15)]"
+                    onClick={() => setSelectedOrderForPayment(order)}
+                    className="group relative bg-zinc-900/20 backdrop-blur-md border border-zinc-800/50 rounded-2xl p-5 hover:bg-zinc-900/40 hover:border-primary/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-[0_0_30px_-10px_rgba(255,95,31,0.15)] cursor-pointer"
                   >
                     <div className="flex flex-col lg:flex-row items-center gap-6">
                       {/* Identificação */}
@@ -444,6 +447,12 @@ function ReportsContent() {
           </div>
         )}
       </AnimatePresence>
+
+      <OrderPaymentModal 
+        order={selectedOrderForPayment}
+        isOpen={!!selectedOrderForPayment}
+        onClose={() => setSelectedOrderForPayment(null)}
+      />
     </div>
   );
 }
