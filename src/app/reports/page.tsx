@@ -21,6 +21,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+/**
+ * Utilitário para sanitização de valores monetários.
+ * Converte strings formatadas ou nulos em floats puros para exportação.
+ */
 const cleanCurrency = (val: any): number => {
   if (typeof val === 'number') return val;
   if (!val || typeof val !== 'string') return 0;
@@ -37,6 +41,7 @@ function ReportsContent() {
   const [selectedMonth, setSelectedMonth] = useState('');
   const [itemToPay, setItemToPay] = useState<any>(null);
 
+  // Inicializa o seletor com o mês atual
   useEffect(() => {
     setSelectedMonth(format(new Date(), 'yyyy-MM'));
   }, []);
@@ -60,6 +65,10 @@ function ReportsContent() {
   const { data: cashflowManual } = useCollection(cashflowQuery);
   const { data: payables } = useCollection(payablesQuery);
 
+  /**
+   * MOTOR DE CONSOLIDAÇÃO FINANCEIRA
+   * Unifica transações de OS, Fluxo Manual e Contas a Pagar.
+   */
   const reportData = useMemo(() => {
     if (!selectedMonth) return null;
     const [year, month] = selectedMonth.split('-').map(Number);
@@ -69,12 +78,17 @@ function ReportsContent() {
     let incomes = 0, expenses = 0, receivables = 0, totalPayables = 0;
     const transactions: any[] = [];
 
+    // Processamento de Ordens de Serviço (Receitas e Parcelas)
     orders?.forEach(order => {
       const orderDate = order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000) : parseISO(order.emission_date || order.delivery_date || '');
+      
+      // Cálculo de valores a receber (Saldos pendentes no mês)
       if (isWithinInterval(orderDate, { start: startDate, end: endDate })) {
         const balance = cleanCurrency(order.balance_due ?? order.balanceDue);
         if (balance > 0) receivables += balance;
       }
+
+      // Processamento de faturas quitadas (Entradas Reais)
       const installments = Array.isArray(order.installments) ? order.installments : [];
       installments.forEach((inst: any) => {
         if ((inst?.status === 'paid' || inst?.status === 'pago') && inst.paid_date) {
@@ -83,13 +97,23 @@ function ReportsContent() {
             if (isWithinInterval(paidDate, { start: startDate, end: endDate })) {
               const amount = cleanCurrency(inst.amount);
               incomes += amount;
-              transactions.push({ id: `${order.id}-${inst.uid}`, date: inst.paid_date, description: `PGTO OS #${order.id.slice(-6)} - ${order.client}`, type: 'income', amount, method: inst.payment_method || 'Sistema', origin: 'SISTEMA (OS)', originalId: order.id });
+              transactions.push({ 
+                id: `${order.id}-${inst.uid}`, 
+                date: inst.paid_date, 
+                description: `PGTO OS #${order.id.slice(-6)} - ${order.client}`, 
+                type: 'income', 
+                amount, 
+                method: inst.payment_method || 'Sistema', 
+                origin: 'SISTEMA (OS)', 
+                originalId: order.id 
+              });
             }
           } catch (e) {}
         }
       });
     });
 
+    // Processamento de Contas a Pagar (Saídas Previstas)
     const groups: Record<string, any> = {};
     payables?.forEach(payable => {
       if (payable.status !== 'paid') totalPayables += cleanCurrency(payable.amount);
@@ -100,37 +124,72 @@ function ReportsContent() {
       if (payable.status !== 'paid') groups[gid].allPaid = false;
     });
 
+    // Processamento de Lançamentos Manuais (Despesas e Entradas Diversas)
     cashflowManual?.forEach(entry => {
       try {
         const entryDate = parseISO(entry.date);
         if (isWithinInterval(entryDate, { start: startDate, end: endDate })) {
           const amount = cleanCurrency(entry.amount);
           if (entry.type === 'income') incomes += amount; else expenses += amount;
-          transactions.push({ id: entry.id, date: entry.date, description: entry.description, type: entry.type, amount, method: entry.method || 'Manual', origin: entry.origin || 'MANUAL' });
+          transactions.push({ 
+            id: entry.id, 
+            date: entry.date, 
+            description: entry.description, 
+            type: entry.type, 
+            amount, 
+            method: entry.method || 'Manual', 
+            origin: entry.origin || 'MANUAL' 
+          });
         }
       } catch (e) {}
     });
 
     transactions.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
-    return { transactions, groupedPayables: Object.values(groups), kpis: { incomes, expenses, net: incomes - expenses, receivables, payables: totalPayables } };
+    return { 
+      transactions, 
+      groupedPayables: Object.values(groups), 
+      kpis: { incomes, expenses, net: incomes - expenses, receivables, payables: totalPayables } 
+    };
   }, [orders, cashflowManual, payables, selectedMonth]);
 
+  /**
+   * MOTOR DE EXPORTAÇÃO INDUSTRIAL (SHEETJS)
+   * Gera planilhas com tipagem correta e auto-ajuste.
+   */
   const handleExport = (formatType: 'xlsx' | 'csv' | 'xml') => {
     if (!reportData) return;
 
+    // Definição estrita do cabeçalho conforme requisitos
+    const header = ['Data', 'Tipo', 'Descrição', 'Origem/Destino', 'Valor Bruto', 'Status', 'Responsável'];
+
+    // Mapeamento e Tipagem de Dados (Crucial para cálculos no Excel)
     const dataToExport = reportData.transactions.map(t => ({
-      Data: format(parseISO(t.date), 'dd/MM/yyyy'),
-      Tipo: t.type === 'income' ? 'Entrada' : 'Saída',
-      Descrição: t.description,
-      'Origem/Destino': t.origin,
-      'Valor Bruto': t.amount,
-      Status: 'Compensado',
-      Responsável: t.method
+      'Data': format(parseISO(t.date), 'dd/MM/yyyy'),
+      'Tipo': t.type === 'income' ? 'Entrada' : 'Saída',
+      'Descrição': String(t.description || ''),
+      'Origem/Destino': String(t.origin || ''),
+      'Valor Bruto': Number(t.amount || 0), // Convertido para number para permitir somas no Excel
+      'Status': 'Compensado',
+      'Responsável': String(t.method || 'Sistema')
     }));
 
     if (formatType === 'xlsx' || formatType === 'csv') {
-      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+      // Cria a folha de dados respeitando a ordem do cabeçalho
+      const worksheet = XLSX.utils.json_to_sheet(dataToExport, { header });
+      
+      // Implementação de Auto-ajuste de Largura (UX de Visualização)
+      const wscols = [
+        { wch: 12 }, // Data
+        { wch: 10 }, // Tipo
+        { wch: 50 }, // Descrição (Maior largura para textos longos)
+        { wch: 20 }, // Origem/Destino
+        { wch: 15 }, // Valor Bruto
+        { wch: 12 }, // Status
+        { wch: 15 }, // Responsável
+      ];
+      worksheet['!cols'] = wscols;
+
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Fluxo de Caixa");
       
@@ -139,8 +198,10 @@ function ReportsContent() {
       } else {
         XLSX.writeFile(workbook, `Relatorio_Financeiro_${selectedMonth}.csv`, { bookType: 'csv' });
       }
-      toast({ title: "Exportação Concluída", description: `Arquivo ${formatType.toUpperCase()} gerado com sucesso.` });
+      
+      toast({ title: "Extração Concluída", description: `Arquivo ${formatType.toUpperCase()} gerado com sucesso.` });
     } else if (formatType === 'xml') {
+      // Geração de Estrutura XML Padronizada
       let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<RelatorioFinanceiro>\n';
       dataToExport.forEach(item => {
         xml += '  <Transacao>\n';
@@ -159,7 +220,7 @@ function ReportsContent() {
       a.download = `Relatorio_Financeiro_${selectedMonth}.xml`;
       a.click();
       URL.revokeObjectURL(url);
-      toast({ title: "Exportação Concluída", description: "Arquivo XML gerado com sucesso." });
+      toast({ title: "Extração Concluída", description: "Estrutura XML gerada com sucesso." });
     }
   };
 
@@ -167,7 +228,16 @@ function ReportsContent() {
     if (!itemToPay || !firestore || !user) return;
     const payableRef = doc(firestore, 'accounts_payable', itemToPay.id);
     updateDoc(payableRef, { status: 'paid', paidAt: serverTimestamp(), paymentDate: new Date().toISOString() }).then(async () => {
-      await addDoc(collection(firestore, 'cashflow_manual'), { description: `PGTO: ${itemToPay.supplier}`, amount: cleanCurrency(itemToPay.amount), type: 'expense', date: format(new Date(), 'yyyy-MM-dd'), method: 'Boleto', origin: 'CONTAS A PAGAR', createdAt: serverTimestamp(), userId: user.uid });
+      await addDoc(collection(firestore, 'cashflow_manual'), { 
+        description: `PGTO: ${itemToPay.supplier}`, 
+        amount: cleanCurrency(itemToPay.amount), 
+        type: 'expense', 
+        date: format(new Date(), 'yyyy-MM-dd'), 
+        method: 'Boleto', 
+        origin: 'CONTAS A PAGAR', 
+        createdAt: serverTimestamp(), 
+        userId: user.uid 
+      });
       toast({ title: "Baixa Confirmada" }); 
       setItemToPay(null);
     });
@@ -183,7 +253,7 @@ function ReportsContent() {
           <h1 className="text-4xl font-black text-white tracking-tighter uppercase leading-none">Relatórios <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">Industriais</span></h1>
         </div>
         <div className="flex items-center gap-4">
-           {/* BOTÃO EXPORTAR */}
+           {/* COMANDO DE EXPORTAÇÃO */}
            <DropdownMenu>
              <DropdownMenuTrigger asChild>
                <button className="flex items-center gap-2 px-5 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest group">
