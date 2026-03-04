@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -12,15 +11,12 @@ import {
   ShoppingBag, Users as UsersIcon, ChevronRight, Sparkles,
   FileSpreadsheet, ClipboardList
 } from 'lucide-react';
-import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Label } from 'recharts';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import * as XLSX from 'xlsx';
-import { AdminGate } from '@/components/auth/AdminGate';
+import { AdminGuard } from '@/components/auth/AdminGuard';
 
-// MAPEAMENTO DE CORES INDUSTRIAIS
 const PRODUCTION_COLORS: Record<string, string> = { 
   'ARTE': '#d946ef', 
   'IMPRESSÃO': '#3b82f6', 
@@ -43,13 +39,10 @@ function ReportsContent() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
-  const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<'FLUXO' | 'CONTAS' | 'PEDIDOS'>('FLUXO');
   const [selectedMonth, setSelectedMonth] = useState('');
-  const [itemToDelete, setItemToDelete] = useState<any>(null);
   const [itemToPay, setItemToPay] = useState<any>(null);
-  const [activePieIndex, setActivePieIndex] = useState<number | null>(null);
 
   useEffect(() => {
     setSelectedMonth(format(new Date(), 'yyyy-MM'));
@@ -125,27 +118,14 @@ function ReportsContent() {
       } catch (e) {}
     });
 
-    const biStatus: Record<string, number> = {};
-    const biClients: Record<string, number> = {};
-    let biTotalValue = 0;
     const filteredOrders = orders?.filter(o => {
       const d = o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000) : parseISO(o.emission_date || o.delivery_date || '');
       return isWithinInterval(d, { start: startDate, end: endDate });
     }) || [];
 
-    filteredOrders.forEach(o => {
-      const val = cleanCurrency(o.total_value ?? o.totalValue);
-      biTotalValue += val;
-      const statusName = String(o.status || 'Outros').toUpperCase();
-      biStatus[statusName] = (biStatus[statusName] || 0) + 1;
-      if (o.client) biClients[o.client] = (biClients[o.client] || 0) + val;
-    });
-
-    const statusChart = Object.entries(biStatus).map(([name, value]) => ({ name, value, color: PRODUCTION_COLORS[name] || '#64748b' }));
-    const clientChart = Object.entries(biClients).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 5);
     transactions.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
-    return { transactions, groupedPayables: Object.values(groups), kpis: { incomes, expenses, net: incomes - expenses, receivables, payables: totalPayables }, ordersBI: { totalCount: filteredOrders.length, statusChart, clientChart, filteredOrders, totalValue: biTotalValue, ticketMedio: filteredOrders.length > 0 ? biTotalValue / filteredOrders.length : 0 } };
+    return { transactions, groupedPayables: Object.values(groups), kpis: { incomes, expenses, net: incomes - expenses, receivables, payables: totalPayables } };
   }, [orders, cashflowManual, payables, selectedMonth]);
 
   const handleConfirmPayment = async () => {
@@ -263,5 +243,5 @@ function KPICard({ label, value, color, icon: Icon, glow }: any) {
 }
 
 export default function ReportsPage() {
-  return <AdminGate><ReportsContent /></AdminGate>;
+  return <AdminGuard><ReportsContent /></AdminGuard>;
 }

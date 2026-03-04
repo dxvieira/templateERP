@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { ProtectedGate } from '@/components/auth/ProtectedGate';
+import { AdminGuard } from '@/components/auth/AdminGuard';
 
 function FiscalCenterContent() {
   const firestore = useFirestore();
@@ -89,5 +89,5 @@ function KPICard({ label, value, color, icon: Icon, isCurrency = true }: any) {
 }
 
 export default function FiscalCenterPage() {
-  return <ProtectedGate><FiscalCenterContent /></ProtectedGate>;
+  return <AdminGuard><FiscalCenterContent /></AdminGuard>;
 }
