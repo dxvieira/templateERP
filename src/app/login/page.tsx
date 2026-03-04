@@ -11,10 +11,6 @@ import { useAuth, useUser, initiateEmailSignIn, initiateEmailSignUp, useFirestor
 import { doc, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
-/**
- * LoginPage - Terminal de Acesso IMPACTO.
- * Implementa validação obrigatória via Whitelist no Firestore.
- */
 export default function LoginPage() {
   const router = useRouter();
   const auth = useAuth();
@@ -27,12 +23,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Redireciona se já estiver logado
   useEffect(() => {
-    if (user) {
+    if (user && !isUserLoading) {
       router.replace('/');
     }
-  }, [user, router]);
+  }, [user, isUserLoading, router]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +36,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // 1. PROTOCOLO DE WHITELIST (Obrigatório para Login e Cadastro)
+      // 1. VALIDAÇÃO DE WHITELIST (Obrigatória)
       const emailKey = email.toLowerCase().trim();
       const whitelistRef = doc(db, 'authorized_emails', emailKey);
       const whitelistSnap = await getDoc(whitelistRef);
@@ -50,7 +45,7 @@ export default function LoginPage() {
         toast({
           variant: 'destructive',
           title: 'Acesso Negado',
-          description: 'Este e-mail não está autorizado no ecossistema IMPACTO.',
+          description: 'Este e-mail não consta na lista de identidades autorizadas.',
         });
         setLoading(false);
         return;
@@ -58,21 +53,24 @@ export default function LoginPage() {
 
       // 2. EXECUÇÃO DA AUTENTICAÇÃO
       if (mode === 'signup') {
-        initiateEmailSignUp(auth, email, password);
-        toast({ title: 'Registro Efetuado', description: 'Bem-vindo ao terminal de comando.' });
+        await initiateEmailSignUp(auth, email, password);
+        toast({ title: 'Identidade Criada', description: 'Bem-vindo ao terminal IMPACTO.' });
       } else {
-        initiateEmailSignIn(auth, email, password);
+        await initiateEmailSignIn(auth, email, password);
       }
     } catch (error: any) {
       console.error("Auth Error:", error);
+      let msg = "Credenciais inválidas ou erro de conexão.";
+      if (error.code === 'auth/email-already-in-use') msg = "Este e-mail já possui uma conta ativa.";
+      if (error.code === 'auth/wrong-password') msg = "Senha incorreta para este terminal.";
+      
       toast({
         variant: 'destructive',
-        title: 'Falha de Segurança',
-        description: 'Credenciais inválidas ou erro de conexão.',
+        title: 'Falha de Autenticação',
+        description: msg,
       });
     } finally {
-      // Pequeno atraso para o Firebase propagar o estado
-      setTimeout(() => setLoading(false), 1500);
+      setLoading(false);
     }
   };
 
@@ -86,7 +84,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center p-4 overflow-hidden relative">
-      {/* Background Glows */}
       <div className="absolute top-1/4 -left-20 w-80 h-80 bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
 
@@ -99,28 +96,19 @@ export default function LoginPage() {
           <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-[0_0_30px_rgba(255,95,31,0.6)]">
             <ClipboardList className="text-black w-10 h-10" />
           </div>
-          <div className="text-center flex flex-col items-center">
-            <h1 
-              className="text-5xl text-white tracking-tighter leading-none" 
-              style={{ fontFamily: 'Impact, Arial Black, sans-serif', transform: 'scaleY(1.05)' }}
-            >
-              IMPACTO
-            </h1>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-[0.4em] font-bold mt-2">
-              Comunicação Visual
-            </p>
+          <div className="text-center">
+            <h1 className="text-4xl font-black text-white tracking-tighter uppercase leading-none">IMPACTO</h1>
+            <p className="text-[10px] text-zinc-500 uppercase tracking-[0.4em] font-bold mt-2">Terminal de Identidade</p>
           </div>
         </div>
 
-        <Card className="glass-card border-white/5 bg-black/40 overflow-hidden shadow-2xl rounded-3xl">
-          <CardHeader className="text-center space-y-2 pb-8 pt-10">
+        <Card className="bg-[#0c0c0e] border-zinc-800 shadow-2xl rounded-[2.5rem] overflow-hidden">
+          <CardHeader className="text-center pb-8 pt-10">
             <CardTitle className="text-xl font-bold text-white uppercase tracking-tight">
               {mode === 'login' ? 'Identificação' : 'Novo Registro'}
             </CardTitle>
-            <CardDescription className="text-[10px] text-muted-foreground uppercase tracking-[0.2em]">
-              {mode === 'login' 
-                ? 'Insira suas credenciais corporativas' 
-                : 'O cadastro requer autorização prévia na whitelist'}
+            <CardDescription className="text-[9px] text-zinc-500 uppercase tracking-[0.2em] font-bold">
+              {mode === 'login' ? 'Insira suas credenciais autorizadas' : 'O cadastro requer autorização prévia na whitelist'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 pb-12 px-8">
@@ -131,10 +119,10 @@ export default function LoginPage() {
                   <input
                     required
                     type="email"
-                    placeholder="E-mail"
+                    placeholder="E-mail Corporativo"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full h-14 bg-zinc-900/50 border border-zinc-800 rounded-2xl pl-12 pr-4 text-white text-sm outline-none focus:border-primary/50 transition-all"
+                    className="w-full h-14 bg-zinc-950 border border-zinc-800 rounded-2xl pl-12 pr-4 text-white text-sm outline-none focus:border-primary/50 transition-all placeholder:text-zinc-800"
                   />
                 </div>
                 <div className="relative group">
@@ -145,7 +133,7 @@ export default function LoginPage() {
                     placeholder="Senha"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full h-14 bg-zinc-900/50 border border-zinc-800 rounded-2xl pl-12 pr-4 text-white text-sm outline-none focus:border-primary/50 transition-all"
+                    className="w-full h-14 bg-zinc-950 border border-zinc-800 rounded-2xl pl-12 pr-4 text-white text-sm outline-none focus:border-primary/50 transition-all placeholder:text-zinc-800"
                   />
                 </div>
               </div>
@@ -157,34 +145,23 @@ export default function LoginPage() {
                 {loading ? <Loader2 className="animate-spin w-5 h-5" /> : (
                   <>
                     {mode === 'login' ? <LogIn className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
-                    {mode === 'login' ? 'Entrar no Sistema' : 'Solicitar Acesso'}
+                    {mode === 'login' ? 'Entrar no Sistema' : 'Validar Identidade'}
                   </>
                 )}
               </Button>
             </form>
 
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 text-center">
               <button
                 onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
-                className="text-[10px] text-zinc-500 hover:text-primary uppercase font-black tracking-widest transition-colors"
+                className="text-[10px] text-zinc-600 hover:text-primary uppercase font-black tracking-widest transition-colors"
               >
-                {mode === 'login' ? 'Não tem conta? Registre-se' : 'Já possui acesso? Faça Login'}
+                {mode === 'login' ? 'Não tem acesso? Registrar-se' : 'Já possui conta? Fazer Login'}
               </button>
 
-              <div className="relative py-2">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-white/5"></div>
-                </div>
-                <div className="relative flex justify-center text-[8px] uppercase tracking-widest">
-                  <span className="bg-[#0A0A0A] px-4 text-muted-foreground">Whitelist Enforced</span>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-center gap-2 opacity-40">
+              <div className="flex items-center justify-center gap-2 opacity-40 mt-4">
                 <ShieldCheck size={12} className="text-primary" />
-                <p className="text-[8px] text-muted-foreground uppercase tracking-widest leading-relaxed">
-                  Terminal de uso restrito a colaboradores.
-                </p>
+                <p className="text-[8px] text-zinc-500 uppercase tracking-widest">Acesso Restrito via Whitelist</p>
               </div>
             </div>
           </CardContent>
