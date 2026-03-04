@@ -1,28 +1,71 @@
+
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { ClipboardList, LogIn, Chrome } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ClipboardList, LogIn, Mail, Lock, UserPlus, ArrowRight, Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { useAuth, useUser, initiateGoogleSignIn } from '@/firebase';
+import { useAuth, useUser, initiateEmailSignIn, initiateEmailSignUp, useFirestore } from '@/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
   const router = useRouter();
   const auth = useAuth();
+  const db = useFirestore();
   const { user, isUserLoading } = useUser();
+  const { toast } = useToast();
 
-  // Redirect if already logged in (and not anonymous)
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Redirect if already logged in
   useEffect(() => {
-    if (user && !user.isAnonymous) {
+    if (user) {
       router.replace('/');
     }
   }, [user, router]);
 
-  const handleGoogleLogin = () => {
-    if (auth) {
-      initiateGoogleSignIn(auth);
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!auth || !db) return;
+
+    setLoading(true);
+
+    try {
+      if (mode === 'signup') {
+        // WHITELIST CHECK
+        const whitelistRef = doc(db, 'authorized_emails', email.toLowerCase().trim());
+        const whitelistSnap = await getDoc(whitelistRef);
+
+        if (!whitelistSnap.exists()) {
+          toast({
+            variant: 'destructive',
+            title: 'Acesso Negado',
+            description: 'Este e-mail não está autorizado no Terminal Impacto.',
+          });
+          setLoading(false);
+          return;
+        }
+
+        initiateEmailSignUp(auth, email, password);
+        toast({ title: 'Conta Criada', description: 'Bem-vindo ao ecossistema IMPACTO.' });
+      } else {
+        initiateEmailSignIn(auth, email, password);
+      }
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Falha na Autenticação',
+        description: 'Verifique suas credenciais e tente novamente.',
+      });
+    } finally {
+      // Small delay to allow Firebase to process before stopping loader
+      setTimeout(() => setLoading(false), 1500);
     }
   };
 
@@ -64,22 +107,64 @@ export default function LoginPage() {
 
         <Card className="glass-card border-white/5 bg-black/40 overflow-hidden shadow-2xl rounded-3xl">
           <CardHeader className="text-center space-y-2 pb-8 pt-10">
-            <CardTitle className="text-xl font-bold text-white uppercase tracking-tight">Acesso Restrito</CardTitle>
+            <CardTitle className="text-xl font-bold text-white uppercase tracking-tight">
+              {mode === 'login' ? 'Acesso ao Terminal' : 'Novo Registro'}
+            </CardTitle>
             <CardDescription className="text-[10px] text-muted-foreground uppercase tracking-[0.2em]">
-              Autenticação segura via console Impacto
+              {mode === 'login' 
+                ? 'Insira suas credenciais para iniciar sessão' 
+                : 'Validação obrigatória via lista de autorização'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 pb-12 px-8">
-            <div className="space-y-4">
+            <form onSubmit={handleAuth} className="space-y-4">
+              <div className="space-y-4">
+                <div className="relative group">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-primary transition-colors" size={18} />
+                  <input
+                    required
+                    type="email"
+                    placeholder="E-mail Corporativo"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full h-14 bg-zinc-900/50 border border-zinc-800 rounded-2xl pl-12 pr-4 text-white text-sm outline-none focus:border-primary/50 transition-all"
+                  />
+                </div>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-primary transition-colors" size={18} />
+                  <input
+                    required
+                    type="password"
+                    placeholder="Sua Senha"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full h-14 bg-zinc-900/50 border border-zinc-800 rounded-2xl pl-12 pr-4 text-white text-sm outline-none focus:border-primary/50 transition-all"
+                  />
+                </div>
+              </div>
+
               <Button
-                onClick={handleGoogleLogin}
-                className="w-full h-14 bg-white text-black hover:bg-white/90 font-black uppercase tracking-widest rounded-2xl gap-3 transition-all active:scale-95 flex items-center justify-center"
+                disabled={loading}
+                className="w-full h-14 bg-primary text-black hover:bg-white font-black uppercase tracking-widest rounded-2xl gap-3 transition-all active:scale-95 shadow-[0_5px_20px_-5px_rgba(255,95,31,0.4)]"
               >
-                <Chrome className="w-5 h-5" />
-                Acessar com Google
+                {loading ? <Loader2 className="animate-spin w-5 h-5" /> : (
+                  <>
+                    {mode === 'login' ? <LogIn className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
+                    {mode === 'login' ? 'Entrar no Sistema' : 'Criar Acesso'}
+                  </>
+                )}
               </Button>
-              
-              <div className="relative py-4">
+            </form>
+
+            <div className="flex flex-col gap-4">
+              <button
+                onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
+                className="text-[10px] text-zinc-500 hover:text-primary uppercase font-black tracking-widest transition-colors"
+              >
+                {mode === 'login' ? 'Não tem acesso? Solicite registro' : 'Já possui conta? Fazer Login'}
+              </button>
+
+              <div className="relative py-2">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-white/5"></div>
                 </div>
@@ -88,16 +173,19 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <p className="text-[9px] text-center text-muted-foreground uppercase tracking-widest leading-relaxed opacity-60">
-                Ao acessar, você concorda com os protocolos de segurança e monitoramento do terminal Impacto.
-              </p>
+              <div className="flex items-center justify-center gap-2 opacity-40">
+                <ShieldCheck size={12} className="text-primary" />
+                <p className="text-[8px] text-muted-foreground uppercase tracking-widest leading-relaxed">
+                  Criptografia Industrial AES-256 ativada.
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>
         
         <div className="mt-8 flex flex-col items-center gap-1 opacity-20">
-          <p className="text-[8px] uppercase tracking-[0.5em] text-white font-black whitespace-nowrap">CLOUD SYNC ENCRYPTED</p>
-          <p className="text-[7px] uppercase tracking-[0.1em] text-muted-foreground font-mono">Build 2025.02.09 • Secure Auth Active</p>
+          <p className="text-[8px] uppercase tracking-[0.5em] text-white font-black whitespace-nowrap">EMAIL WHITELIST ENFORCED</p>
+          <p className="text-[7px] uppercase tracking-[0.1em] text-muted-foreground font-mono">Build 2025.02.15 • Secure Cloud Auth</p>
         </div>
       </motion.div>
     </div>

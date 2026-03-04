@@ -20,121 +20,27 @@
       },
       "required": ["id", "client", "status", "createdAt"]
     },
-    "Expense": {
-      "title": "Expense",
+    "AuthorizedEmail": {
+      "title": "AuthorizedEmail",
       "type": "object",
+      "description": "Whitelist of emails allowed to register in the system.",
       "properties": {
-        "id": { "type": "string" },
-        "description": { "type": "string" },
-        "value": { "type": "number" },
-        "category": { "type": "string" },
-        "date": { "type": "string", "format": "date" },
-        "createdAt": { "type": "string", "format": "date-time" }
-      }
-    },
-    "CashflowEntry": {
-      "title": "CashflowEntry",
-      "type": "object",
-      "description": "Manual financial entries not linked directly to an Order.",
-      "properties": {
-        "id": { "type": "string" },
-        "description": { "type": "string" },
-        "amount": { "type": "number" },
-        "type": { "type": "string", "enum": ["income", "expense"] },
-        "date": { "type": "string", "format": "date" },
-        "account": { "type": "string" },
-        "method": { "type": "string" }
-      }
-    },
-    "AccountPayable": {
-      "title": "AccountPayable",
-      "type": "object",
-      "description": "Bills and commitments to be paid by the company.",
-      "properties": {
-        "id": { "type": "string" },
-        "description": { "type": "string" },
-        "supplier": { "type": "string" },
-        "dueDate": { "type": "string", "format": "date" },
-        "amount": { "type": "number" },
-        "category": { "type": "string" },
-        "status": { "type": "string", "enum": ["pending", "paid"] },
-        "invoiceNumber": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
-      }
-    },
-    "MaterialRequest": {
-      "title": "MaterialRequest",
-      "type": "object",
-      "description": "Request for production materials by the team.",
-      "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "quantity": { "type": "string" },
-        "category": { "type": "string", "enum": ["Impressão", "Serralheria", "Acabamento", "Instalação"] },
-        "status": { "type": "string", "enum": ["pendente", "comprado"] },
-        "urgente": { "type": "boolean" },
-        "userId": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "completedAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["name", "quantity", "category", "status", "userId", "createdAt"]
-    },
-    "Client": {
-      "title": "Client",
-      "type": "object",
-      "description": "Customer or partner data for CRM.",
-      "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "company": { "type": "string" },
-        "cpfCnpj": { "type": "string" },
         "email": { "type": "string" },
-        "mobile": { "type": "string" }
-      }
-    },
-    "Supplier": {
-      "title": "Supplier",
-      "type": "object",
-      "description": "Supply chain vendor information.",
-      "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "cnpj": { "type": "string" },
-        "category": { "type": "string" }
+        "addedAt": { "type": "string", "format": "date-time" }
       }
     }
   },
   "auth": {
-    "providers": ["password", "anonymous", "google"]
+    "providers": ["password"]
   },
   "firestore": {
     "/orders/{orderId}": {
       "schema": { "$ref": "#/backend/entities/Order" },
       "description": "Production orders."
     },
-    "/expenses/{expenseId}": {
-      "schema": { "$ref": "#/backend/entities/Expense" },
-      "description": "Business expenses."
-    },
-    "/cashflow_manual/{entryId}": {
-      "schema": { "$ref": "#/backend/entities/CashflowEntry" },
-      "description": "Manual cashflow entries."
-    },
-    "/accounts_payable/{payableId}": {
-      "schema": { "$ref": "#/backend/entities/AccountPayable" },
-      "description": "Company bills to pay."
-    },
-    "/materials/{materialId}": {
-      "schema": { "$ref": "#/backend/entities/MaterialRequest" },
-      "description": "Inventory requests for production materials."
-    },
-    "/clients/{clientId}": {
-      "schema": { "$ref": "#/backend/entities/Client" },
-      "description": "Customer/Partner contact and tax data."
-    },
-    "/suppliers/{supplierId}": {
-      "schema": { "$ref": "#/backend/entities/Supplier" },
-      "description": "Supply chain partners."
+    "/authorized_emails/{email}": {
+      "schema": { "$ref": "#/backend/entities/AuthorizedEmail" },
+      "description": "Whitelist for registration control."
     }
   }
 }
