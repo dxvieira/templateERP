@@ -4,29 +4,22 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { collection, query, orderBy, doc, deleteDoc, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
 import { 
   TrendingUp, TrendingDown, Wallet, Target, AlertCircle, Plus, Trash2, Calendar, 
-  Loader2, X, CheckCircle2, Receipt, ArrowDownLeft, Box, Factory, PieChart as PieChartIcon, 
-  ShoppingBag, Users as UsersIcon, ChevronRight, Sparkles,
-  FileSpreadsheet, ClipboardList
+  Loader2, X, CheckCircle2, Sparkles, Download, FileText, ChevronDown
 } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { AdminGuard } from '@/components/auth/AdminGuard';
-
-const PRODUCTION_COLORS: Record<string, string> = { 
-  'ARTE': '#d946ef', 
-  'IMPRESSÃO': '#3b82f6', 
-  'SERRALHERIA': '#eab308', 
-  'ACABAMENTO': '#f97316', 
-  'INSTALAÇÃO': '#a855f7', 
-  'CONCLUÍDO': '#10b981', 
-  'ENTREGUE': '#10b981', 
-  'OUTROS': '#64748b' 
-};
+import * as XLSX from 'xlsx';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const cleanCurrency = (val: any): number => {
   if (typeof val === 'number') return val;
@@ -118,15 +111,57 @@ function ReportsContent() {
       } catch (e) {}
     });
 
-    const filteredOrders = orders?.filter(o => {
-      const d = o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000) : parseISO(o.emission_date || o.delivery_date || '');
-      return isWithinInterval(d, { start: startDate, end: endDate });
-    }) || [];
-
     transactions.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
     return { transactions, groupedPayables: Object.values(groups), kpis: { incomes, expenses, net: incomes - expenses, receivables, payables: totalPayables } };
   }, [orders, cashflowManual, payables, selectedMonth]);
+
+  const handleExport = (formatType: 'xlsx' | 'csv' | 'xml') => {
+    if (!reportData) return;
+
+    const dataToExport = reportData.transactions.map(t => ({
+      Data: format(parseISO(t.date), 'dd/MM/yyyy'),
+      Tipo: t.type === 'income' ? 'Entrada' : 'Saída',
+      Descrição: t.description,
+      'Origem/Destino': t.origin,
+      'Valor Bruto': t.amount,
+      Status: 'Compensado',
+      Responsável: t.method
+    }));
+
+    if (formatType === 'xlsx' || formatType === 'csv') {
+      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Fluxo de Caixa");
+      
+      if (formatType === 'xlsx') {
+        XLSX.writeFile(workbook, `Relatorio_Financeiro_${selectedMonth}.xlsx`);
+      } else {
+        XLSX.writeFile(workbook, `Relatorio_Financeiro_${selectedMonth}.csv`, { bookType: 'csv' });
+      }
+      toast({ title: "Exportação Concluída", description: `Arquivo ${formatType.toUpperCase()} gerado com sucesso.` });
+    } else if (formatType === 'xml') {
+      let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<RelatorioFinanceiro>\n';
+      dataToExport.forEach(item => {
+        xml += '  <Transacao>\n';
+        Object.entries(item).forEach(([key, value]) => {
+          const safeKey = key.replace(/\//g, '_').replace(/ /g, '_');
+          xml += `    <${safeKey}>${value}</${safeKey}>\n`;
+        });
+        xml += '  </Transacao>\n';
+      });
+      xml += '</RelatorioFinanceiro>';
+      
+      const blob = new Blob([xml], { type: 'application/xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Relatorio_Financeiro_${selectedMonth}.xml`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Exportação Concluída", description: "Arquivo XML gerado com sucesso." });
+    }
+  };
 
   const handleConfirmPayment = async () => {
     if (!itemToPay || !firestore || !user) return;
@@ -148,7 +183,32 @@ function ReportsContent() {
           <h1 className="text-4xl font-black text-white tracking-tighter uppercase leading-none">Relatórios <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">Industriais</span></h1>
         </div>
         <div className="flex items-center gap-4">
-           <div className="relative group"><Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" size={16} /><input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white text-xs font-black outline-none focus:border-primary transition-all" /></div>
+           {/* BOTÃO EXPORTAR */}
+           <DropdownMenu>
+             <DropdownMenuTrigger asChild>
+               <button className="flex items-center gap-2 px-5 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest group">
+                 <Download size={16} className="text-primary group-hover:scale-110 transition-transform" /> 
+                 <span>Exportar Relatório</span>
+                 <ChevronDown size={14} className="opacity-50" />
+               </button>
+             </DropdownMenuTrigger>
+             <DropdownMenuContent className="bg-zinc-950 border-zinc-800 text-white min-w-[180px] p-2 rounded-2xl shadow-2xl z-[300]">
+               <DropdownMenuItem onClick={() => handleExport('xlsx')} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 cursor-pointer text-[10px] font-black uppercase tracking-widest transition-colors">
+                 <FileText size={14} className="text-emerald-500" /> Planilha Excel (XLSX)
+               </DropdownMenuItem>
+               <DropdownMenuItem onClick={() => handleExport('csv')} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 cursor-pointer text-[10px] font-black uppercase tracking-widest transition-colors">
+                 <FileText size={14} className="text-blue-500" /> Arquivo CSV
+               </DropdownMenuItem>
+               <DropdownMenuItem onClick={() => handleExport('xml')} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 cursor-pointer text-[10px] font-black uppercase tracking-widest transition-colors">
+                 <FileText size={14} className="text-orange-500" /> Estrutura XML
+               </DropdownMenuItem>
+             </DropdownMenuContent>
+           </DropdownMenu>
+
+           <div className="relative group">
+             <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" size={16} />
+             <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white text-xs font-black outline-none focus:border-primary transition-all" />
+           </div>
         </div>
       </header>
 
