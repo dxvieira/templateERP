@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -7,9 +6,14 @@ import { motion } from 'framer-motion';
 import { ClipboardList, LogIn, Mail, Lock, UserPlus, Loader2, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { useAuth, useUser, initiateEmailSignIn, initiateEmailSignUp } from '@/firebase';
+import { useAuth, useUser } from '@/firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 
+/**
+ * LoginPage - Terminal de Autenticação Industrial.
+ * Refatorado para garantir execução imediata e feedback de loading.
+ */
 export default function LoginPage() {
   const router = useRouter();
   const auth = useAuth();
@@ -21,6 +25,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Redirecionamento automático se já estiver logado
   useEffect(() => {
     if (user && !isUserLoading) {
       router.replace('/');
@@ -31,35 +36,41 @@ export default function LoginPage() {
     e.preventDefault();
     if (!auth) return;
 
+    console.log(`[AUTH] Iniciando tentativa de ${mode} para:`, email);
     setLoading(true);
 
     try {
       if (mode === 'signup') {
-        await initiateEmailSignUp(auth, email, password);
-        toast({ title: 'Identidade Criada', description: 'Bem-vindo ao terminal IMPACTO.' });
+        await createUserWithEmailAndPassword(auth, email, password);
+        toast({ title: 'Terminal Configurado', description: 'Identidade industrial criada com sucesso.' });
       } else {
-        await initiateEmailSignIn(auth, email, password);
+        await signInWithEmailAndPassword(auth, email, password);
       }
+      
+      console.log('[AUTH] Sucesso. Redirecionando...');
+      router.replace('/');
     } catch (error: any) {
-      console.error("Auth Error:", error);
-      let msg = "Credenciais inválidas ou erro de conexão.";
-      if (error.code === 'auth/email-already-in-use') msg = "Este e-mail já possui uma conta ativa.";
-      if (error.code === 'auth/wrong-password') msg = "Senha incorreta para este terminal.";
+      console.error("[AUTH] Erro de Autenticação:", error);
+      let msg = "Falha na conexão com o servidor de identidade.";
+      
+      if (error.code === 'auth/email-already-in-use') msg = "Este e-mail já possui um acesso registrado.";
+      if (error.code === 'auth/wrong-password') msg = "Senha incorreta para este e-mail.";
+      if (error.code === 'auth/user-not-found') msg = "Identidade não localizada no sistema.";
+      if (error.code === 'auth/invalid-credential') msg = "E-mail ou senha inválidos.";
       
       toast({
         variant: 'destructive',
-        title: 'Falha de Autenticação',
-        description: error.message || msg,
+        title: 'Falha de Identificação',
+        description: msg,
       });
-    } finally {
-      setLoading(false);
+      setLoading(false); // Volta o botão ao estado normal apenas em caso de erro
     }
   };
 
   if (isUserLoading) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin shadow-[0_0_20px_rgba(255,95,31,0.5)]" />
+        <Loader2 className="w-10 h-10 text-primary animate-spin shadow-[0_0_20px_rgba(255,95,31,0.5)]" />
       </div>
     );
   }
@@ -121,8 +132,9 @@ export default function LoginPage() {
               </div>
 
               <Button
+                type="submit"
                 disabled={loading}
-                className="w-full h-14 bg-primary text-black hover:bg-white font-black uppercase tracking-widest rounded-2xl gap-3 transition-all active:scale-95 shadow-[0_5px_20px_-5px_rgba(255,95,31,0.4)]"
+                className="w-full h-14 bg-primary text-black hover:bg-white font-black uppercase tracking-widest rounded-2xl gap-3 transition-all active:scale-95 shadow-[0_5px_20px_-5px_rgba(255,95,31,0.4)] disabled:opacity-50"
               >
                 {loading ? <Loader2 className="animate-spin w-5 h-5" /> : (
                   <>
@@ -135,6 +147,7 @@ export default function LoginPage() {
 
             <div className="flex flex-col gap-4 text-center">
               <button
+                type="button"
                 onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
                 className="text-[10px] text-zinc-600 hover:text-primary uppercase font-black tracking-widest transition-colors"
               >

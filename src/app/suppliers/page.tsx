@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, Suspense, useCallback, useMemo } from 'react';
@@ -13,7 +12,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-import { AdminGate } from '@/components/auth/AdminGate';
+import { ProtectedGate } from '@/components/auth/ProtectedGate';
 
 function SuppliersContent() {
   const firestore = useFirestore();
@@ -102,7 +101,7 @@ function SuppliersContent() {
   const inputClass = "w-full bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none transition-colors";
 
   return (
-    <AdminGate>
+    <ProtectedGate>
       <div className="p-4 md:p-8 space-y-8 mt-14 md:mt-0">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div>
@@ -196,7 +195,7 @@ function SuppliersContent() {
           )}
         </AnimatePresence>
       </div>
-    </AdminGate>
+    </ProtectedGate>
   );
 }
 

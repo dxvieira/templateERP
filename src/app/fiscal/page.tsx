@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -9,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { AdminGate } from '@/components/auth/AdminGate';
+import { ProtectedGate } from '@/components/auth/ProtectedGate';
 
 function FiscalCenterContent() {
   const firestore = useFirestore();
@@ -90,5 +89,5 @@ function KPICard({ label, value, color, icon: Icon, isCurrency = true }: any) {
 }
 
 export default function FiscalCenterPage() {
-  return <AdminGate><FiscalCenterContent /></AdminGate>;
+  return <ProtectedGate><FiscalCenterContent /></ProtectedGate>;
 }

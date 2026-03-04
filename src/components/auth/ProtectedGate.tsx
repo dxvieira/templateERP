@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -13,8 +12,8 @@ interface ProtectedGateProps {
 }
 
 /**
- * ProtectedGate - Filtro de Acesso por Senha Fixa.
- * Protege rotas sensíveis exigindo a string @impactoADM2026.
+ * ProtectedGate - Gate de Segurança Unificado.
+ * Protege rotas sensíveis exigindo a senha @impactoADM2026.
  */
 export function ProtectedGate({ children }: ProtectedGateProps) {
   const { isUserLoading } = useUser();
@@ -25,7 +24,7 @@ export function ProtectedGate({ children }: ProtectedGateProps) {
   const [isPassError, setIsPassError] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
-  // Senha Mestre Conforme Protocolo
+  // Senha Mestre Conforme Protocolo Industrial
   const MASTER_PASS = "@impactoADM2026";
 
   useEffect(() => {
@@ -69,7 +68,7 @@ export function ProtectedGate({ children }: ProtectedGateProps) {
   }
 
   return (
-    <div className="h-full flex items-center justify-center p-4 relative overflow-hidden bg-[#0A0A0A]">
+    <div className="h-full min-h-[80vh] flex items-center justify-center p-4 relative overflow-hidden bg-[#0A0A0A]">
       <div className="absolute top-[-20%] left-[-20%] w-[50%] h-[50%] bg-primary/5 blur-[120px] rounded-full pointer-events-none" />
       
       <motion.div 
@@ -83,7 +82,7 @@ export function ProtectedGate({ children }: ProtectedGateProps) {
           </div>
           <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Área de Gestão</h2>
           <p className="text-zinc-500 text-[10px] mt-3 uppercase tracking-[0.3em] font-bold leading-relaxed max-w-[280px]">
-            Insira a Senha de Acesso para gerenciar dados financeiros e pauta industrial.
+            Insira a Senha Administrativa para gerenciar dados financeiros e pauta industrial.
           </p>
         </div>
 

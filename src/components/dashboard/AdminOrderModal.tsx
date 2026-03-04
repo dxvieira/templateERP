@@ -1,8 +1,7 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { doc, setDoc, serverTimestamp, collection, getDocs, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { 
   X, Save, Plus, Trash2, Box, 
@@ -37,6 +36,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   const [items, setItems] = useState<any[]>([]);
   const [installments, setInstallments] = useState<any[]>([]);
 
+  // Verifica se o gate administrativo local foi desbloqueado
   useEffect(() => {
     if (isOpen) {
       setIsUnlocked(sessionStorage.getItem('page_unlocked') === 'true');
@@ -103,6 +103,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       ...(isNewOrder ? { createdAt: serverTimestamp() } : {})
     };
 
+    // Operação não-bloqueante para agilidade operacional
     const savePromise = isNewOrder ? setDoc(docRef, payload) : updateDoc(docRef, payload);
 
     savePromise
@@ -139,6 +140,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </div>
           
           <div className="flex items-center gap-4">
+             {/* Exibição condicional baseada no gate administrativo unificado */}
              {isUnlocked && (
                <div className="flex items-center gap-6 border-r border-zinc-800 pr-6 mr-2">
                  <button onClick={() => toast({ title: "Módulo Fiscal Ativo" })} className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-xl hover:bg-emerald-500 hover:text-black transition-all">
