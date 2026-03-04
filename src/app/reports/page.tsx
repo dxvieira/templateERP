@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -17,6 +18,7 @@ import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
+import { AdminGate } from '@/components/auth/AdminGate';
 
 // MAPEAMENTO DE CORES INDUSTRIAIS
 const PRODUCTION_COLORS: Record<string, string> = { 
@@ -30,7 +32,6 @@ const PRODUCTION_COLORS: Record<string, string> = {
   'OUTROS': '#64748b' 
 };
 
-// UTILITÁRIO DE LIMPEZA FINANCEIRA
 const cleanCurrency = (val: any): number => {
   if (typeof val === 'number') return val;
   if (!val || typeof val !== 'string') return 0;
@@ -38,7 +39,7 @@ const cleanCurrency = (val: any): number => {
   return parseFloat(cleaned) || 0;
 };
 
-export default function ReportsManager() {
+function ReportsContent() {
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
@@ -49,14 +50,11 @@ export default function ReportsManager() {
   const [itemToDelete, setItemToDelete] = useState<any>(null);
   const [itemToPay, setItemToPay] = useState<any>(null);
   const [activePieIndex, setActivePieIndex] = useState<number | null>(null);
-  const [isCashflowModalOpen, setIsCashflowModalOpen] = useState(false);
-  const [isPayableModalOpen, setIsPayableModalOpen] = useState(false);
 
   useEffect(() => {
     setSelectedMonth(format(new Date(), 'yyyy-MM'));
   }, []);
 
-  // CONSULTAS FIREBASE (REAL-TIME)
   const ordersQuery = useMemoFirebase(() => { 
     if (!firestore || !user) return null; 
     return query(collection(firestore, 'orders')); 
@@ -76,27 +74,21 @@ export default function ReportsManager() {
   const { data: cashflowManual } = useCollection(cashflowQuery);
   const { data: payables } = useCollection(payablesQuery);
 
-  // MOTOR DE INTELIGÊNCIA DE DADOS (BI)
   const reportData = useMemo(() => {
     if (!selectedMonth) return null;
-
     const [year, month] = selectedMonth.split('-').map(Number);
     const startDate = startOfMonth(new Date(year, month - 1));
     const endDate = endOfMonth(new Date(year, month - 1));
 
-    // KPIs Financeiros
     let incomes = 0, expenses = 0, receivables = 0, totalPayables = 0;
     const transactions: any[] = [];
 
-    // Processar Ordens para Receita e Recebíveis
     orders?.forEach(order => {
       const orderDate = order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000) : parseISO(order.emission_date || order.delivery_date || '');
-      
       if (isWithinInterval(orderDate, { start: startDate, end: endDate })) {
         const balance = cleanCurrency(order.balance_due ?? order.balanceDue);
         if (balance > 0) receivables += balance;
       }
-
       const installments = Array.isArray(order.installments) ? order.installments : [];
       installments.forEach((inst: any) => {
         if ((inst?.status === 'paid' || inst?.status === 'pago') && inst.paid_date) {
@@ -105,20 +97,13 @@ export default function ReportsManager() {
             if (isWithinInterval(paidDate, { start: startDate, end: endDate })) {
               const amount = cleanCurrency(inst.amount);
               incomes += amount;
-              transactions.push({ 
-                id: `${order.id}-${inst.uid || Math.random()}`, 
-                date: inst.paid_date, 
-                description: `PGTO OS #${order.id.slice(-6)} - ${order.client}`, 
-                type: 'income', amount, method: inst.payment_method || 'Sistema', 
-                origin: 'SISTEMA (OS)', originalId: order.id 
-              });
+              transactions.push({ id: `${order.id}-${inst.uid}`, date: inst.paid_date, description: `PGTO OS #${order.id.slice(-6)} - ${order.client}`, type: 'income', amount, method: inst.payment_method || 'Sistema', origin: 'SISTEMA (OS)', originalId: order.id });
             }
           } catch (e) {}
         }
       });
     });
 
-    // Processar Contas a Pagar
     const groups: Record<string, any> = {};
     payables?.forEach(payable => {
       if (payable.status !== 'paid') totalPayables += cleanCurrency(payable.amount);
@@ -129,7 +114,6 @@ export default function ReportsManager() {
       if (payable.status !== 'paid') groups[gid].allPaid = false;
     });
 
-    // Processar Fluxo Manual
     cashflowManual?.forEach(entry => {
       try {
         const entryDate = parseISO(entry.date);
@@ -141,18 +125,12 @@ export default function ReportsManager() {
       } catch (e) {}
     });
 
-    // Processar BI de Pedidos
     const biStatus: Record<string, number> = {};
     const biClients: Record<string, number> = {};
     let biTotalValue = 0;
-    
     const filteredOrders = orders?.filter(o => {
       const d = o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000) : parseISO(o.emission_date || o.delivery_date || '');
       return isWithinInterval(d, { start: startDate, end: endDate });
-    }).sort((a, b) => {
-      const dateA = a.createdAt?.seconds ? a.createdAt.seconds : new Date(a.emission_date || a.delivery_date || '9999-99-99').getTime();
-      const dateB = b.createdAt?.seconds ? b.createdAt.seconds : new Date(b.emission_date || b.delivery_date || '9999-99-99').getTime();
-      return dateA - dateB;
     }) || [];
 
     filteredOrders.forEach(o => {
@@ -160,108 +138,23 @@ export default function ReportsManager() {
       biTotalValue += val;
       const statusName = String(o.status || 'Outros').toUpperCase();
       biStatus[statusName] = (biStatus[statusName] || 0) + 1;
-      if (o.client) {
-        biClients[o.client] = (biClients[o.client] || 0) + val;
-      }
+      if (o.client) biClients[o.client] = (biClients[o.client] || 0) + val;
     });
 
-    const statusChart = Object.entries(biStatus).map(([name, value]) => ({ 
-      name, 
-      value, 
-      color: PRODUCTION_COLORS[name] || PRODUCTION_COLORS['OUTROS'] 
-    }));
-
-    const clientChart = Object.entries(biClients)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
-
+    const statusChart = Object.entries(biStatus).map(([name, value]) => ({ name, value, color: PRODUCTION_COLORS[name] || '#64748b' }));
+    const clientChart = Object.entries(biClients).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 5);
     transactions.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
-    return {
-      transactions,
-      groupedPayables: Object.values(groups).sort((a: any, b: any) => a.installments[0]?.dueDate?.localeCompare(b.installments[0]?.dueDate)),
-      kpis: { incomes, expenses, net: incomes - expenses, receivables, payables: totalPayables },
-      ordersBI: { 
-        totalCount: filteredOrders.length, 
-        inProduction: filteredOrders.filter(o => !['Concluído', 'Entregue'].includes(o.status)).length,
-        finalized: filteredOrders.filter(o => ['Concluído', 'Entregue'].includes(o.status)).length,
-        totalValue: biTotalValue,
-        ticketMedio: filteredOrders.length > 0 ? biTotalValue / filteredOrders.length : 0,
-        statusChart,
-        clientChart,
-        filteredOrders
-      }
-    };
+    return { transactions, groupedPayables: Object.values(groups), kpis: { incomes, expenses, net: incomes - expenses, receivables, payables: totalPayables }, ordersBI: { totalCount: filteredOrders.length, statusChart, clientChart, filteredOrders, totalValue: biTotalValue, ticketMedio: filteredOrders.length > 0 ? biTotalValue / filteredOrders.length : 0 } };
   }, [orders, cashflowManual, payables, selectedMonth]);
 
   const handleConfirmPayment = async () => {
     if (!itemToPay || !firestore || !user) return;
     const payableRef = doc(firestore, 'accounts_payable', itemToPay.id);
-    const updateData = { status: 'paid', paidAt: serverTimestamp(), paymentDate: new Date().toISOString() };
-    updateDoc(payableRef, updateData).then(async () => {
-      const cashflowData = { description: `PGTO: ${itemToPay.supplier || itemToPay.description}`, amount: cleanCurrency(itemToPay.amount), type: 'expense', date: format(new Date(), 'yyyy-MM-dd'), method: itemToPay.method || 'Boleto', origin: 'CONTAS A PAGAR', createdAt: serverTimestamp(), userId: user.uid };
-      await addDoc(collection(firestore, 'cashflow_manual'), cashflowData); 
+    updateDoc(payableRef, { status: 'paid', paidAt: serverTimestamp(), paymentDate: new Date().toISOString() }).then(async () => {
+      await addDoc(collection(firestore, 'cashflow_manual'), { description: `PGTO: ${itemToPay.supplier}`, amount: cleanCurrency(itemToPay.amount), type: 'expense', date: format(new Date(), 'yyyy-MM-dd'), method: 'Boleto', origin: 'CONTAS A PAGAR', createdAt: serverTimestamp(), userId: user.uid });
       toast({ title: "Baixa Confirmada" }); 
       setItemToPay(null);
-    });
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!itemToDelete || !firestore) return;
-    const coll = (itemToDelete.supplier || itemToDelete.status === 'pending') ? 'accounts_payable' : 'cashflow_manual';
-    deleteDoc(doc(firestore, coll, itemToDelete.id)).then(() => { toast({ title: "Removido" }); setItemToDelete(null); });
-  };
-
-  const exportToExcel = () => {
-    if (!reportData) return;
-
-    let dataToExport: any[] = [];
-    let cols: any[] = [];
-    const filename = `impacto-relatorio-${activeTab.toLowerCase()}-${selectedMonth}.xlsx`;
-
-    if (activeTab === 'FLUXO') {
-      dataToExport = reportData.transactions.map(t => ({
-        'Data': format(parseISO(t.date), 'dd/MM/yyyy'),
-        'Descrição': t.description,
-        'Método': t.method,
-        'Tipo': t.type === 'income' ? 'Entrada' : 'Saída',
-        'Valor': t.amount
-      }));
-      cols = [{ wch: 15 }, { wch: 65 }, { wch: 25 }, { wch: 15 }, { wch: 20 }];
-    } else if (activeTab === 'CONTAS') {
-      reportData.groupedPayables.forEach((g: any) => {
-        g.installments.forEach((p: any) => {
-          dataToExport.push({
-            'Fornecedor': g.supplier,
-            'Descrição': g.description || p.description,
-            'Vencimento': format(parseISO(p.dueDate), 'dd/MM/yyyy'),
-            'Valor': cleanCurrency(p.amount),
-            'Status': p.status === 'paid' ? 'Pago' : 'Pendente'
-          });
-        });
-      });
-      cols = [{ wch: 40 }, { wch: 55 }, { wch: 15 }, { wch: 20 }, { wch: 15 }];
-    } else if (activeTab === 'PEDIDOS') {
-      dataToExport = reportData.ordersBI.filteredOrders.map((o: any) => ({
-        'OS': o.id,
-        'Cliente': o.client,
-        'Valor Total': cleanCurrency(o.total_value || o.totalValue),
-        'Status': o.status,
-        'Entrega': o.delivery_date || o.deliveryDate || '--'
-      }));
-      cols = [{ wch: 12 }, { wch: 45 }, { wch: 20 }, { wch: 25 }, { wch: 15 }];
-    }
-
-    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-    worksheet['!cols'] = cols;
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, activeTab);
-    XLSX.writeFile(workbook, filename);
-
-    toast({ 
-      title: "Exportação Concluída", 
-      description: "Relatório gerado em formato Excel (.xlsx)." 
     });
   };
 
@@ -271,41 +164,20 @@ export default function ReportsManager() {
     <div className="p-4 md:p-8 space-y-8 mt-14 md:mt-0 pb-24">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-white/5 pb-8">
         <div className="space-y-1">
-          <div className="flex items-center gap-2 text-primary"><Sparkles size={14} className="animate-pulse" /><span className="text-[10px] font-black uppercase tracking-[0.3em]">Intelligence Dashboard</span></div>
-          <h1 className="text-4xl font-black text-white tracking-tighter uppercase leading-none">Gestão de <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">Resultados</span></h1>
+          <div className="flex items-center gap-2 text-primary"><Sparkles size={14}/><span className="text-[10px] font-black uppercase tracking-[0.3em]">Finance Hub</span></div>
+          <h1 className="text-4xl font-black text-white tracking-tighter uppercase leading-none">Relatórios <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">Industriais</span></h1>
         </div>
-        <div className="flex flex-wrap items-center gap-4">
-           <button 
-             onClick={exportToExcel}
-             className="flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-emerald-500 transition-all border border-white/5 shadow-lg shadow-emerald-900/40"
-           >
-             <FileSpreadsheet size={16} /> Exportar Excel
-           </button>
-           <div className="relative group"><Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" size={16} /><input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white text-xs font-black uppercase outline-none focus:border-primary transition-all" /></div>
-           {activeTab !== 'PEDIDOS' && (
-             <button onClick={() => activeTab === 'FLUXO' ? setIsCashflowModalOpen(true) : setIsPayableModalOpen(true)} className="flex items-center gap-2 px-6 py-3 bg-primary text-black font-black text-[10px] uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(255,95,31,0.4)] hover:bg-white transition-all"><Plus size={16} strokeWidth={3} /> {activeTab === 'FLUXO' ? 'Lançamento' : 'Nova Conta'}</button>
-           )}
+        <div className="flex items-center gap-4">
+           <div className="relative group"><Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" size={16} /><input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white text-xs font-black outline-none focus:border-primary transition-all" /></div>
         </div>
       </header>
 
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {activeTab === 'PEDIDOS' ? (
-          <>
-            <KPICard label="Total Pedidos" value={reportData.ordersBI.totalCount} isCurrency={false} color="text-white" icon={ShoppingBag} />
-            <KPICard label="Em Produção" value={reportData.ordersBI.inProduction} isCurrency={false} color="text-yellow-500" icon={Factory} />
-            <KPICard label="Finalizados" value={reportData.ordersBI.finalized} isCurrency={false} color="text-emerald-500" icon={CheckCircle2} />
-            <KPICard label="Valor Total" value={reportData.ordersBI.totalValue} color="text-primary" icon={Wallet} glow />
-            <KPICard label="Ticket Médio" value={reportData.ordersBI.ticketMedio} color="text-cyan-400" icon={TrendingUp} />
-          </>
-        ) : (
-          <>
-            <KPICard label="Entradas" value={reportData.kpis.incomes} color="text-emerald-500" icon={TrendingUp} />
-            <KPICard label="Saídas" value={reportData.kpis.expenses} color="text-red-500" icon={TrendingDown} />
-            <KPICard label="Líquido" value={reportData.kpis.net} color="text-primary" icon={Wallet} glow />
-            <KPICard label="A Receber" value={reportData.kpis.receivables} color="text-yellow-500" icon={Target} />
-            <KPICard label="A Pagar" value={reportData.kpis.payables} color="text-rose-500" icon={AlertCircle} />
-          </>
-        )}
+        <KPICard label="Entradas" value={reportData.kpis.incomes} color="text-emerald-500" icon={TrendingUp} />
+        <KPICard label="Saídas" value={reportData.kpis.expenses} color="text-red-500" icon={TrendingDown} />
+        <KPICard label="Líquido" value={reportData.kpis.net} color="text-white" icon={Wallet} glow />
+        <KPICard label="A Receber" value={reportData.kpis.receivables} color="text-yellow-500" icon={Target} />
+        <KPICard label="A Pagar" value={reportData.kpis.payables} color="text-rose-500" icon={AlertCircle} />
       </section>
 
       <div className="flex gap-2 p-1 bg-zinc-900/50 rounded-2xl w-fit border border-zinc-800">
@@ -316,238 +188,59 @@ export default function ReportsManager() {
 
       <div className="bg-[#09090b] border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
         {activeTab === 'FLUXO' && (
-          <div className="overflow-x-auto custom-scrollbar">
-            <div className="divide-y divide-white/5 min-w-max">
-              {reportData.transactions.length > 0 ? reportData.transactions.map((t) => (
-                <div key={t.id} onClick={() => t.origin === 'SISTEMA (OS)' && router.push(`/orders?edit=${t.originalId}`)} className="group flex items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-8 cursor-pointer">
-                  <div className="flex items-center gap-4 flex-1 min-w-[300px]">
-                     <div className="flex flex-col items-center justify-center min-w-[50px] bg-zinc-950 p-2 rounded-xl border border-zinc-900"><span className="text-[8px] font-black text-zinc-600 uppercase">{format(parseISO(t.date), 'MMM', { locale: ptBR })}</span><span className="text-lg font-black text-white leading-none">{format(parseISO(t.date), 'dd')}</span></div>
-                     <div className="min-w-0 flex-1">
-                       <p className="text-sm font-bold text-white uppercase group-hover:text-primary transition-colors whitespace-nowrap">
-                         {t.description}
-                       </p>
-                       <div className="flex items-center gap-3 mt-1">
-                         <span className="text-[8px] font-black uppercase text-zinc-600 tracking-widest bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800 whitespace-nowrap">{t.method}</span>
-                         <span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded-full border whitespace-nowrap", t.type === 'income' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20")}>{t.type === 'income' ? 'Entrada' : 'Saída'}</span>
-                       </div>
-                     </div>
-                  </div>
-                  <div className="flex items-center gap-8 shrink-0">
-                    <p className={cn("text-lg font-black font-mono tracking-tighter", t.type === 'income' ? "text-emerald-500" : "text-red-500")}>{t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                    <button onClick={(e) => { e.stopPropagation(); setItemToDelete(t); }} className="p-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all border border-red-500/20"><Trash2 size={16}/></button>
-                  </div>
+          <div className="divide-y divide-white/5">
+            {reportData.transactions.map((t) => (
+              <div key={t.id} className="flex items-center justify-between p-4 hover:bg-zinc-900/40 transition-all">
+                <div className="flex items-center gap-4">
+                   <div className="flex flex-col items-center justify-center min-w-[50px] bg-zinc-950 p-2 rounded-xl border border-zinc-900"><span className="text-[8px] font-black text-zinc-600 uppercase">{format(parseISO(t.date), 'MMM', { locale: ptBR })}</span><span className="text-lg font-black text-white">{format(parseISO(t.date), 'dd')}</span></div>
+                   <div>
+                     <p className="text-sm font-bold text-white uppercase">{t.description}</p>
+                     <p className="text-[8px] font-black uppercase text-zinc-600 tracking-widest">{t.method} &bull; {t.origin}</p>
+                   </div>
                 </div>
-              )) : <EmptyState icon={Target} text="Sem movimentos no período" />}
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'PEDIDOS' && (
-          <div className="p-8 space-y-12">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-              <div className="lg:col-span-7 bg-zinc-950/30 border border-zinc-800 p-8 rounded-[2.5rem] relative overflow-hidden flex flex-col items-center">
-                <div className="absolute top-0 right-0 p-6 opacity-10"><PieChartIcon size={80} strokeWidth={1} /></div>
-                <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.4em] mb-8 flex items-center gap-2 self-start"><div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> Distribuição de Produção</h3>
-                <div className="flex flex-col md:flex-row items-center gap-12 w-full">
-                  <div className="relative w-[320px] h-[320px] shrink-0">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie 
-                          data={reportData.ordersBI.statusChart} 
-                          cx="50%" cy="50%" 
-                          innerRadius={90} outerRadius={120} 
-                          paddingAngle={6} cornerRadius={12} 
-                          dataKey="value" stroke="none"
-                          onMouseEnter={(_, index) => setActivePieIndex(index)}
-                          onMouseLeave={() => setActivePieIndex(null)}
-                        >
-                          {reportData.ordersBI.statusChart.map((entry, index) => (
-                            <Cell 
-                              key={`cell-${index}`} 
-                              fill={entry.color} 
-                              className="transition-all duration-300"
-                              style={{ 
-                                filter: activePieIndex === index ? `drop-shadow(0 0 15px ${entry.color})` : 'none',
-                                opacity: activePieIndex === null || activePieIndex === index ? 1 : 0.3,
-                                cursor: 'pointer'
-                              }}
-                            />
-                          ))}
-                          <Label 
-                            content={({ viewBox }) => { 
-                              if (viewBox && "cx" in viewBox && "cy" in viewBox) return (
-                                <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
-                                  <tspan x={viewBox.cx} y={viewBox.cy - 10} fill="#fff" className="text-5xl font-black">{reportData.ordersBI.totalCount}</tspan>
-                                  <tspan x={viewBox.cx} y={viewBox.cy + 25} fill="#71717a" className="text-[10px] font-black uppercase tracking-widest">Protocolos</tspan>
-                                </text>
-                              )
-                            }} 
-                          />
-                        </Pie>
-                        <Tooltip content={() => null} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="flex-1 w-full space-y-2">
-                    {reportData.ordersBI.statusChart.map((entry, index) => (
-                      <div 
-                        key={index}
-                        onMouseEnter={() => setActivePieIndex(index)}
-                        onMouseLeave={() => setActivePieIndex(null)}
-                        className={cn(
-                          "flex items-center justify-between p-3 rounded-xl border border-transparent transition-all duration-300 cursor-pointer",
-                          activePieIndex === index ? "bg-white/5 border-white/10 translate-x-2" : "opacity-60"
-                        )}
-                        style={{ boxShadow: activePieIndex === index ? `0 0 20px -5px ${entry.color}40` : 'none' }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color, boxShadow: `0 0 10px ${entry.color}` }} />
-                          <span className="text-[10px] font-black text-white uppercase tracking-wider">{entry.name}</span>
-                        </div>
-                        <span className="text-sm font-mono font-black text-zinc-400">{entry.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <p className={cn("text-lg font-black font-mono", t.type === 'income' ? "text-emerald-500" : "text-red-500")}>{t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
               </div>
-              <div className="lg:col-span-5 bg-zinc-950/30 border border-zinc-800 p-8 rounded-[2.5rem]">
-                <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.4em] mb-8 flex items-center gap-2"><UsersIcon size={14}/> Top 5 Clientes (Faturamento)</h3>
-                <div className="h-[350px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={reportData.ordersBI.clientChart} layout="vertical" margin={{ left: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#18181b" horizontal={false} />
-                      <XAxis type="number" hide />
-                      <YAxis 
-                        dataKey="name" 
-                        type="category" 
-                        width={120} 
-                        style={{ fontSize: '9px', fill: '#71717a', fontWeight: 'bold' }} 
-                        tickFormatter={(val) => val.length > 15 ? `${val.substring(0, 15)}...` : val}
-                      />
-                      <Tooltip 
-                        cursor={{ fill: 'rgba(255,255,255,0.03)' }} 
-                        content={({ active, payload }) => {
-                          if (active && payload && payload.length) return (
-                            <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-xl shadow-2xl">
-                              <p className="text-[10px] font-black text-zinc-500 uppercase mb-1">{payload[0].payload.name}</p>
-                              <p className="text-sm font-black text-primary">{payload[0].value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                            </div>
-                          )
-                          return null;
-                        }}
-                      />
-                      <Bar dataKey="value" fill="#FF5F1F" radius={[0, 8, 8, 0]} barSize={30}>
-                        {reportData.ordersBI.clientChart.map((_, index) => (
-                          <Cell key={`bar-${index}`} fillOpacity={0.8} className="hover:fill-opacity-100 transition-opacity" />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.4em] flex items-center gap-2"><ClipboardList size={14}/> Detalhamento de Protocolos (Cronologia do Mês)</h3>
-                <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">{reportData.ordersBI.filteredOrders.length} Registros Encontrados</span>
-              </div>
-              <div className="bg-zinc-950/30 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
-                <div className="overflow-x-auto custom-scrollbar">
-                  <div className="min-w-[800px] divide-y divide-white/5">
-                    {reportData.ordersBI.filteredOrders.length > 0 ? reportData.ordersBI.filteredOrders.map((order: any) => {
-                      const orderDate = order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000) : parseISO(order.emission_date || order.delivery_date || '');
-                      const statusUpper = String(order.status || 'Outros').toUpperCase();
-                      const statusColor = PRODUCTION_COLORS[statusUpper] || PRODUCTION_COLORS['OUTROS'];
-                      return (
-                        <div key={order.id} className="group flex items-center justify-between p-4 hover:bg-zinc-900/40 transition-all gap-8">
-                          <div className="flex items-center gap-6 flex-1">
-                            <div className="flex flex-col items-center justify-center min-w-[50px] bg-zinc-900 p-2 rounded-xl border border-zinc-800">
-                              <span className="text-[8px] font-black text-zinc-600 uppercase">{format(orderDate, 'MMM', { locale: ptBR })}</span>
-                              <span className="text-lg font-black text-white leading-none">{format(orderDate, 'dd')}</span>
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-bold text-white uppercase group-hover:text-primary transition-colors whitespace-nowrap truncate max-w-[300px]">{order.client}</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[8px] font-mono font-black text-zinc-600 bg-zinc-950 px-1.5 py-0.5 rounded border border-zinc-900">OS #{order.id.slice(-6)}</span>
-                                <span className="text-[8px] font-black uppercase text-zinc-500 tracking-widest">Aberto em {format(orderDate, 'HH:mm')}</span>
-                              </div>
-                            </div>
-                            <div className="w-[140px] shrink-0">
-                              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-widest text-center justify-center" style={{ backgroundColor: `${statusColor}10`, borderColor: `${statusColor}30`, color: statusColor, boxShadow: `0 0 10px ${statusColor}15` }}>
-                                <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: statusColor }} />
-                                {order.status}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-8 shrink-0">
-                            <p className="text-lg font-black font-mono tracking-tighter text-white">{cleanCurrency(order.total_value || order.totalValue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                            <button onClick={() => router.push(`/orders?edit=${order.id}`)} className="p-3 bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-xl transition-all border border-zinc-800"><ChevronRight size={16}/></button>
-                          </div>
-                        </div>
-                      );
-                    }) : <EmptyState icon={ShoppingBag} text="Nenhum protocolo neste mês" />}
-                  </div>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
         )}
 
         {activeTab === 'CONTAS' && (
-          <div className="overflow-x-auto custom-scrollbar">
-            <div className="divide-y divide-white/5 min-w-[600px]">
-              {reportData.groupedPayables.length > 0 ? reportData.groupedPayables.map((group: any) => (
-                <div key={group.groupId} className="flex flex-col">
-                  <div className="flex items-center justify-between p-5 border-l-2 border-transparent">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className={cn("p-2.5 rounded-xl border flex items-center justify-center shrink-0", group.allPaid ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" : "bg-zinc-900 border-zinc-800 text-zinc-500")}><Box size={20} /></div>
-                      <div className="min-w-0">
-                        <h4 className="text-sm font-black text-white uppercase whitespace-nowrap">{group.supplier}</h4>
-                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-0.5 whitespace-nowrap">{group.description}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-8 shrink-0">
-                      <div className="text-right">
-                        <p className="text-[9px] text-zinc-600 uppercase font-black">Total Contrato</p>
-                        <p className="text-lg font-black font-mono text-white">{group.totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                      </div>
-                    </div>
+          <div className="divide-y divide-white/5">
+            {reportData.groupedPayables.map((group: any) => (
+              <div key={group.groupId} className="p-5 flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-black text-white uppercase">{group.supplier}</h4>
+                    <p className="text-[10px] text-zinc-500 uppercase">{group.description}</p>
                   </div>
-                  <div className="bg-black/20 border-t border-white/5 pl-16">
-                    {group.installments.map((p: any) => (
-                      <div key={p.id} className={cn("flex items-center justify-between p-4 transition-all gap-8 border-l-4", p.status === 'paid' ? "bg-emerald-500/5 border-emerald-500" : "bg-zinc-900/30 border-transparent")}>
-                        <div className="flex items-center gap-4 shrink-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black text-zinc-400 uppercase">Vencimento:</span>
-                            <span className="text-[10px] font-bold text-white whitespace-nowrap">{format(parseISO(p.dueDate), 'dd/MM/yyyy')}</span>
-                            {p.status === 'paid' && <span className="px-1.5 py-0.5 text-[8px] font-black bg-emerald-500 text-black rounded">PAGO</span>}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-6 shrink-0">
-                          <p className="text-sm font-black text-white font-mono">{cleanCurrency(p.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                          {p.status !== 'paid' && <button onClick={() => setItemToPay(p)} className="p-2.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-lg"><CheckCircle2 size={16}/></button>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <p className="text-lg font-black text-white font-mono">{group.totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                 </div>
-              )) : <EmptyState icon={Receipt} text="Sem contas pendentes" />}
-            </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {group.installments.map((p: any) => (
+                    <div key={p.id} className={cn("p-3 rounded-xl border flex items-center justify-between", p.status === 'paid' ? "bg-emerald-500/5 border-emerald-500/20" : "bg-zinc-900/50 border-zinc-800")}>
+                      <span className="text-[9px] font-bold text-zinc-400">VENC: {format(parseISO(p.dueDate), 'dd/MM/yy')}</span>
+                      <div className="flex items-center gap-4">
+                        <span className="text-xs font-black font-mono text-white">{cleanCurrency(p.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        {p.status !== 'paid' && <button onClick={() => setItemToPay(p)} className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-black transition-all"><CheckCircle2 size={14}/></button>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
       <AnimatePresence>
-        {itemToDelete && (
+        {itemToPay && (
           <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 p-4">
-            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="bg-[#0c0c0e] border border-zinc-800 rounded-3xl w-full max-w-md p-8 shadow-2xl text-center">
-              <div className="w-20 h-20 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6 mx-auto text-2xl">⚠️</div>
-              <h3 className="text-2xl font-black text-white mb-3 uppercase tracking-tighter">Confirmar Exclusão?</h3>
-              <p className="text-zinc-500 text-sm mb-8 uppercase tracking-widest font-bold">Esta ação é irreversível no terminal.</p>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="bg-[#0c0c0e] border border-emerald-500/20 rounded-3xl w-full max-w-md p-8 shadow-2xl text-center">
+              <h3 className="text-2xl font-black text-white mb-3 uppercase tracking-tighter">Confirmar Pagamento?</h3>
+              <p className="text-zinc-500 text-sm mb-8 uppercase tracking-widest font-bold">Deseja dar baixa no valor de {cleanCurrency(itemToPay.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}?</p>
               <div className="flex gap-4">
-                <button onClick={() => setItemToDelete(null)} className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-400 font-black uppercase text-[10px]">Cancelar</button>
-                <button onClick={handleConfirmDelete} className="flex-1 py-4 rounded-xl bg-red-500 text-white font-black uppercase text-[10px] shadow-[0_0_20px_rgba(239,68,68,0.3)]">Confirmar</button>
+                <button onClick={() => setItemToPay(null)} className="flex-1 py-4 rounded-xl border border-zinc-800 text-zinc-400 font-black uppercase text-[10px]">Cancelar</button>
+                <button onClick={handleConfirmPayment} className="flex-1 py-4 rounded-xl bg-emerald-600 text-black font-black uppercase text-[10px]">Confirmar Baixa</button>
               </div>
             </motion.div>
           </div>
@@ -557,19 +250,18 @@ export default function ReportsManager() {
   );
 }
 
-function KPICard({ label, value, color, icon: Icon, glow, isCurrency = true }: any) {
+function KPICard({ label, value, color, icon: Icon, glow }: any) {
   return (
-    <div className={cn("relative bg-[#09090b] border border-zinc-800 p-5 rounded-2xl overflow-hidden group transition-all duration-500", glow && "border-primary/30 shadow-[0_0_40px_-10px_rgba(255,95,31,0.2)]")}>
-      <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-24 h-24 bg-white/5 rounded-full blur-2xl group-hover:bg-primary/5 transition-colors" />
-      <div className="flex justify-between items-start mb-2 relative z-10">
+    <div className={cn("relative bg-[#09090b] border border-zinc-800 p-5 rounded-2xl overflow-hidden", glow && "border-primary/30 shadow-[0_0_40px_-10px_rgba(255,95,31,0.2)]")}>
+      <div className="flex justify-between items-start mb-2">
         <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">{label}</span>
-        <div className={cn("p-2 rounded-lg bg-zinc-950 border border-zinc-800", color)}><Icon size={14} className="opacity-80" /></div>
+        <Icon size={14} className={color} />
       </div>
-      <p className={cn("text-2xl font-black font-mono tracking-tighter truncate relative z-10", color)}>{isCurrency ? (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : (value || 0)}</p>
+      <p className={cn("text-2xl font-black font-mono tracking-tighter", color)}>{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
     </div>
   );
 }
 
-function EmptyState({ icon: Icon, text }: any) {
-  return <div className="py-24 text-center opacity-20 group"><Icon size={48} className="mx-auto mb-4 group-hover:scale-110 transition-transform" /><p className="text-[10px] font-black uppercase tracking-[0.4em]">{text}</p></div>;
+export default function ReportsPage() {
+  return <AdminGate><ReportsContent /></AdminGate>;
 }

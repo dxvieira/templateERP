@@ -3,13 +3,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Whitelist check: allows anyone to verify if a specific email is authorized
+    // Whitelist check: permite que qualquer pessoa verifique se um e-mail está autorizado antes do login
     match /authorized_emails/{email} {
       allow get: if true;
-      allow list, write: if false; // Only manageable via Firebase Console for safety
+      allow list, write: if false; 
     }
 
-    // General operational documents: accessible only by authenticated users
+    // Documentos operacionais: acessíveis apenas por usuários autenticados
     match /{document=**} {
       allow read, write: if request.auth != null;
     }
