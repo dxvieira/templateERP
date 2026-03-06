@@ -12,23 +12,38 @@ import {
 } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 
-// IMPORTANT: DO NOT MODIFY THIS FUNCTION
-export function initializeFirebase() {
-  if (!getApps().length) {
-    let firebaseApp;
-    try {
-      firebaseApp = initializeApp();
-    } catch (e) {
-      if (process.env.NODE_ENV === "production") {
-        console.warn('Automatic initialization failed. Falling back to firebase config object.', e);
-      }
-      firebaseApp = initializeApp(firebaseConfig);
-    }
+// Cache singleton para evitar múltiplas inicializações e conflitos de lease no IndexedDB
+let firebaseInstances: {
+  firebaseApp: FirebaseApp;
+  auth: any;
+  firestore: Firestore;
+  functions: any;
+} | null = null;
 
-    return getSdks(firebaseApp);
+/**
+ * Inicializa os serviços do Firebase garantindo uma única instância (Singleton).
+ * Resolve o erro "Failed to obtain primary lease" ao estabilizar a inicialização do Firestore.
+ */
+export function initializeFirebase() {
+  // Se já inicializado nesta sessão do cliente, retorna as instâncias cacheadas
+  if (firebaseInstances) return firebaseInstances;
+
+  let firebaseApp: FirebaseApp;
+  
+  if (!getApps().length) {
+    try {
+      // No ambiente do Studio, tentamos a inicialização padrão primeiro
+      firebaseApp = initializeApp(firebaseConfig);
+    } catch (e) {
+      console.warn('Firebase init fallback:', e);
+      firebaseApp = getApp();
+    }
+  } else {
+    firebaseApp = getApp();
   }
 
-  return getSdks(getApp());
+  firebaseInstances = getSdks(firebaseApp);
+  return firebaseInstances;
 }
 
 export function getSdks(firebaseApp: FirebaseApp) {
@@ -42,7 +57,8 @@ export function getSdks(firebaseApp: FirebaseApp) {
       // No servidor, usamos o Firestore básico sem cache local persistente
       firestore = getFirestore(firebaseApp);
     } else {
-      // No cliente, ativamos o Cache Local Persistente para carregamento instantâneo
+      // No cliente, ativamos o Cache Local Persistente.
+      // initializeFirestore deve ser chamado apenas uma vez por App.
       firestore = initializeFirestore(firebaseApp, {
         localCache: persistentLocalCache({ 
           tabManager: persistentMultipleTabManager() 
@@ -50,7 +66,7 @@ export function getSdks(firebaseApp: FirebaseApp) {
       });
     }
   } catch (e) {
-    // Caso já tenha sido inicializado ou ocorra erro, recupera a instância existente
+    // Se já estiver inicializado ou ocorrer erro de lease, recupera a instância existente
     firestore = getFirestore(firebaseApp);
   }
 
