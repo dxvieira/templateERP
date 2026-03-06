@@ -10,6 +10,7 @@ import {
   getFirestore,
   Firestore 
 } from 'firebase/firestore';
+import { getFunctions } from 'firebase/functions';
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
@@ -56,7 +57,8 @@ export function getSdks(firebaseApp: FirebaseApp) {
   return {
     firebaseApp,
     auth: getAuth(firebaseApp),
-    firestore
+    firestore,
+    functions: getFunctions(firebaseApp)
   };
 }
 

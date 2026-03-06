@@ -4,6 +4,7 @@ import React, { DependencyList, createContext, useContext, ReactNode, useMemo, u
 import { FirebaseApp } from 'firebase/app';
 import { Firestore } from 'firebase/firestore';
 import { Auth, User, onAuthStateChanged } from 'firebase/auth';
+import { Functions } from 'firebase/functions';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
 
 interface FirebaseProviderProps {
@@ -11,6 +12,7 @@ interface FirebaseProviderProps {
   firebaseApp: FirebaseApp;
   firestore: Firestore;
   auth: Auth;
+  functions?: Functions;
 }
 
 interface UserAuthState {
@@ -24,6 +26,7 @@ export interface FirebaseContextState {
   firebaseApp: FirebaseApp | null;
   firestore: Firestore | null;
   auth: Auth | null;
+  functions: Functions | null;
   user: User | null;
   isUserLoading: boolean;
   userError: Error | null;
@@ -33,6 +36,7 @@ export interface FirebaseServicesAndUser {
   firebaseApp: FirebaseApp;
   firestore: Firestore;
   auth: Auth;
+  functions: Functions;
   user: User | null;
   isUserLoading: boolean;
   userError: Error | null;
@@ -51,6 +55,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   firebaseApp,
   firestore,
   auth,
+  functions,
 }) => {
   const [userAuthState, setUserAuthState] = useState<UserAuthState>({
     user: null,
@@ -82,20 +87,16 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       firebaseApp: servicesAvailable ? firebaseApp : null,
       firestore: servicesAvailable ? firestore : null,
       auth: servicesAvailable ? auth : null,
+      functions: functions || null,
       user: userAuthState.user,
       isUserLoading: userAuthState.isUserLoading,
       userError: userAuthState.userError,
     };
-  }, [firebaseApp, firestore, auth, userAuthState]);
+  }, [firebaseApp, firestore, auth, functions, userAuthState]);
 
   return (
     <FirebaseContext.Provider value={contextValue}>
       <FirebaseErrorListener />
-      {/* 
-        Renderização imediata: 
-        O children é montado sem aguardar o Auth, permitindo que o cache do Firestore 
-        popule a tela instantaneamente.
-      */}
       {children}
     </FirebaseContext.Provider>
   );
@@ -111,6 +112,7 @@ export const useFirebase = (): FirebaseServicesAndUser => {
     firebaseApp: context.firebaseApp,
     firestore: context.firestore,
     auth: context.auth,
+    functions: context.functions!,
     user: context.user,
     isUserLoading: context.isUserLoading,
     userError: context.userError,
@@ -120,6 +122,7 @@ export const useFirebase = (): FirebaseServicesAndUser => {
 export const useAuth = (): Auth => useFirebase().auth;
 export const useFirestore = (): Firestore => useFirebase().firestore;
 export const useFirebaseApp = (): FirebaseApp => useFirebase().firebaseApp;
+export const useFunctions = (): Functions => useFirebase().functions;
 
 export function useMemoFirebase<T>(factory: () => T, deps: DependencyList): T {
   return useMemo(() => {
