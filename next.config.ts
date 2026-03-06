@@ -19,14 +19,10 @@ const nextConfig: NextConfig = {
     serverActions: {
       allowedOrigins: [
         'localhost:9002',
-        '*.cloudworkstations.dev'
+        '*.cloudworkstations.dev',
+        '*.cluster-gizzoza7hzhfyxzo5d76y3flkw.cloudworkstations.dev'
       ]
-    },
-    // Adicionado para resolver o erro de Cross-Origin em ambientes de workstation
-    allowedDevOrigins: [
-      'localhost:9002',
-      '*.cloudworkstations.dev'
-    ]
+    }
   }
 };
 
