@@ -126,7 +126,7 @@ export default function WeeklyGoalsPage() {
 
   return (
     <div className="p-4 md:p-8 space-y-8 mt-14 md:mt-0 pb-24 relative">
-      <header className="space-y-4">
+      <header className="space-y-6">
         <Button 
           variant="ghost" 
           onClick={() => router.push('/')} 
@@ -134,16 +134,68 @@ export default function WeeklyGoalsPage() {
         >
           <ChevronLeft size={12} /> Voltar ao Terminal
         </Button>
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Target size={16} className="text-primary" />
-              <span className="text-primary text-[10px] font-black uppercase tracking-[0.3em]">Missão Semanal</span>
+
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-white/5 pb-8">
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="space-y-1"
+          >
+            <div className="flex items-center gap-4">
+              {/* Icon Container with subtle glow trace */}
+              <motion.div
+                animate={{ 
+                  y: [0, -4, 0],
+                }}
+                transition={{ 
+                  duration: 6,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+                className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-900/50 border border-white/5 backdrop-blur-sm overflow-hidden group"
+              >
+                <motion.div 
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                  className="absolute inset-[-50%] bg-[conic-gradient(from_0deg,transparent_70%,#FF5F1F_100%)] opacity-40 group-hover:opacity-100 transition-opacity"
+                />
+                <div className="absolute inset-[1px] bg-[#0A0A0A] rounded-[15px] z-10 flex items-center justify-center">
+                  <Target className="text-primary w-6 h-6" />
+                </div>
+              </motion.div>
+
+              {/* Title with Shimmering Gradient */}
+              <div className="flex flex-col">
+                <motion.h1 
+                  className="text-4xl font-black text-white tracking-tighter uppercase leading-none flex flex-wrap items-center gap-2"
+                >
+                  <span>META DA</span>
+                  <motion.span 
+                    animate={{ 
+                      backgroundImage: [
+                        'linear-gradient(90deg, #FF5F1F 0%, #FF8F5F 50%, #FF5F1F 100%)',
+                        'linear-gradient(90deg, #FF8F5F 0%, #FF5F1F 50%, #FF8F5F 100%)',
+                        'linear-gradient(90deg, #FF5F1F 0%, #FF8F5F 50%, #FF5F1F 100%)'
+                      ]
+                    }}
+                    transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                    style={{ backgroundSize: '200% auto' }}
+                    className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-orange-600"
+                  >
+                    SEMANA
+                  </motion.span>
+                </motion.h1>
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: '40%' }}
+                  transition={{ delay: 0.5, duration: 1 }}
+                  className="h-[2px] bg-gradient-to-r from-primary/50 to-transparent mt-1"
+                />
+              </div>
             </div>
-            <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tighter">
-              Meta da <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">Semana</span>
-            </h1>
-          </div>
+          </motion.div>
+
           <Button 
             onClick={() => setIsManageModalOpen(true)} 
             className="bg-primary text-black font-black px-8 h-14 rounded-2xl uppercase text-[10px] tracking-widest shadow-[0_0_25px_rgba(255,95,31,0.4)] transition-all hover:scale-105 active:scale-95"
@@ -296,7 +348,7 @@ function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
     const q = query(collection(firestore, 'orders'));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       setAllOrders(docs.filter(o => o.status !== 'Entregue'));
       setLoading(false);
     });

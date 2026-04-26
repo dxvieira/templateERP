@@ -72,10 +72,8 @@ const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | nul
     
     setLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { deliveryDate, client, ...payload } = formData;
-      
-      await updateOrder(order.id, payload);
+      // Envia o formData completo para permitir edição de cliente e data
+      await updateOrder(order.id, formData);
       toast({ title: "Protocolo Atualizado" });
       onClose();
     } finally {

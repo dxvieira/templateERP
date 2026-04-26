@@ -102,12 +102,67 @@ function SuppliersContent() {
 
   return (
     <div className="p-4 md:p-8 space-y-8 mt-14 md:mt-0">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-        <div>
-           <div className="flex items-center gap-2 mb-2"><Truck size={16} className="text-primary" /><span className="text-primary text-[10px] font-black uppercase tracking-[0.3em]">Supply Chain</span></div>
-           <h1 className="text-4xl font-black text-white tracking-tight uppercase">Rede de <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-600">Fornecedores</span></h1>
-        </div>
-        <button onClick={() => openModal()} className="group flex items-center gap-2 px-6 py-3 rounded-full bg-primary text-black font-black uppercase tracking-wider text-[10px] hover:bg-white hover:scale-105 transition-all shadow-[0_0_20px_rgba(255,95,31,0.4)]"><Plus size={18} /> Novo Fornecedor</button>
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-white/5 pb-8">
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="space-y-1"
+        >
+          <div className="flex items-center gap-4">
+            {/* Icon Container with orange halo */}
+            <motion.div
+              animate={{ 
+                y: [0, -4, 0],
+              }}
+              transition={{ 
+                duration: 6,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+              className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-900/50 border border-white/5 backdrop-blur-sm overflow-hidden group"
+            >
+              <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                className="absolute inset-[-50%] bg-[conic-gradient(from_0deg,transparent_70%,#FF5F1F_100%)] opacity-40 group-hover:opacity-100 transition-opacity"
+              />
+              <div className="absolute inset-[1px] bg-[#0A0A0A] rounded-[15px] z-10 flex items-center justify-center">
+                <Truck className="text-primary w-6 h-6" />
+              </div>
+            </motion.div>
+
+            {/* Title with Orange Shimmering Gradient */}
+            <div className="flex flex-col">
+              <motion.h1 
+                className="text-4xl font-black text-white tracking-tighter uppercase leading-none flex items-center gap-2"
+              >
+                <span>REDE DE</span>
+                <motion.span 
+                  animate={{ 
+                    backgroundImage: [
+                      'linear-gradient(90deg, #FF5F1F 0%, #FF8F5F 50%, #FF5F1F 100%)',
+                      'linear-gradient(90deg, #FF8F5F 0%, #FF5F1F 50%, #FF8F5F 100%)',
+                      'linear-gradient(90deg, #FF5F1F 0%, #FF8F5F 50%, #FF5F1F 100%)'
+                    ]
+                  }}
+                  transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                  style={{ backgroundSize: '200% auto' }}
+                  className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-orange-600"
+                >
+                  FORNECEDORES
+                </motion.span>
+              </motion.h1>
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: '40%' }}
+                transition={{ delay: 0.5, duration: 1 }}
+                className="h-[2px] bg-gradient-to-r from-primary/50 to-transparent mt-1"
+              />
+            </div>
+          </div>
+        </motion.div>
+        <button onClick={() => openModal()} className="group flex items-center h-14 gap-4 px-8 rounded-2xl bg-primary text-black font-black uppercase tracking-widest text-[10px] hover:bg-white hover:scale-105 transition-all shadow-[0_0_25px_rgba(255,95,31,0.4)] active:scale-95"><Plus size={18} /> Novo Fornecedor</button>
       </header>
 
       <div className="relative group max-w-2xl">

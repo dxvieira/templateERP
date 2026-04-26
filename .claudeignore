@@ -1,0 +1,10 @@
+# Ignorar pastas densas no subdiretório
+node_modules/
+.next/
+dist/
+build/
+.git/
+.vscode/
+.idx/
+*.log
+package-lock.json

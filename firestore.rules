@@ -1,10 +1,32 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Reset de Segurança Industrial: Libera leitura e escrita para qualquer usuário autenticado.
-    // Isso elimina erros de permissão em terminais operacionais rápidos.
+    
+    // Função auxiliar para verificar se o usuário está na Whitelist
+    function isAuthorized() {
+      return request.auth != null && 
+             exists(/databases/$(database)/documents/authorized_users/$(request.auth.token.email));
+    }
+
+    // Função auxiliar para verificar se o usuário é Administrador
+    function isAdmin() {
+      return isAuthorized() && 
+             get(/databases/$(database)/documents/authorized_users/$(request.auth.token.email)).data.role == 'admin';
+    }
+
+    // Regra Global: Precisa estar na Whitelist para ver o app
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAuthorized();
+      // Apenas Admins podem DELETAR qualquer coisa no sistema
+      allow delete: if isAdmin();
+    }
+
+    // Regras Específicas para Finanças e Relatórios
+    match /accounts_payable/{doc} {
+      allow read, write: if isAdmin();
+    }
+    match /cashflow_manual/{doc} {
+      allow read, write: if isAdmin();
     }
   }
 }

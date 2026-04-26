@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { doc, setDoc, serverTimestamp, updateDoc, onSnapshot, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, updateDoc, onSnapshot, getDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { useFirestore, useUser, useFunctions } from '@/firebase';
 import { 
@@ -18,6 +18,12 @@ import { FirestorePermissionError } from '@/firebase/errors';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { DeleteConfirmationModal } from './DeleteConfirmationModal';
+import { ClientSearchField } from './ClientSearchField';
+import { Client } from '../../types/client';
+import { InstallmentManager } from './InstallmentManager';
+import { Installment } from '../../types/finance';
+import { dbService } from '@/services/db-service';
 
 interface AdminOrderModalProps {
   order?: any | null;
@@ -44,6 +50,8 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   const [observations, setObservations] = useState('');
   const [items, setItems] = useState<any[]>([]);
   const [installments, setInstallments] = useState<any[]>([]);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -97,50 +105,85 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   }, [items]);
 
   const amountPaid = useMemo(() => {
-    return installments
-      .filter(i => i.status === 'paid' || i.status === 'pago')
-      .reduce((acc, i) => acc + (Number(i.amount) || 0), 0);
+    return (installments as Installment[])
+      .filter(i => i.status === 'paid' || (i.status as any) === 'pago')
+      .reduce((acc, i) => acc + Number(i.amount), 0);
   }, [installments]);
 
   const balanceDue = totalValue - amountPaid;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firestore) return;
+    if (!firestore) {
+      toast({ variant: 'destructive', title: 'Erro de Conexão', description: 'O banco de dados não foi inicializado corretamente.' });
+      return;
+    }
+    
     setLoading(true);
 
-    const isNew = !order;
-    const finalId = order?.id || String(Date.now()).slice(-6);
-    const docRef = doc(firestore, 'orders', finalId);
-
-    const payload = {
-      id: finalId,
-      client, status, 
-      emission_date: emissionDate, 
-      delivery_date: deliveryDate, 
-      observations, items, 
-      total_value: totalValue,
-      amount_paid: amountPaid, 
-      balance_due: balanceDue, 
-      installments,
-      updatedAt: serverTimestamp(),
-      ...(isNew ? { createdAt: serverTimestamp() } : {})
-    };
-
     try {
+      const isNew = !order;
+      let finalId = order?.id;
+      let oldId: string | null = null;
+
+      // Lógica de ID Sequencial (00001...)
       if (isNew) {
-        await setDoc(docRef, payload);
-      } else {
-        await updateDoc(docRef, payload);
+        finalId = await dbService.getNextOrderNumber(firestore);
+      } else if (order?.id && order.id.length !== 5) {
+        // Migração do pedido aberto (se o ID for legado/diferente de 5 dígitos)
+        // Isso atende ao pedido do usuário: "o pedido que já tem aberto, pode ser o 00001"
+        oldId = order.id;
+        finalId = await dbService.getNextOrderNumber(firestore);
       }
-      toast({ title: "Sincronização Industrial", description: "Protocolo atualizado com sucesso." });
-      if (isNew) onClose();
-    } catch (err) {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: docRef.path,
-        operation: isNew ? 'create' : 'update',
-        requestResourceData: payload
-      }));
+
+      const docRef = doc(firestore, 'orders', finalId);
+
+      // Payload robusto (snake_case para DB antigo, camelCase para compatibilidade)
+      const payload = {
+        id: finalId,
+        client: client,
+        status: status,
+        emission_date: emissionDate,
+        emissionDate: emissionDate,
+        delivery_date: deliveryDate,
+        deliveryDate: deliveryDate,
+        observations: observations,
+        items: items,
+        total_value: totalValue,
+        totalValue: totalValue,
+        amount_paid: amountPaid,
+        amountPaid: amountPaid,
+        balance_due: balanceDue,
+        balanceDue: balanceDue,
+        installments: installments,
+        updatedAt: serverTimestamp(),
+        ...(isNew ? { createdAt: serverTimestamp() } : (order.createdAt ? { createdAt: order.createdAt } : {}))
+      };
+
+      // Se for migração, precisamos criar o novo e deletar o antigo
+      if (oldId) {
+        await setDoc(docRef, payload);
+        await deleteDoc(doc(firestore, 'orders', oldId));
+        toast({ 
+          title: "Migração Concluída", 
+          description: `OS #${oldId} migrada para a nova sequência: #${finalId}` 
+        });
+        onClose(); // Fecha para evitar inconsistência de ID no snapshot
+      } else {
+        await setDoc(docRef, payload, { merge: true });
+        toast({ 
+          title: "Registro Salvo", 
+          description: `Protocolo #${finalId} atualizado com sucesso.` 
+        });
+        if (isNew) onClose();
+      }
+    } catch (err: any) {
+      console.error("Erro ao salvar OS:", err);
+      toast({ 
+        variant: "destructive", 
+        title: "Falha na Gravação", 
+        description: err.message || "Erro desconhecido ao gerar numeração ou salvar." 
+      });
     } finally {
       setLoading(false);
     }
@@ -186,42 +229,52 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           <title>OP #${order.id.slice(-6)} - IMPACTO</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-            body { font-family: 'Inter', sans-serif; margin: 0; padding: 40px; color: #000; background: #fff; line-height: 1.4; }
-            .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 15px; }
+            @page { size: A4 portrait; margin: 15mm; }
+            * { box-sizing: border-box; }
+            html, body { margin: 0; padding: 0; height: auto; }
+            body { font-family: 'Inter', sans-serif; color: #000; background: #ffffff !important; line-height: 1.3; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .page-container { padding: 10px; max-height: 257mm; overflow: hidden; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 12px; }
             .header-info { text-align: right; }
-            .header-info h1 { margin: 0; font-size: 28px; font-weight: 900; text-transform: uppercase; letter-spacing: -1px; }
-            .header-info p { margin: 5px 0 0; font-size: 20px; font-weight: 700; color: #333; }
-            .client-card { display: flex; gap: 20px; margin-bottom: 25px; }
-            .client-box { flex: 2; border: 1.5px solid #000; border-radius: 12px; padding: 15px; }
-            .client-label { font-size: 10px; font-weight: 900; color: #666; text-transform: uppercase; margin-bottom: 8px; }
-            .client-name { font-size: 22px; font-weight: 900; text-transform: uppercase; margin: 0 0 10px; }
-            .client-details { font-size: 13px; font-weight: 500; }
-            .date-box { border: 1.5px solid #000; border-radius: 12px; padding: 12px; text-align: center; min-width: 140px; }
+            .header-info h1 { margin: 0; font-size: 26px; font-weight: 900; text-transform: uppercase; letter-spacing: -1px; }
+            .header-info p { margin: 4px 0 0; font-size: 18px; font-weight: 700; color: #333; }
+            .client-card { display: flex; gap: 20px; margin-bottom: 20px; }
+            .client-box { flex: 2; border: 1.5px solid #000; border-radius: 12px; padding: 12px 15px; }
+            .client-label { font-size: 9px; font-weight: 900; color: #666; text-transform: uppercase; margin-bottom: 6px; }
+            .client-name { font-size: 20px; font-weight: 900; text-transform: uppercase; margin: 0 0 8px; }
+            .client-details { font-size: 12px; font-weight: 500; }
+            .date-box { border: 1.5px solid #000; border-radius: 12px; padding: 10px; text-align: center; min-width: 140px; }
             .date-label { font-size: 9px; font-weight: 900; text-transform: uppercase; color: #666; margin-bottom: 4px; }
-            .date-value { font-size: 18px; font-weight: 900; }
-            .section-title { background: #f4f4f5; padding: 10px 15px; font-size: 11px; font-weight: 900; text-transform: uppercase; border: 1.5px solid #000; border-radius: 10px 10px 0 0; display: flex; align-items: center; gap: 8px; }
-            .items-table { width: 100%; border-collapse: collapse; border: 1.5px solid #000; border-radius: 0 0 10px 10px; overflow: hidden; margin-bottom: 30px; }
-            .items-table th { background: #fff; padding: 12px; font-size: 10px; font-weight: 900; border-bottom: 1.5px solid #000; border-right: 1.5px solid #000; text-transform: uppercase; }
-            .items-table td { padding: 15px; font-size: 13px; border-bottom: 1px solid #ccc; border-right: 1.5px solid #000; font-weight: 700; }
+            .date-value { font-size: 16px; font-weight: 900; }
+            .section-title { background: #fff !important; padding: 8px 15px; font-size: 11px; font-weight: 900; text-transform: uppercase; border: 1.5px solid #000; border-radius: 10px 10px 0 0; display: flex; align-items: center; gap: 8px; }
+            .items-table { width: 100%; border-collapse: collapse; border: 1.5px solid #000; border-radius: 0 0 10px 10px; overflow: hidden; margin-bottom: 25px; }
+            .items-table th { background: #fff !important; padding: 10px; font-size: 10px; font-weight: 900; border-bottom: 1.5px solid #000; border-right: 1.5px solid #000; text-transform: uppercase; }
+            .items-table td { padding: 12px; font-size: 12px; border-bottom: 1px solid #ccc; border-right: 1.5px solid #000; font-weight: 700; }
             .items-table td:last-child, .items-table th:last-child { border-right: none; }
-            .conf-circle { width: 20px; height: 20px; border: 1.5px solid #000; border-radius: 50%; margin: 0 auto; }
-            .bottom-grid { display: grid; grid-template-cols: 1fr 1.2fr; gap: 30px; }
-            .notes-area { border: 1.5px solid #ccc; border-radius: 15px; padding: 20px; min-height: 250px; font-size: 13px; }
-            .workflow-step { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
-            .step-circle { width: 18px; height: 18px; border: 1.5px solid #000; border-radius: 50%; margin-top: 2px; }
+            .conf-circle { width: 16px; height: 16px; border: 1.5px solid #000; border-radius: 50%; margin: 0 auto; }
+            .bottom-grid { display: grid; grid-template-cols: 1fr 1.2fr; gap: 25px; }
+            .notes-area { border: 1.5px solid #ccc; border-radius: 15px; padding: 15px; min-height: 120px; font-size: 12px; }
+            .workflow-step { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+            .step-circle { width: 16px; height: 16px; border: 1.5px solid #000; border-radius: 50%; margin-top: 2px; }
             .step-info { flex: 1; }
-            .step-label { font-size: 12px; font-weight: 900; text-transform: uppercase; margin-bottom: 6px; }
+            .step-label { font-size: 11px; font-weight: 900; text-transform: uppercase; margin-bottom: 4px; }
             .step-lines { display: flex; gap: 15px; }
             .line-box { border-bottom: 1px solid #ccc; font-size: 8px; font-weight: 700; color: #999; padding-bottom: 2px; flex: 1; }
-            .signatures { display: flex; justify-content: space-around; margin-top: 60px; }
-            .sig-box { width: 280px; border-top: 1.5px solid #000; text-align: center; padding-top: 8px; font-size: 10px; font-weight: 900; text-transform: uppercase; }
-            .footer { margin-top: 50px; border-top: 1px solid #eee; padding-top: 10px; display: flex; justify-content: space-between; font-size: 9px; color: #aaa; font-weight: 700; text-transform: uppercase; }
-            @media print { body { padding: 0; } .header { border-bottom-width: 3px; } }
+            .signatures { display: flex; justify-content: space-around; margin-top: 30px; }
+            .sig-box { width: 250px; border-top: 1.5px solid #000; text-align: center; padding-top: 8px; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+            .footer { margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px; display: flex; justify-content: space-between; font-size: 9px; color: #aaa; font-weight: 700; text-transform: uppercase; }
+            @media print { 
+              html, body { height: auto !important; overflow: visible !important; }
+              .page-container { page-break-after: avoid; page-break-inside: avoid; }
+              .header { border-bottom-width: 3px; }
+              .notes-area { border-color: #000; }
+            }
           </style>
         </head>
         <body>
+          <div class="page-container">
           <div class="header">
-            <img src="${logoUrl}" style="height: 60px;">
+            <img src="${logoUrl}" style="height: 60px; max-width: 200px; object-fit: contain;">
             <div class="header-info">
               <h1>Ordem de Produção</h1>
               <p>OS #${order.id.slice(-6).toUpperCase()}</p>
@@ -310,15 +363,19 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
             <span>Sistema Impacto • Cloud Gestão Industrial</span>
             <span>Gerado em: ${now}</span>
           </div>
+          </div><!-- end .page-container -->
+          <script>
+            window.onload = function() {
+              setTimeout(function() { window.print(); }, 150);
+            };
+            setTimeout(function() { window.print(); }, 3000);
+          </script>
         </body>
       </html>
     `;
 
     printWindow.document.write(html);
     printWindow.document.close();
-    printWindow.setTimeout(() => {
-      printWindow.print();
-    }, 500);
   };
 
   const handleEmitNFe = async () => {
@@ -331,6 +388,39 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     } catch (error: any) {
       toast({ variant: "destructive", title: "Erro Fiscal", description: error.message });
     } finally { setLoading(false); }
+  };
+
+  const handleDeleteOrder = async () => {
+    if (!order?.id || !firestore) return;
+    setIsDeleting(true);
+    try {
+      await deleteDoc(doc(firestore, 'orders', order.id));
+      toast({ title: "OS Cancelada", description: "O protocolo foi removido permanentemente do sistema." });
+      setShowDeleteModal(false);
+      onClose();
+    } catch (err) {
+      toast({ variant: "destructive", title: "Erro na exclusão", description: "Houve um problema ao apagar a OS. Verifique as permissões." });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleClientSelection = (selectedClient: Client) => {
+    setClient(selectedClient.name);
+    
+    let note = '';
+    if (selectedClient.pricingTier) {
+      note += `[CLIENTE ${selectedClient.pricingTier.toUpperCase()}] `;
+    }
+    if (selectedClient.defaultTechnicalNote) {
+      note += selectedClient.defaultTechnicalNote;
+    }
+
+    if (note) {
+      setObservations(prev => prev ? `${prev}\n\n${note}` : note);
+    }
+
+    toast({ title: "Cliente Carregado", description: "Os dados padrão do cliente foram carregados na pauta." });
   };
 
   if (!isOpen) return null;
@@ -347,7 +437,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
             <div className="bg-primary/10 text-primary p-2 rounded-xl border border-primary/20"><Calculator size={20} /></div>
             <div>
               <h2 className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.3em] mb-1">IMPACTO DIGITAL</h2>
-              <p className="text-sm font-black text-white uppercase tracking-tight">OS #{order?.id?.slice(-6) || 'NOVA'}</p>
+              <p className="text-sm font-black text-white uppercase tracking-tight">OS #{order?.id || 'NOVA'}</p>
             </div>
           </div>
           
@@ -385,7 +475,12 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                 <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="md:col-span-2">
                     <label className={labelClass}>Cliente / Projeto</label>
-                    <input required value={client} onChange={e => setClient(e.target.value)} className={inputClass} />
+                    <ClientSearchField 
+                      initialValue={client}
+                      onClientSelect={handleClientSelection}
+                      className={inputClass}
+                    />
+                    <input type="hidden" required value={client} />
                   </div>
                   <div>
                     <label className={labelClass}>Status da Pauta</label>
@@ -439,40 +534,36 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                 </section>
                 <section className="space-y-4">
                    <h3 className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] border-b border-white/5 pb-2 flex items-center gap-2"><History size={14}/> Cronograma de Faturamento</h3>
-                   <div className="grid grid-cols-1 gap-2">
-                      {installments.length > 0 ? installments.map((inst, i) => (
-                        <div key={i} className={cn("flex items-center justify-between p-4 rounded-2xl border transition-all", (inst.status === 'paid' || inst.status === 'pago') ? "bg-emerald-500/5 border-emerald-500/20" : "bg-zinc-900/40 border-zinc-800")}>
-                           <div className="flex items-center gap-4">
-                              <div className={cn("w-2 h-2 rounded-full", (inst.status === 'paid' || inst.status === 'pago') ? "bg-emerald-500 shadow-[0_0_10px_#10b981]" : "bg-zinc-700")} />
-                              <div>
-                                <p className="text-xs font-black text-white uppercase">{inst.due_date || inst.dueDate}</p>
-                                <p className="text-[9px] text-zinc-500 font-bold uppercase">{inst.payment_method || 'PIX/DINHEIRO'}</p>
-                              </div>
-                           </div>
-                           <p className="text-sm font-black text-white font-mono">{Number(inst.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                        </div>
-                      )) : (
-                        <div className="text-center py-12 border border-dashed border-zinc-800 rounded-3xl">
-                          <p className="text-[10px] text-zinc-600 font-black uppercase tracking-widest">Nenhuma fatura lançada para este contrato</p>
-                        </div>
-                      )}
-                   </div>
+                   <InstallmentManager
+                     orderId={order?.id || null}
+                     totalValue={totalValue}
+                     installments={installments as Installment[]}
+                     onInstallmentsChange={(updated) => setInstallments(updated)}
+                     readOnly={false}
+                   />
                 </section>
               </div>
             )}
           </form>
         </div>
 
-        <div className="p-5 border-t border-zinc-800 bg-zinc-900/50 flex flex-col sm:flex-row justify-end gap-3">
-           <button onClick={onClose} className="w-full sm:w-auto px-6 py-3 rounded-xl border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-all">Cancelar</button>
-           <button 
-             form="adminOrderForm" 
-             type="submit" 
-             disabled={loading} 
-             className="w-full sm:w-auto px-10 py-3 rounded-xl bg-primary text-black text-[10px] font-black uppercase tracking-widest shadow-[0_0_25px_-5px_rgba(255,95,31,0.5)] disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-95"
-           >
-             {loading ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> Gravar Registro Industrial</>}
-           </button>
+        <div className="p-5 border-t border-zinc-800 bg-zinc-900/50 flex flex-col sm:flex-row justify-between items-center gap-3">
+           <div>
+             {order?.id && (
+                <button type="button" onClick={() => setShowDeleteModal(true)} className="w-full sm:w-auto px-6 py-3 rounded-xl border border-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">Excluir Pedido</button>
+             )}
+           </div>
+           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+             <button onClick={onClose} className="w-full sm:w-auto px-6 py-3 rounded-xl border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-all">Cancelar</button>
+             <button 
+               form="adminOrderForm" 
+               type="submit" 
+               disabled={loading} 
+               className="w-full sm:w-auto px-10 py-3 rounded-xl bg-primary text-black text-[10px] font-black uppercase tracking-widest shadow-[0_0_25px_-5px_rgba(255,95,31,0.5)] disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-95"
+             >
+               {loading ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> Gravar Registro Industrial</>}
+             </button>
+           </div>
         </div>
 
         <div className="py-3 px-6 bg-black flex items-center justify-center gap-2 border-t border-white/5 opacity-30">
@@ -480,6 +571,13 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
            <span className="text-[8px] font-black text-zinc-500 uppercase tracking-[0.3em]">Protocolo de Integridade Firestore SDK v9 Ativo</span>
         </div>
       </motion.div>
+
+      <DeleteConfirmationModal 
+        isOpen={showDeleteModal} 
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteOrder}
+        orderId={order?.id}
+      />
     </div>
   );
 }

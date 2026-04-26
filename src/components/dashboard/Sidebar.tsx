@@ -28,7 +28,7 @@ import Image from 'next/image';
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: Target, label: 'Meta da Semana', path: '/goals' },
-  { icon: BarChart3, label: 'Relatórios Flux', path: '/reports' },
+  { icon: BarChart3, label: 'RELATÓRIOS', path: '/reports' },
   { icon: Package, label: 'Suprimentos', path: '/materials' },
   { icon: FileText, label: 'Central Fiscal', path: '/fiscal' },
   { icon: ClipboardList, label: 'Gestão de Pedidos', path: '/orders' },

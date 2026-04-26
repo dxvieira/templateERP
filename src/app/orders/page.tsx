@@ -3,7 +3,8 @@
 import React, { useState, useMemo, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, Plus, Loader2 } from 'lucide-react';
+import { Search, Plus, Loader2, Calendar, ClipboardList } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { useOrders } from '@/hooks/use-orders';
 import { OrderCard } from '@/components/dashboard/OrderCard';
 import { Button } from '@/components/ui/button';
@@ -20,10 +21,30 @@ function OrdersManagerContent() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todos');
+  const [selectedMonth, setSelectedMonth] = useState('');
   const { orders, isLoading } = useOrders();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
+
+  useEffect(() => {
+    setSelectedMonth(format(new Date(), 'yyyy-MM'));
+  }, []);
+
+  const monthFilteredOrders = useMemo(() => {
+    if (!selectedMonth) return orders;
+    return orders.filter(o => {
+      const dateStr = o.emission_date || o.emissionDate;
+      if (dateStr) {
+        return dateStr.startsWith(selectedMonth);
+      }
+      if (o.createdAt?.seconds) {
+        const d = new Date(o.createdAt.seconds * 1000);
+        return format(d, 'yyyy-MM') === selectedMonth;
+      }
+      return true; // Se não tiver data, mantemos na lista por segurança
+    });
+  }, [orders, selectedMonth]);
 
   useEffect(() => {
     if (editId && orders.length > 0) {
@@ -39,36 +60,100 @@ function OrdersManagerContent() {
   }, [editId, orders, router, searchParams]);
 
   const activeOrders = useMemo(() => {
-    let filtered = orders.filter(o => o.status !== 'Concluído' && o.status !== 'Entregue');
+    let filtered = monthFilteredOrders.filter(o => o.status !== 'Concluído' && o.status !== 'Entregue');
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(o => o.client?.toLowerCase().includes(term) || o.id?.toLowerCase().includes(term));
     }
     if (statusFilter !== 'Todos' && statusFilter !== 'Concluído') filtered = filtered.filter(o => o.status === statusFilter);
     return filtered.sort((a, b) => (a.delivery_date || '9999').localeCompare(b.delivery_date || '9999'));
-  }, [orders, searchTerm, statusFilter]);
+  }, [monthFilteredOrders, searchTerm, statusFilter]);
 
   const concludedOrders = useMemo(() => {
-    let filtered = orders.filter(o => o.status === 'Concluído' || o.status === 'Entregue');
+    let filtered = monthFilteredOrders.filter(o => o.status === 'Concluído' || o.status === 'Entregue');
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(o => o.client?.toLowerCase().includes(term) || o.id?.toLowerCase().includes(term));
     }
     return filtered.sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
-  }, [orders, searchTerm]);
+  }, [monthFilteredOrders, searchTerm]);
 
   return (
     <div className="p-4 md:p-6 space-y-6 mt-14 md:mt-0 pb-20">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-white/5 pb-6">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-emerald-500">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,1)]" />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em]">Pauta Industrial Impacto</span>
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-white/5 pb-8">
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="space-y-1"
+        >
+          <div className="flex items-center gap-4">
+            {/* Icon Container with emerald halo */}
+            <motion.div
+              animate={{ 
+                y: [0, -4, 0],
+              }}
+              transition={{ 
+                duration: 6,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+              className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-900/50 border border-white/5 backdrop-blur-sm overflow-hidden group"
+            >
+              <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                className="absolute inset-[-50%] bg-[conic-gradient(from_0deg,transparent_70%,#10B981_100%)] opacity-40 group-hover:opacity-100 transition-opacity"
+              />
+              <div className="absolute inset-[1px] bg-[#0A0A0A] rounded-[15px] z-10 flex items-center justify-center">
+                <ClipboardList className="text-emerald-400 w-6 h-6" />
+              </div>
+            </motion.div>
+
+            {/* Title with Emerald Shimmering Gradient */}
+            <div className="flex flex-col">
+              <motion.h1 
+                className="text-4xl font-black text-white tracking-tighter uppercase leading-none flex items-center gap-2"
+              >
+                <span>GESTÃO DE</span>
+                <motion.span 
+                  animate={{ 
+                    backgroundImage: [
+                      'linear-gradient(90deg, #10B981 0%, #34D399 50%, #10B981 100%)',
+                      'linear-gradient(90deg, #34D399 0%, #10B981 50%, #34D399 100%)',
+                      'linear-gradient(90deg, #10B981 0%, #34D399 50%, #10B981 100%)'
+                    ]
+                  }}
+                  transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                  style={{ backgroundSize: '200% auto' }}
+                  className="bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-green-600"
+                >
+                  PEDIDOS
+                </motion.span>
+              </motion.h1>
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: '40%' }}
+                transition={{ delay: 0.5, duration: 1 }}
+                className="h-[2px] bg-gradient-to-r from-emerald-400/50 to-transparent mt-1"
+              />
+            </div>
           </div>
-          <h1 className="text-3xl font-black tracking-tighter text-white uppercase leading-none">Gestão de <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-green-600">Custos e Pauta</span></h1>
+        </motion.div>
+
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="relative group">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500" size={16} />
+            <input 
+              type="month" 
+              value={selectedMonth} 
+              onChange={(e) => setSelectedMonth(e.target.value)} 
+              className="bg-zinc-900 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white text-xs font-black outline-none focus:border-emerald-500 transition-all cursor-pointer h-14" 
+            />
+          </div>
+          <Button onClick={() => { setEditingOrder(null); setIsModalOpen(true); }} className="bg-emerald-500 text-black font-black h-14 px-8 rounded-2xl uppercase tracking-widest text-[10px] shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:bg-white transition-all hover:scale-105 active:scale-95"><Plus size={16} strokeWidth={3} className="mr-2" /> Nova OS</Button>
         </div>
-        <Button onClick={() => { setEditingOrder(null); setIsModalOpen(true); }} className="bg-emerald-500 text-black font-black h-10 px-6 rounded-full uppercase tracking-widest text-[10px] shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:bg-white"><Plus size={16} strokeWidth={3} className="mr-2" /> Nova OS</Button>
-      </div>
+      </header>
 
       <div className="sticky top-2 z-40 bg-[#09090b]/95 backdrop-blur-xl border border-zinc-800/80 rounded-2xl p-3 shadow-xl">
         <div className="flex flex-col lg:flex-row gap-3 items-center">

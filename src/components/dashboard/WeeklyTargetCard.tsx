@@ -1,9 +1,8 @@
-
 'use client';
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Target, ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface WeeklyTargetCardProps {
@@ -11,44 +10,77 @@ interface WeeklyTargetCardProps {
 }
 
 /**
- * Card de Meta Semanal - Refatorado para preenchimento vertical e alinhamento central.
+ * WeeklyTargetCard — Tier-1 Redesign.
+ *
+ * Mudanças:
+ * - Botão CTA redesenhado com identidade visual premium
+ * - Número principal com animação de entrada suave
+ * - Glow de fundo mais sutil e refinado
+ * - Tipografia hierárquica reforçada
  */
 export function WeeklyTargetCard({ pendingCount }: WeeklyTargetCardProps) {
   const router = useRouter();
 
   return (
     <div className="h-full flex flex-col justify-between">
-      <div className="absolute top-[-20%] right-[-20%] w-[80%] h-[80%] bg-yellow-500/5 blur-[60px] rounded-full pointer-events-none group-hover:bg-yellow-500/15" />
+      {/* Glow de fundo sutil */}
+      <div className="absolute top-[-15%] right-[-15%] w-[70%] h-[70%] bg-primary/[0.04] blur-[80px] rounded-full pointer-events-none" />
 
+      {/* ── Header ── */}
       <div className="relative z-10">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="p-1.5 rounded-full bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">
-             <Target size={16} />
-          </div>
-          <span className="text-yellow-500 text-[9px] font-bold uppercase tracking-[0.2em]">Objetivo Ativo</span>
-        </div>
-        
-        <h2 className="text-3xl font-black text-white uppercase leading-[0.9] tracking-tight mb-1">
-          Meta da <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400">Semana</span>
+        <p className="text-[9px] font-black uppercase tracking-[0.35em] text-zinc-600 mb-2">
+          Objetivo Ativo
+        </p>
+        <h2 className="text-3xl font-black text-white uppercase leading-[0.9] tracking-tight">
+          Meta da{' '}
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-500">
+            Semana
+          </span>
         </h2>
       </div>
 
-      <div className="flex flex-row items-baseline gap-2 my-auto relative z-10">
-         <span className="text-7xl font-black text-white tracking-tighter group-hover:text-yellow-400 transition-colors">
-           {pendingCount}
-         </span>
-         <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider leading-none">Pedidos</span>
-            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider leading-none">Pendentes</span>
-         </div>
-      </div>
-
-      <button 
-        onClick={() => router.push('/goals')}
-        className="w-full mt-4 py-3 bg-zinc-800/30 hover:bg-zinc-800 text-zinc-300 font-medium rounded-xl border border-zinc-700/50 transition-all relative z-10 flex items-center justify-center gap-2"
+      {/* ── Número principal com entrada suave ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        className="flex flex-row items-baseline gap-3 my-auto relative z-10"
       >
-        Acessar Missão <ArrowUpRight size={14} />
+        <span className="text-7xl font-black text-white tracking-tighter leading-none">
+          {pendingCount}
+        </span>
+        <div className="flex flex-col">
+          <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider leading-none">
+            Pedidos
+          </span>
+          <span className="text-[10px] font-black text-zinc-600 uppercase tracking-wider leading-none mt-0.5">
+            Pendentes
+          </span>
+        </div>
+      </motion.div>
+
+      {/* ── CTA Button Premium ── */}
+      <button
+        onClick={() => router.push('/goals')}
+        className="
+          group w-full mt-4 py-3.5 rounded-xl border border-white/8
+          bg-white/[0.02] hover:bg-primary/10 hover:border-primary/30
+          text-zinc-500 hover:text-primary
+          font-black text-[10px] uppercase tracking-[0.2em]
+          transition-all duration-300 ease-out
+          relative z-10 flex items-center justify-center gap-2
+          overflow-hidden
+        "
+      >
+        {/* Shimmer no hover */}
+        <span
+          className="absolute inset-0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 bg-gradient-to-r from-transparent via-primary/10 to-transparent"
+        />
+        <span className="relative">Acessar Missão</span>
+        <ArrowUpRight
+          size={14}
+          className="relative group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-200"
+        />
       </button>
     </div>
   );

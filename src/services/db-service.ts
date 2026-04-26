@@ -7,7 +7,10 @@ import {
   onSnapshot, 
   orderBy, 
   QuerySnapshot, 
-  DocumentData 
+  DocumentData,
+  runTransaction,
+  doc,
+  getDoc
 } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -44,5 +47,30 @@ export const dbService = {
         errorEmitter.emit('permission-error', permissionError);
       }
     );
+  },
+
+  /**
+   * Obtém o próximo número sequencial para uma nova OS em formato 00001.
+   * Utiliza transações para evitar duplicidade em disparos simultâneos.
+   */
+  getNextOrderNumber: async (db: Firestore): Promise<string> => {
+    const counterRef = doc(db, 'counters', 'order_sequence');
+
+    const nextId = await runTransaction(db, async (transaction) => {
+      const counterSnap = await transaction.get(counterRef);
+      let current = 0;
+      
+      if (counterSnap.exists()) {
+        current = counterSnap.data().current || 0;
+      }
+      
+      const next = current + 1;
+      transaction.set(counterRef, { current: next }, { merge: true });
+      
+      // Formata com leading zeros (ex: 00001)
+      return String(next).padStart(5, '0');
+    });
+
+    return nextId;
   }
 };

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { memo, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { Calendar, ChevronRight, CheckCircle2, AlertTriangle, DollarSign, Layers, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { startOfDay, isBefore, parseISO, format } from 'date-fns';
@@ -19,62 +20,62 @@ export interface Order {
   balanceDue?: number;
   installments?: any[];
   updatedAt?: any;
-  _origin?: 'MANUAL' | 'AUTO_DATA' | 'AMBOS'; // Tag temporária para debug
+  _origin?: 'MANUAL' | 'AUTO_DATA' | 'AMBOS';
 }
 
 interface OrderCardProps {
   order: Order;
   onClick?: (order: Order) => void;
   onDelete?: (order: Order) => void;
+  /** Índice para animação escalonada (stagger) */
+  index?: number;
 }
 
 /**
- * Card de Pedido - Refatorado para cálculo dinâmico de progresso financeiro e alertas temporais 'Hoje'.
- * Agora inclui efeito Neon Verde para pedidos concluídos (Wall of Fame).
+ * OrderCard — Tier-1 Redesign.
+ *
+ * Mudanças de Design:
+ * - Removido: animate-pulse-neon-green/red (ruído visual)
+ * - Adicionado: accent topline (1px no topo com cor do status)
+ * - Adicionado: entrada escalonada via staggerChildren (orgânico)
+ * - Adicionado: barra de progresso com animação de entrada (data storytelling)
+ * - Otimizado: will-change: transform para GPU
  */
-export const OrderCard = memo(({ order, onClick, onDelete }: OrderCardProps) => {
+export const OrderCard = memo(({ order, onClick, onDelete, index = 0 }: OrderCardProps) => {
   const isDone = useMemo(() => ['Concluído', 'Entregue'].includes(order.status), [order.status]);
-  
+
   const dateInfo = useMemo(() => {
     const rawDate = order.delivery_date || order.deliveryDate;
     if (!rawDate) return { formatted: '--/--', isLate: false, isToday: false };
-    
-    // Normalização Temporal: Ignora horas para evitar atrasos falsos
     const todayNormalized = startOfDay(new Date());
     const deadlineNormalized = startOfDay(parseISO(rawDate));
-    
     const isToday = format(deadlineNormalized, 'yyyy-MM-dd') === format(todayNormalized, 'yyyy-MM-dd');
-    
     return {
       formatted: isToday ? 'HOJE' : format(deadlineNormalized, 'dd/MM'),
       isLate: isBefore(deadlineNormalized, todayNormalized) && !isDone,
-      isToday: isToday && !isDone
+      isToday: isToday && !isDone,
     };
   }, [order.delivery_date, order.deliveryDate, isDone]);
 
   const statusConfig = useMemo(() => {
-    switch(order.status) {
-      case 'Arte': return { color: '#d946ef', label: 'Arte Final' };
-      case 'Impressão': return { color: '#3B82F6', label: 'Impressão' };
-      case 'Serralheria': return { color: '#EAB308', label: 'Serralheria' };
+    switch (order.status) {
+      case 'Arte':       return { color: '#d946ef', label: 'Arte Final' };
+      case 'Impressão':  return { color: '#3B82F6', label: 'Impressão' };
+      case 'Serralheria':return { color: '#EAB308', label: 'Serralheria' };
       case 'Acabamento': return { color: '#FF5F1F', label: 'Acabamento' };
       case 'Instalação': return { color: '#8B5CF6', label: 'Instalação' };
       case 'Concluído':
-      case 'Entregue': return { color: '#4ade80', label: 'Concluído' }; 
-      default: return { color: '#71717a', label: 'Aguardando' };
+      case 'Entregue':   return { color: '#4ade80', label: 'Concluído' };
+      default:           return { color: '#71717a', label: 'Aguardando' };
     }
   }, [order.status]);
 
   const financialStats = useMemo(() => {
     const total = Number(order.total_value || order.totalValue) || 0;
     const paid = Number(order.amount_paid || order.amountPaid) || 0;
-    
     const installments = Array.isArray(order.installments) ? order.installments : [];
-    
     const instCount = installments.length;
     const paidCount = installments.filter(i => i.status === 'paid' || i.status === 'pago').length;
-    
-    // Verificação de atraso em faturas usando normalização de meia-noite
     const todayNormalized = startOfDay(new Date());
     const hasOverdue = installments.some(i => {
       if (i.status === 'paid' || i.status === 'pago') return false;
@@ -82,138 +83,183 @@ export const OrderCard = memo(({ order, onClick, onDelete }: OrderCardProps) => 
       if (!dueDate) return false;
       return isBefore(startOfDay(parseISO(dueDate)), todayNormalized);
     });
-    
     const progress = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
     const balanceDue = order.balance_due !== undefined ? order.balance_due : (total - paid);
     const isFullyPaid = balanceDue <= 0 && total > 0;
-    
     return { progress, isFullyPaid, instCount, paidCount, hasOverdue, balanceDue };
   }, [order.total_value, order.totalValue, order.amount_paid, order.amountPaid, order.balance_due, order.balanceDue, order.installments]);
 
-  return (
-    <div 
-      onClick={() => onClick?.(order)}
-      className={cn(
-        "group relative w-full cursor-pointer bg-[#0c0c0e] border rounded-xl overflow-hidden p-5 transition-all duration-300 ease-out",
-        "hover:shadow-lg hover:-translate-y-0.5",
-        isDone 
-          ? "border-green-500/60 shadow-[0_0_15px_rgba(34,197,94,0.5)] animate-pulse-neon-green" 
-          : dateInfo.isToday 
-            ? "border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.5)] animate-pulse-neon-red" 
-            : "border-zinc-800 hover:border-zinc-700"
-      )}
-    >
-      <div 
-        className="absolute inset-0 border border-transparent rounded-xl pointer-events-none transition-opacity duration-300 opacity-0 group-hover:opacity-100"
-        style={{ borderColor: (dateInfo.isToday || isDone) ? 'transparent' : `${statusConfig.color}20` }}
-      />
+  // Cor da accent line e topline
+  const accentColor = isDone ? '#4ade80' : dateInfo.isToday ? '#ef4444' : statusConfig.color;
+  const barColor = financialStats.isFullyPaid ? '#4ade80' : financialStats.hasOverdue ? '#ef4444' : '#FF5F1F';
 
-      <div className="flex items-stretch h-full gap-4">
-        <div 
-          className="w-1 shrink-0 transition-all duration-500 rounded-full"
-          style={{ 
-            backgroundColor: isDone ? '#4ade80' : dateInfo.isToday ? '#ef4444' : statusConfig.color, 
-            boxShadow: (!isDone && !dateInfo.isToday) ? `0 0 15px ${statusConfig.color}40` : (dateInfo.isToday ? '0 0 15px rgba(239,68,68,0.6)' : isDone ? '0 0 15px rgba(74,222,128,0.6)' : 'none') 
-          }}
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: 0.45,
+        delay: index * 0.055,
+        ease: [0.16, 1, 0.3, 1],
+      }}
+      style={{ willChange: 'transform' }}
+    >
+      <div
+        onClick={() => onClick?.(order)}
+        className={cn(
+          'group relative w-full cursor-pointer bg-[#0d0d0f] border border-white/5 rounded-xl overflow-hidden transition-all duration-200 ease-out',
+          'hover:border-white/10 hover:bg-[#111114] hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)]',
+          isDone && 'opacity-80',
+        )}
+      >
+        {/* ── Accent Topline (substitui borda neon pulsante) ─────────── */}
+        <div
+          className="absolute top-0 left-0 right-0 h-[1.5px] transition-opacity duration-300 opacity-60 group-hover:opacity-100"
+          style={{ backgroundColor: accentColor }}
         />
 
-        <div className={cn("flex-1 flex flex-col justify-between gap-4 min-w-0 transition-opacity", isDone && "opacity-75")}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
-            <div className="min-w-0 space-y-1">
-              <div className="flex items-center gap-2.5">
-                <span className="text-[13px] font-mono font-bold text-zinc-100 bg-zinc-800 px-2 py-0.5 rounded-lg border border-zinc-700 uppercase tracking-tight shadow-sm shrink-0">
-                  #{order.id.slice(-6)}
-                </span>
-                <div className="flex items-center gap-1.5 min-w-0">
-                   <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", !isDone && "animate-pulse")} style={{ backgroundColor: isDone ? '#4ade80' : dateInfo.isToday ? '#ef4444' : statusConfig.color }} />
-                   <span className="text-[9px] font-black uppercase tracking-[0.15em] truncate" style={{ color: isDone ? '#4ade80' : dateInfo.isToday ? '#ef4444' : statusConfig.color }}>
-                     {statusConfig.label}
-                   </span>
+        <div className="flex items-stretch h-full gap-4 p-5 pt-6">
+          {/* ── Status Bar lateral ───────────────────────────────────── */}
+          <div
+            className="w-[3px] shrink-0 rounded-full transition-all duration-500"
+            style={{ backgroundColor: accentColor, boxShadow: `0 0 8px ${accentColor}60` }}
+          />
+
+          <div className={cn('flex-1 flex flex-col justify-between gap-4 min-w-0')}>
+            {/* ── Header: ID + Status + Cliente ────────────────────── */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-[11px] font-mono font-bold text-zinc-400 bg-zinc-900/80 px-2 py-0.5 rounded-md border border-white/5 uppercase tracking-tight shrink-0">
+                    #{order.id}
+                  </span>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <div
+                      className={cn('w-1.5 h-1.5 rounded-full shrink-0', !isDone && 'animate-pulse')}
+                      style={{ backgroundColor: accentColor }}
+                    />
+                    <span
+                      className="text-[9px] font-black uppercase tracking-[0.15em] truncate"
+                      style={{ color: accentColor }}
+                    >
+                      {statusConfig.label}
+                    </span>
+                  </div>
                 </div>
+
+                <h3 className="text-sm font-black text-white truncate uppercase tracking-tight group-hover:text-primary transition-colors duration-200">
+                  {order.client}
+                </h3>
               </div>
 
-              <h3 className="text-sm font-black text-white truncate uppercase tracking-tight group-hover:text-primary transition-colors">
-                {order.client}
-              </h3>
-            </div>
-
-            <div className="flex items-center gap-4 shrink-0 border-t sm:border-t-0 border-zinc-800/50 pt-2 sm:pt-0">
-              <div className={cn(
-                "flex flex-col items-end px-2.5 py-1 rounded-lg border transition-colors min-w-[65px]",
-                dateInfo.isLate || dateInfo.isToday ? "bg-red-500/10 border-red-500/30" : isDone ? "bg-emerald-500/10 border-emerald-500/30" : "bg-zinc-900/50 border-zinc-800"
-              )}>
-                <span className="text-[7px] text-zinc-500 uppercase font-black tracking-[0.2em]">
-                  {isDone ? 'Finalizado' : 'Deadline'}
-                </span>
+              {/* ── Deadline Badge ────────────────────────────────── */}
+              <div className="flex items-center gap-4 shrink-0 border-t sm:border-t-0 border-white/5 pt-2 sm:pt-0">
                 <div className={cn(
-                  "flex items-center gap-1 font-mono font-bold text-xs",
-                  (dateInfo.isLate || dateInfo.isToday) ? "text-red-500 animate-pulse" : isDone ? "text-emerald-500" : "text-white"
+                  'flex flex-col items-end px-2.5 py-1 rounded-lg border transition-colors min-w-[65px]',
+                  dateInfo.isLate || dateInfo.isToday
+                    ? 'bg-red-500/10 border-red-500/20'
+                    : isDone
+                      ? 'bg-emerald-500/10 border-emerald-500/20'
+                      : 'bg-zinc-900/60 border-white/5',
                 )}>
-                  {(dateInfo.isLate || dateInfo.isToday) ? <AlertTriangle size={10} /> : (isDone ? <CheckCircle2 size={10} className="text-emerald-500" /> : <Calendar size={10} className="text-zinc-500" />)}
-                  {dateInfo.formatted}
+                  <span className="text-[7px] text-zinc-600 uppercase font-black tracking-[0.2em]">
+                    {isDone ? 'Finalizado' : 'Deadline'}
+                  </span>
+                  <div className={cn(
+                    'flex items-center gap-1 font-mono font-bold text-xs',
+                    (dateInfo.isLate || dateInfo.isToday) ? 'text-red-400' : isDone ? 'text-emerald-400' : 'text-white',
+                  )}>
+                    {(dateInfo.isLate || dateInfo.isToday)
+                      ? <AlertTriangle size={10} />
+                      : isDone
+                        ? <CheckCircle2 size={10} className="text-emerald-400" />
+                        : <Calendar size={10} className="text-zinc-600" />
+                    }
+                    {dateInfo.formatted}
+                  </div>
                 </div>
-              </div>
 
-              {onDelete && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(order);
-                  }}
-                  className="p-2 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                  title="Excluir Pedido"
-                >
-                  <Trash2 size={18} />
-                </button>
-              )}
-
-              <ChevronRight className="text-zinc-800 group-hover:text-white group-hover:translate-x-1 transition-all" size={16} />
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-white/5 space-y-2">
-            <div className="flex justify-between items-end">
-              <div className="flex flex-col gap-0.5">
-                 <div className="flex items-center gap-1.5">
-                   {financialStats.hasOverdue ? <AlertTriangle size={10} className="text-red-500 animate-bounce" /> : <DollarSign size={10} className={cn(financialStats.isFullyPaid ? "text-emerald-500" : "text-zinc-500")} />}
-                   <span className={cn(
-                     "text-[8px] font-black uppercase tracking-widest",
-                     financialStats.isFullyPaid ? "text-emerald-500" : financialStats.hasOverdue ? "text-red-500" : "text-zinc-500"
-                   )}>
-                     {financialStats.isFullyPaid ? "Protocolo Pago" : financialStats.hasOverdue ? "Cobrança Vencida" : `Saldo: R$ ${financialStats.balanceDue.toLocaleString('pt-BR')}`}
-                   </span>
-                 </div>
-                 {financialStats.instCount > 0 && (
-                   <div className="flex items-center gap-1 text-[7px] font-bold text-zinc-600 uppercase tracking-widest ml-4">
-                      <Layers size={8} /> <span>{financialStats.paidCount} de {financialStats.instCount} faturas pagas</span>
-                   </div>
-                 )}
-              </div>
-              <span className="text-[8px] font-mono text-zinc-600 font-bold">{financialStats.progress}%</span>
-            </div>
-            <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
-              <div 
-                className={cn(
-                  "h-full transition-all duration-700", 
-                  financialStats.isFullyPaid ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" : 
-                  financialStats.hasOverdue ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" : "bg-primary"
+                {onDelete && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(order); }}
+                    className="p-2 text-zinc-700 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all duration-200"
+                    title="Excluir Pedido"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 )}
-                style={{ width: `${financialStats.progress}%` }}
-              />
+
+                <ChevronRight
+                  className="text-zinc-700 group-hover:text-zinc-400 group-hover:translate-x-1 transition-all duration-200"
+                  size={16}
+                />
+              </div>
+            </div>
+
+            {/* ── Footer: Financeiro ────────────────────────────────── */}
+            <div className="pt-3 border-t border-white/5 space-y-2">
+              <div className="flex justify-between items-end">
+                <div className="flex flex-col gap-0.5">
+                  <div className="flex items-center gap-1.5">
+                    {financialStats.hasOverdue
+                      ? <AlertTriangle size={10} className="text-red-400" />
+                      : <DollarSign size={10} className={financialStats.isFullyPaid ? 'text-emerald-400' : 'text-zinc-600'} />
+                    }
+                    <span className={cn(
+                      'text-[8px] font-black uppercase tracking-widest',
+                      financialStats.isFullyPaid
+                        ? 'text-emerald-400'
+                        : financialStats.hasOverdue
+                          ? 'text-red-400'
+                          : 'text-zinc-600',
+                    )}>
+                      {financialStats.isFullyPaid
+                        ? 'Quitado'
+                        : financialStats.hasOverdue
+                          ? 'Cobrança Vencida'
+                          : `Saldo: R$ ${financialStats.balanceDue.toLocaleString('pt-BR')}`}
+                    </span>
+                  </div>
+                  {financialStats.instCount > 0 && (
+                    <div className="flex items-center gap-1 text-[7px] font-bold text-zinc-700 uppercase tracking-widest ml-4">
+                      <Layers size={8} />
+                      <span>{financialStats.paidCount}/{financialStats.instCount} faturas</span>
+                    </div>
+                  )}
+                </div>
+                <span className="text-[8px] font-mono text-zinc-700 font-bold">{financialStats.progress}%</span>
+              </div>
+
+              {/* ── Progress Bar com animação de entrada ─────────── */}
+              <div className="h-[3px] w-full bg-zinc-900 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${financialStats.progress}%` }}
+                  transition={{ duration: 0.8, delay: index * 0.055 + 0.2, ease: [0.16, 1, 0.3, 1] }}
+                  className="h-full rounded-full"
+                  style={{
+                    backgroundColor: barColor,
+                    boxShadow: financialStats.progress > 0 ? `0 0 6px ${barColor}60` : 'none',
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }, (prev, next) => {
-  return prev.order.id === next.order.id && 
-         prev.order.status === next.order.status && 
-         (prev.order.delivery_date === next.order.delivery_date || prev.order.deliveryDate === next.order.deliveryDate) &&
-         (prev.order.amount_paid === next.order.amount_paid || prev.order.amountPaid === next.order.amountPaid) &&
-         (prev.order.total_value === next.order.total_value || prev.order.totalValue === next.order.totalValue) &&
-         prev.order.client === next.order.client &&
-         JSON.stringify(prev.order.installments) === JSON.stringify(next.order.installments);
+  return (
+    prev.order.id === next.order.id &&
+    prev.order.status === next.order.status &&
+    (prev.order.delivery_date === next.order.delivery_date || prev.order.deliveryDate === next.order.deliveryDate) &&
+    (prev.order.amount_paid === next.order.amount_paid || prev.order.amountPaid === next.order.amountPaid) &&
+    (prev.order.total_value === next.order.total_value || prev.order.totalValue === next.order.totalValue) &&
+    prev.order.client === next.order.client &&
+    prev.index === next.index &&
+    JSON.stringify(prev.order.installments) === JSON.stringify(next.order.installments)
+  );
 });
 
 OrderCard.displayName = 'OrderCard';
