@@ -205,44 +205,161 @@ export default function WeeklyGoalsPage() {
         </div>
       </header>
 
-      {/* PAINEL DE PROGRESSO PREMIUM */}
-      <section className="bg-zinc-950/50 border border-zinc-800/50 rounded-[2.5rem] p-8 relative overflow-hidden group shadow-2xl">
-        <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.07] transition-all duration-700">
-          <Trophy size={160} strokeWidth={1} />
-        </div>
-        
-        <div className="flex flex-col md:flex-row justify-between items-end mb-8 relative z-10 gap-6">
-          <div className="w-full md:w-auto">
-            <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.4em] mb-2 flex items-center gap-2">
-              <Zap size={12} className="text-primary fill-primary" /> Status da Expedição
-            </p>
-            <div className="flex items-baseline gap-3">
-              <span className="text-7xl font-black text-white tracking-tighter">{completedOrders.length}</span>
-              <span className="text-3xl text-zinc-700 font-black">/ {totalOrdersCount}</span>
-              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest ml-2 mb-2">Objetivos Concluídos</span>
-            </div>
-          </div>
-          <div className="text-right w-full md:w-auto">
-            <div className="flex items-center justify-end gap-2 mb-1">
-              <span className="text-4xl font-black text-primary font-mono tracking-tighter">{progress}%</span>
-            </div>
-            <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">Eficiência de Produção</p>
-          </div>
-        </div>
-        
-        <div className="relative h-5 w-full bg-black/60 rounded-full border border-zinc-800 p-1 overflow-hidden shadow-inner">
-          <motion.div 
-            initial={{ width: 0 }} 
-            animate={{ width: `${progress}%` }} 
-            transition={{ duration: 1.5, ease: [0.22, 1, 0.36, 1] }}
-            className="relative h-full bg-gradient-to-r from-orange-700 via-primary to-orange-400 rounded-full" 
+      {/* PAINEL DE PROGRESSO PREMIUM — Animated Status Card */}
+      {(() => {
+        const isVictory = progress === 100;
+        const accentColor = isVictory ? '#10B981' : '#FF5F1F';
+        const accentClass = isVictory ? 'text-emerald-500' : 'text-primary';
+        const accentFill = isVictory ? 'text-emerald-500 fill-emerald-500' : 'text-primary fill-primary';
+
+        return (
+          <motion.section 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            className="relative rounded-[2.5rem] p-[1px] overflow-hidden"
+            style={{ background: `linear-gradient(180deg, ${accentColor}33 0%, ${accentColor}05 100%)` }}
           >
-            {/* Efeito de Brilho na Ponta */}
-            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-r from-transparent to-white/30 blur-sm rounded-r-full" />
-            <div className="absolute inset-0 shadow-[0_0_20px_rgba(255,95,31,0.4)] rounded-full" />
-          </motion.div>
-        </div>
-      </section>
+            {/* Rotating border trace */}
+            <div className="absolute inset-0 rounded-[2.5rem] overflow-hidden">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: isVictory ? 6 : 10, repeat: Infinity, ease: 'linear' }}
+                className="absolute -inset-full"
+                style={{
+                  background: `conic-gradient(from 0deg at 50% 50%, transparent 0%, transparent 35%, ${accentColor} 50%, transparent 65%, transparent 100%)`,
+                  opacity: isVictory ? 0.5 : 0.25,
+                }}
+              />
+            </div>
+
+            <div className={cn(
+              "relative rounded-[2.5rem] p-8 overflow-hidden z-10",
+              isVictory ? "bg-[#060D08]" : "bg-[#0A0A0A]"
+            )}>
+              {/* Background watermark */}
+              <div className={cn("absolute top-0 right-0 p-8", isVictory ? "opacity-[0.06]" : "opacity-[0.03]")}>
+                <Trophy size={160} strokeWidth={1} className={isVictory ? "text-emerald-500" : undefined} />
+              </div>
+
+              {/* Victory: Animated Glow Pulse behind card */}
+              {isVictory && (
+                <motion.div
+                  animate={{ opacity: [0.05, 0.12, 0.05], scale: [1, 1.02, 1] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                  className="absolute inset-0 bg-emerald-500/10 rounded-[2.5rem] pointer-events-none"
+                />
+              )}
+
+              {/* Shimmer sweep */}
+              <motion.div
+                animate={{ x: ['-200%', '200%'] }}
+                transition={{ duration: isVictory ? 3 : 4, repeat: Infinity, repeatDelay: isVictory ? 4 : 8, ease: 'easeInOut' }}
+                className={cn(
+                  "absolute inset-0 bg-gradient-to-r from-transparent to-transparent -skew-x-12 pointer-events-none z-[5]",
+                  isVictory ? "via-emerald-500/[0.06]" : "via-primary/[0.04]"
+                )}
+              />
+              
+              <div className="flex flex-col md:flex-row justify-between items-end mb-8 relative z-10 gap-6">
+                <motion.div 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2, duration: 0.6 }}
+                  className="w-full md:w-auto"
+                >
+                  {/* Victory: Special label */}
+                  {isVictory ? (
+                    <motion.p 
+                      animate={{ opacity: [0.6, 1, 0.6] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                      className="text-[10px] text-emerald-500 font-black uppercase tracking-[0.4em] mb-2 flex items-center gap-2"
+                    >
+                      <Trophy size={12} className="text-emerald-500 fill-emerald-500" />
+                      Meta da Semana Concluída
+                    </motion.p>
+                  ) : (
+                    <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.4em] mb-2 flex items-center gap-2">
+                      <motion.span animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 2, repeat: Infinity }}>
+                        <Zap size={12} className={accentFill} />
+                      </motion.span>
+                      Status da Expedição
+                    </p>
+                  )}
+
+                  <div className="flex items-baseline gap-3">
+                    <motion.span 
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.4, duration: 0.5, type: 'spring' }}
+                      className={cn("text-7xl font-black tracking-tighter", isVictory ? "text-emerald-400" : "text-white")}
+                    >
+                      {completedOrders.length}
+                    </motion.span>
+                    <span className="text-3xl text-zinc-700 font-black">/ {totalOrdersCount}</span>
+                    <span className={cn("text-[10px] font-bold uppercase tracking-widest ml-2 mb-2", isVictory ? "text-emerald-600" : "text-zinc-500")}>
+                      {isVictory ? 'Todos os Objetivos Completos' : 'Objetivos Concluídos'}
+                    </span>
+                  </div>
+                </motion.div>
+
+                <motion.div 
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3, duration: 0.6 }}
+                  className="text-right w-full md:w-auto"
+                >
+                  <div className="flex items-center justify-end gap-2 mb-1">
+                    <motion.span 
+                      animate={{ 
+                        textShadow: isVictory
+                          ? ['0 0 0px #10B981', '0 0 20px #10B981', '0 0 0px #10B981']
+                          : ['0 0 0px #FF5F1F', '0 0 12px #FF5F1F', '0 0 0px #FF5F1F']
+                      }}
+                      transition={{ duration: isVictory ? 1.5 : 3, repeat: Infinity, ease: 'easeInOut' }}
+                      className={cn("text-4xl font-black font-mono tracking-tighter", isVictory ? "text-emerald-400" : "text-primary")}
+                    >
+                      {progress}%
+                    </motion.span>
+                  </div>
+                  <p className={cn("text-[10px] font-black uppercase tracking-widest", isVictory ? "text-emerald-600" : "text-zinc-500")}>
+                    {isVictory ? 'Produção Máxima' : 'Eficiência de Produção'}
+                  </p>
+                </motion.div>
+              </div>
+              
+              {/* Progress Bar */}
+              <div className={cn(
+                "relative h-5 w-full rounded-full p-1 overflow-hidden shadow-inner",
+                isVictory ? "bg-emerald-950/40 border border-emerald-800/30" : "bg-black/60 border border-zinc-800"
+              )}>
+                <motion.div 
+                  initial={{ width: 0 }} 
+                  animate={{ width: `${progress}%` }} 
+                  transition={{ duration: 1.5, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                  className={cn(
+                    "relative h-full rounded-full",
+                    isVictory 
+                      ? "bg-gradient-to-r from-emerald-700 via-emerald-500 to-emerald-400" 
+                      : "bg-gradient-to-r from-orange-700 via-primary to-orange-400"
+                  )}
+                >
+                  <motion.div
+                    animate={{ x: ['-100%', '200%'] }}
+                    transition={{ duration: 2, repeat: Infinity, repeatDelay: isVictory ? 1 : 3, ease: 'easeInOut' }}
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent rounded-full"
+                  />
+                  <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-r from-transparent to-white/30 blur-sm rounded-r-full" />
+                  <div className={cn(
+                    "absolute inset-0 rounded-full",
+                    isVictory ? "shadow-[0_0_25px_rgba(16,185,129,0.5)]" : "shadow-[0_0_20px_rgba(255,95,31,0.4)]"
+                  )} />
+                </motion.div>
+              </div>
+            </div>
+          </motion.section>
+        );
+      })()}
 
       {/* GRID DE PEDIDOS ATIVOS */}
       <div className="space-y-6">

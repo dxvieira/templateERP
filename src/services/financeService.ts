@@ -79,13 +79,18 @@ export function generateInstallments(
 /**
  * Liquidação Atômica via Firestore Transaction.
  * Garante que status da parcela + saldo da OS são atualizados juntos (anti Double-Spending).
+ *
+ * @param frontendInstallments - Parcelas do estado local do frontend. Usadas como
+ *   fallback caso o documento no Firestore não tenha parcelas salvas (pedidos legados
+ *   ou parcelas geradas localmente sem salvar antes).
  */
 export async function settleInstallment(
   firestore: Firestore,
   orderId: string,
   installmentIndex: number,
   method: PaymentMethod,
-  userEmail: string
+  userEmail: string,
+  frontendInstallments?: Installment[]
 ): Promise<void> {
   const orderRef = doc(firestore, 'orders', orderId);
 
@@ -94,14 +99,49 @@ export async function settleInstallment(
     if (!orderSnap.exists()) throw new Error('Pedido não encontrado');
 
     const orderData = orderSnap.data();
-    const currentInstallments: Installment[] = orderData.installments || [];
+    let currentInstallments: Installment[] = orderData.installments || [];
 
-    // Localiza a parcela pelo índice
-    const instIdx = currentInstallments.findIndex(i => i.index === installmentIndex);
-    if (instIdx === -1) throw new Error('Parcela não encontrada');
+    // ── Se o Firestore não tem parcelas, usa as do frontend como fonte de verdade ──
+    if (currentInstallments.length === 0 && frontendInstallments && frontendInstallments.length > 0) {
+      console.warn(`[FINANCE] Pedido ${orderId} sem parcelas no DB. Inicializando a partir do frontend (${frontendInstallments.length} parcelas).`);
+      currentInstallments = frontendInstallments.map((inst, idx) => ({
+        ...inst,
+        index: inst.index ?? idx,
+        status: inst.status || 'pending',
+      }));
+    }
+
+    // Se ainda não há parcelas, é impossível liquidar
+    if (currentInstallments.length === 0) {
+      throw new Error('Este pedido não possui parcelas registradas. Gere o cronograma de faturamento antes de dar a baixa.');
+    }
+
+    // ── Busca da Parcela ──────────────────────────────────────────────────
+    let instIdx = -1;
+
+    // 1. Por propriedade .index (comparação numérica segura)
+    instIdx = currentInstallments.findIndex(i => i.index !== undefined && Number(i.index) === Number(installmentIndex));
+
+    // 2. Fallback: posição absoluta no array
+    if (instIdx === -1 && Number(installmentIndex) >= 0 && Number(installmentIndex) < currentInstallments.length) {
+      instIdx = Number(installmentIndex);
+    }
+
+    // 3. Último recurso: primeira parcela pendente
+    if (instIdx === -1) {
+      const pendingIdx = currentInstallments.findIndex(i => i.status !== 'paid' && (i.status as string) !== 'pago');
+      if (pendingIdx !== -1) {
+        console.warn(`[FINANCE] Index ${installmentIndex} não encontrado. Usando primeira parcela pendente (pos ${pendingIdx}).`);
+        instIdx = pendingIdx;
+      }
+    }
+
+    if (instIdx === -1) {
+      throw new Error('Todas as parcelas deste pedido já foram liquidadas.');
+    }
 
     const inst = currentInstallments[instIdx];
-    // Se a parcela já estiver liquidada (paid ou pago), retornamos sucesso (idempotência)
+    // Idempotência: se já estiver paga, retorna sucesso
     if (inst.status === 'paid' || (inst.status as string) === 'pago') {
       return;
     }
@@ -150,8 +190,12 @@ export async function reverseInstallment(
     const orderData = orderSnap.data();
     const currentInstallments: Installment[] = orderData.installments || [];
 
-    const instIdx = currentInstallments.findIndex(i => i.index === installmentIndex);
-    if (instIdx === -1) throw new Error('Parcela não encontrada');
+    // Busca robusta (mesma lógica do settleInstallment)
+    let instIdx = currentInstallments.findIndex(i => i.index !== undefined && Number(i.index) === Number(installmentIndex));
+    if (instIdx === -1 && Number(installmentIndex) >= 0 && Number(installmentIndex) < currentInstallments.length) {
+      instIdx = Number(installmentIndex);
+    }
+    if (instIdx === -1) throw new Error('Parcela não encontrada para estorno.');
 
     // Atualização imutável para reverter
     const updatedInstallments = [...currentInstallments];

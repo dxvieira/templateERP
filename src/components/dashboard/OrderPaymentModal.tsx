@@ -43,13 +43,16 @@ export function OrderPaymentModal({ order, isOpen, onClose }: OrderPaymentModalP
     const today = startOfDay(new Date());
 
     const processedInstallments = installments.map((inst: Installment, index: number) => {
-      const isPaid = inst.status === 'paid';
+      const isPaid = inst.status === 'paid' || (inst.status as string) === 'pago';
       const dueDate = inst.due_date ? parseISO(inst.due_date) : null;
       const isOverdue = !isPaid && dueDate && isValid(dueDate) && isBefore(dueDate, today);
+      
+      // Garante que o índice seja um número inteiro válido para o serviço
+      const safeIndex = inst.index !== undefined ? Number(inst.index) : index;
 
       return {
         ...inst,
-        index: inst.index ?? index,
+        index: safeIndex,
         totalParts: installments.length,
         isPaid,
         isOverdue,
@@ -76,8 +79,9 @@ export function OrderPaymentModal({ order, isOpen, onClose }: OrderPaymentModalP
         firestore,
         order.id,
         installmentIndex,
-        'PIX', // Método padrão para registro rápido
-        user.email || 'sistema@impacto.com'
+        'PIX',
+        user.email || 'sistema@impacto.com',
+        Array.isArray(order.installments) ? order.installments : []
       );
       toast({
         title: "Pagamento Registrado",

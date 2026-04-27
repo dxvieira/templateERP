@@ -104,7 +104,8 @@ export function InstallmentManager({
         orderId, 
         inst.index, 
         method, 
-        user.email || 'operacional@impacto.com'
+        user.email || 'operacional@impacto.com',
+        installments
       );
       
       toast({ 

@@ -5,9 +5,9 @@ import { collection, query, orderBy, doc, deleteDoc, addDoc, updateDoc, serverTi
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  TrendingUp, TrendingDown, Wallet, Target, AlertCircle, Plus, Trash2,
-  Loader2, X, CheckCircle2, Sparkles, Download, FileText, ChevronDown,
-  ArrowUpRight, ShieldCheck, Layers, FileSearch
+  TrendingUp, TrendingDown, Wallet, Target, AlertCircle, AlertTriangle, Plus, Trash2,
+  Loader2, X, CheckCircle2, Sparkles, Download, FileText, ChevronDown, ChevronLeft, ChevronRight,
+  ArrowUpRight, ShieldCheck, Layers, FileSearch, CalendarDays
 } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -22,9 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { OrderPaymentModal } from '@/components/dashboard/OrderPaymentModal';
-import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { validateReportRange, consolidateReport, sanitizeCurrency } from '@/services/reportService';
-import type { ReportRangeRequest } from '@/types/finance';
 
 
 
@@ -35,8 +33,8 @@ function ReportsContent() {
 
   const [activeTab, setActiveTab] = useState<'FLUXO' | 'CONTAS' | 'PEDIDOS'>('FLUXO');
 
-  /** Intervalo de datas do relatório (substitui selectedMonth) */
-  const [dateRange, setDateRange] = useState<ReportRangeRequest>({ startDate: '', endDate: '' });
+  /** Mês selecionado para o relatório */
+  const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
 
   const [itemToPay, setItemToPay] = useState<any>(null);
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<any>(null);
@@ -52,14 +50,37 @@ function ReportsContent() {
     dueDate: format(new Date(), 'yyyy-MM-dd'),
     installments: 1
   });
+  
+  const [dynamicInstallments, setDynamicInstallments] = useState<{amount: string, dueDate: string}[]>([]);
 
+  // Atualiza as parcelas dinâmicas quando os campos base mudam
   useEffect(() => {
-    const now = new Date();
-    setDateRange({
-      startDate: format(startOfMonth(now), 'yyyy-MM-dd'),
-      endDate: format(endOfMonth(now), 'yyyy-MM-dd'),
+    if (isAccountModalOpen) {
+      const count = Math.max(1, newAccount.installments);
+      const totalAmount = sanitizeCurrency(newAccount.amount);
+      const splitValue = (totalAmount / count).toFixed(2).replace('.', ',');
+      
+      const newInst = Array.from({ length: count }).map((_, i) => {
+        const date = new Date(newAccount.dueDate + 'T12:00:00');
+        date.setMonth(date.getMonth() + i);
+        return {
+          amount: `R$ ${splitValue}`,
+          dueDate: format(date, 'yyyy-MM-dd')
+        };
+      });
+      setDynamicInstallments(newInst);
+    }
+  }, [newAccount.amount, newAccount.installments, newAccount.dueDate, isAccountModalOpen]);
+
+  const navigateMonth = (direction: -1 | 1) => {
+    setSelectedMonth(prev => {
+      const d = new Date(prev);
+      d.setMonth(d.getMonth() + direction);
+      return d;
     });
-  }, []);
+  };
+
+  const monthLabel = format(selectedMonth, "MMMM 'de' yyyy", { locale: ptBR }).toUpperCase();
 
   const ordersQuery = useMemoFirebase(() => { 
     if (!firestore || !user) return null; 
@@ -85,21 +106,20 @@ function ReportsContent() {
    * FMEA Gate é executado antes de qualquer processamento de dados.
    */
   const reportData = useMemo(() => {
-    if (!dateRange.startDate || !dateRange.endDate) return null;
-    const validation = validateReportRange(dateRange);
-    if (!validation.valid) return null;
+    const start = startOfMonth(selectedMonth);
+    const end = endOfMonth(selectedMonth);
     return consolidateReport(
-      validation.startDate,
-      validation.endDate,
+      start,
+      end,
       orders ?? [],
       cashflowManual ?? [],
       payables ?? [],
     );
-  }, [orders, cashflowManual, payables, dateRange]);
+  }, [orders, cashflowManual, payables, selectedMonth]);
 
   const handleExport = (formatType: 'xlsx' | 'csv' | 'xml') => {
     if (!reportData) return;
-    const rangeLabel = `${dateRange.startDate}_ate_${dateRange.endDate}`;
+    const rangeLabel = format(selectedMonth, 'yyyy-MM');
     const header = ['Data', 'Tipo', 'Descrição', 'Origem/Destino', 'Valor Bruto', 'Status', 'Responsável'];
     const dataToExport = reportData.transactions.map(t => ({
       'Data': format(parseISO(t.date), 'dd/MM/yyyy'),
@@ -156,8 +176,10 @@ function ReportsContent() {
   const handleConfirmPayment = async () => {
     if (!itemToPay || !firestore || !user) return;
     const payableRef = doc(firestore, 'accounts_payable', itemToPay.id);
-    updateDoc(payableRef, { status: 'paid', paidAt: serverTimestamp(), paymentDate: new Date().toISOString() }).then(async () => {
-      await addDoc(collection(firestore, 'cashflow_manual'), { 
+    
+    try {
+      // 1. Cria o lançamento no fluxo primeiro
+      const cashflowRef = await addDoc(collection(firestore, 'cashflow_manual'), { 
         description: `PGTO: ${itemToPay.supplier}`, 
         amount: sanitizeCurrency(itemToPay.amount), 
         type: 'expense', 
@@ -167,22 +189,44 @@ function ReportsContent() {
         createdAt: serverTimestamp(), 
         userId: user.uid 
       });
+
+      // 2. Atualiza a conta com o status 'paid' e vincula o ID do fluxo
+      await updateDoc(payableRef, { 
+        status: 'paid', 
+        paidAt: serverTimestamp(), 
+        paymentDate: new Date().toISOString(),
+        cashflowId: cashflowRef.id // Vínculo crucial para exclusão automática
+      });
+
       toast({ title: "Baixa Confirmada" }); 
       setItemToPay(null);
-    });
+    } catch (error) {
+      console.error("Erro ao confirmar pagamento:", error);
+      toast({ variant: "destructive", title: "Erro", description: "Não foi possível confirmar o pagamento." });
+    }
   };
 
   const handleDeleteAccount = async () => {
     if (!groupToDelete || !firestore) return;
     setDeleting(true);
     try {
-      const deletePromises = groupToDelete.installments.map((inst: any) =>
-        deleteDoc(doc(firestore, 'accounts_payable', inst.id))
-      );
+      // Mapeia todas as exclusões de parcelas e seus respectivos lançamentos no fluxo
+      const deletePromises = groupToDelete.installments.flatMap((inst: any) => {
+        const promises = [deleteDoc(doc(firestore, 'accounts_payable', inst.id))];
+        
+        // Se a parcela tiver um ID de fluxo vinculado, adiciona à fila de exclusão
+        if (inst.status === 'paid' && inst.cashflowId) {
+          promises.push(deleteDoc(doc(firestore, 'cashflow_manual', inst.cashflowId)));
+        }
+        
+        return promises;
+      });
+
       await Promise.all(deletePromises);
-      toast({ title: "Conta Excluída", description: `${groupToDelete.supplier} foi removido com sucesso.` });
+      toast({ title: "Conta Excluída", description: `${groupToDelete.supplier} e seus lançamentos no fluxo foram removidos.` });
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro", description: "Não foi possível excluir a conta." });
+      console.error("Erro ao excluir conta:", err);
+      toast({ variant: "destructive", title: "Erro", description: "Não foi possível excluir a conta totalmente." });
     } finally {
       setDeleting(false);
       setGroupToDelete(null);
@@ -213,22 +257,19 @@ function ReportsContent() {
     setDeleting(true);
 
     try {
-      const amount = sanitizeCurrency(newAccount.amount);
       const groupId = `group_${Date.now()}`;
       const batchPromises = [];
 
-      for (let i = 0; i < newAccount.installments; i++) {
-        const dueDate = new Date(newAccount.dueDate + 'T12:00:00');
-        dueDate.setMonth(dueDate.getMonth() + i);
-
+      for (let i = 0; i < dynamicInstallments.length; i++) {
+        const inst = dynamicInstallments[i];
         batchPromises.push(
           addDoc(collection(firestore, 'accounts_payable'), {
             supplier: newAccount.supplier,
-            description: `${newAccount.description} (${i + 1}/${newAccount.installments})`,
-            amount: amount,
-            dueDate: format(dueDate, 'yyyy-MM-dd'),
+            description: `${newAccount.description} (${i + 1}/${dynamicInstallments.length})`,
+            amount: sanitizeCurrency(inst.amount),
+            dueDate: inst.dueDate,
             status: 'pending',
-            groupId: newAccount.installments > 1 ? groupId : null,
+            groupId: dynamicInstallments.length > 1 ? groupId : null,
             createdAt: serverTimestamp(),
             userId: user.uid
           })
@@ -236,17 +277,12 @@ function ReportsContent() {
       }
 
       await Promise.all(batchPromises);
-      toast({ title: "Conta Registrada", description: `${newAccount.supplier} adicionado com sucesso.` });
+      toast({ title: "Lançamento Realizado", description: `${newAccount.supplier} registrado com ${dynamicInstallments.length} parcelas.` });
       setIsAccountModalOpen(false);
-      setNewAccount({
-        supplier: '',
-        description: '',
-        amount: '',
-        dueDate: format(new Date(), 'yyyy-MM-dd'),
-        installments: 1
-      });
+      setNewAccount({ supplier: '', description: '', amount: '', dueDate: format(new Date(), 'yyyy-MM-dd'), installments: 1 });
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao Salvar", description: "Não foi possível registrar a conta." });
+      console.error("Erro ao adicionar conta:", err);
+      toast({ variant: "destructive", title: "Erro", description: "Falha ao salvar o lançamento." });
     } finally {
       setDeleting(false);
     }
@@ -339,13 +375,18 @@ function ReportsContent() {
              </DropdownMenuContent>
            </DropdownMenu>
 
-           <DateRangePicker
-             value={dateRange}
-             onChange={setDateRange}
-             onValidationError={(err) =>
-               toast({ variant: 'destructive', title: 'Intervalo Inválido', description: err.message })
-             }
-           />
+           <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+              <button onClick={() => navigateMonth(-1)} className="p-3 text-zinc-500 hover:text-white hover:bg-white/5 transition-all">
+                <ChevronLeft size={16} />
+              </button>
+              <div className="flex items-center gap-2 px-3 py-2.5 min-w-[180px] justify-center">
+                <CalendarDays size={14} className="text-primary" />
+                <span className="text-[10px] font-black text-white uppercase tracking-widest">{monthLabel}</span>
+              </div>
+              <button onClick={() => navigateMonth(1)} className="p-3 text-zinc-500 hover:text-white hover:bg-white/5 transition-all">
+                <ChevronRight size={16} />
+              </button>
+            </div>
         </div>
       </header>
 
@@ -397,32 +438,103 @@ function ReportsContent() {
             </motion.div>
           )}
 
-          {activeTab === 'CONTAS' && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} key="contas" className="bg-[#09090b] border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl divide-y divide-white/5">
-              {reportData.groupedPayables.map((group: any) => (
-                <div key={group.groupId} className="p-5 flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <div><h4 className="text-sm font-black text-white uppercase">{group.supplier}</h4><p className="text-[10px] text-zinc-500 uppercase">{group.description}</p></div>
-                    <div className="flex items-center gap-4">
-                      <p className="text-lg font-black text-white font-mono">{group.totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                      <button onClick={() => setGroupToDelete(group)} className="p-2 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all" title="Excluir conta"><Trash2 size={16}/></button>
-                    </div>
+          {activeTab === 'CONTAS' && (() => {
+            const allGroups = reportData.groupedPayables;
+            const groupsWithUnpaid = allGroups.filter((g: any) => g.installments.some((p: any) => p.status !== 'paid'));
+            const groupsWithPaid = allGroups.filter((g: any) => g.installments.some((p: any) => p.status === 'paid'));
+
+            return (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} key="contas" className="space-y-8">
+                
+                {/* SEÇÃO: CONTAS A PAGAR */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 px-1">
+                    <AlertTriangle size={14} className="text-red-400" />
+                    <h3 className="text-[10px] font-black text-red-400 uppercase tracking-[0.3em]">
+                      Contas a Pagar ({groupsWithUnpaid.reduce((acc: number, g: any) => acc + g.installments.filter((p: any) => p.status !== 'paid').length, 0)})
+                    </h3>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {group.installments.map((p: any) => (
-                      <div key={p.id} className={cn("p-3 rounded-xl border flex items-center justify-between", p.status === 'paid' ? "bg-emerald-500/5 border-emerald-500/20" : "bg-zinc-900/50 border-zinc-800")}>
-                        <span className="text-[9px] font-bold text-zinc-400">VENC: {format(parseISO(p.dueDate), 'dd/MM/yy')}</span>
-                        <div className="flex items-center gap-4">
-                          <span className="text-xs font-black font-mono text-white">{sanitizeCurrency(p.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                          {p.status !== 'paid' && <button onClick={() => setItemToPay(p)} className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-black transition-all"><CheckCircle2 size={14}/></button>}
+
+                  {groupsWithUnpaid.length > 0 ? groupsWithUnpaid.map((group: any) => {
+                    const unpaid = group.installments.filter((p: any) => p.status !== 'paid');
+                    if (unpaid.length === 0) return null;
+                    return (
+                      <div key={group.groupId + '_unpaid'} className="bg-[#09090b] border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
+                        <div className="p-5 flex items-center justify-between border-b border-white/5">
+                          <div><h4 className="text-sm font-black text-white uppercase">{group.supplier}</h4><p className="text-[10px] text-zinc-500 uppercase">{group.description}</p></div>
+                          <div className="flex items-center gap-4">
+                            <p className="text-lg font-black text-white font-mono">{unpaid.reduce((s: number, p: any) => s + sanitizeCurrency(p.amount), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                            <button onClick={() => setGroupToDelete(group)} className="p-2 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all" title="Excluir conta"><Trash2 size={16}/></button>
+                          </div>
+                        </div>
+                        <div className="p-5">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {unpaid.map((p: any) => (
+                              <div key={p.id} className="p-3 rounded-xl border bg-zinc-900/50 border-zinc-800 flex items-center justify-between">
+                                <span className="text-[9px] font-bold text-zinc-400">VENC: {format(parseISO(p.dueDate), 'dd/MM/yy')}</span>
+                                <div className="flex items-center gap-4">
+                                  <span className="text-xs font-black font-mono text-white">{sanitizeCurrency(p.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                  <button onClick={() => setItemToPay(p)} className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-black transition-all"><CheckCircle2 size={14}/></button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    );
+                  }) : (
+                    <div className="py-8 text-center border border-dashed border-zinc-800 rounded-3xl">
+                      <CheckCircle2 size={32} className="mx-auto mb-2 text-emerald-500/30" />
+                      <p className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.3em]">Nenhuma conta pendente no período</p>
+                    </div>
+                  )}
                 </div>
-              ))}
-            </motion.div>
-          )}
+
+                {/* SEÇÃO: CONTAS PAGAS */}
+                {groupsWithPaid.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 px-1">
+                      <CheckCircle2 size={14} className="text-emerald-500" />
+                      <h3 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em]">
+                        Contas Pagas ({groupsWithPaid.reduce((acc: number, g: any) => acc + g.installments.filter((p: any) => p.status === 'paid').length, 0)})
+                      </h3>
+                    </div>
+
+                    {groupsWithPaid.map((group: any) => {
+                      const paidItems = group.installments.filter((p: any) => p.status === 'paid');
+                      if (paidItems.length === 0) return null;
+                      return (
+                        <div key={group.groupId + '_paid'} className="bg-emerald-950/20 border border-emerald-500/20 rounded-3xl overflow-hidden shadow-2xl">
+                          <div className="p-5 flex items-center justify-between border-b border-emerald-500/10">
+                            <div><h4 className="text-sm font-black text-emerald-400 uppercase">{group.supplier}</h4><p className="text-[10px] text-emerald-600 uppercase">{group.description}</p></div>
+                            <div className="flex items-center gap-4">
+                              <p className="text-lg font-black text-emerald-400 font-mono">{paidItems.reduce((s: number, p: any) => s + sanitizeCurrency(p.amount), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                              <button onClick={() => setGroupToDelete(group)} className="p-2 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all" title="Excluir conta"><Trash2 size={16}/></button>
+                            </div>
+                          </div>
+                          <div className="p-5">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              {paidItems.map((p: any) => (
+                                <div key={p.id} className="p-3 rounded-xl border bg-emerald-500/10 border-emerald-500/20 flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <CheckCircle2 size={12} className="text-emerald-500" />
+                                    <span className="text-[9px] font-bold text-emerald-400">
+                                      PAGO: {p.paymentDate ? format(parseISO(p.paymentDate), 'dd/MM/yy') : format(parseISO(p.dueDate), 'dd/MM/yy')}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs font-black font-mono text-emerald-400">{sanitizeCurrency(p.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </motion.div>
+            );
+          })()}
 
           {activeTab === 'PEDIDOS' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} key="pedidos" className="space-y-6">
@@ -609,14 +721,46 @@ function ReportsContent() {
                      <input required type="text" value={newAccount.amount} onChange={e => setNewAccount({...newAccount, amount: e.target.value})} className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-primary font-black outline-none focus:border-primary transition-all text-sm" placeholder="R$ 0,00" />
                    </div>
                    <div>
-                     <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2 block">Data de Vencimento</label>
+                     <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2 block">Data Primeira Parcela</label>
                      <input required type="date" value={newAccount.dueDate} onChange={e => setNewAccount({...newAccount, dueDate: e.target.value})} className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-primary transition-all text-xs" />
                    </div>
-                   <div>
-                      <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2 block">Parcelamento (Meses)</label>
+                   <div className="col-span-full">
+                      <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2 block">Número de Parcelas</label>
                       <input required type="number" min="1" max="60" value={newAccount.installments} onChange={e => setNewAccount({...newAccount, installments: Number(e.target.value)})} className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-white outline-none focus:border-primary transition-all text-sm font-black" />
                    </div>
                  </div>
+
+                 {/* LISTA DE PARCELAS DINÂMICAS */}
+                 {newAccount.installments > 1 && (
+                   <div className="space-y-3 bg-zinc-900/30 p-4 rounded-2xl border border-white/5 max-h-[250px] overflow-y-auto">
+                      <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-2">Configure os vencimentos e valores:</p>
+                      {dynamicInstallments.map((inst, idx) => (
+                        <div key={idx} className="flex gap-2 items-center bg-zinc-950 p-2 rounded-xl border border-zinc-800/50">
+                          <span className="text-[10px] font-black text-zinc-700 w-6">{idx + 1}º</span>
+                          <input 
+                            type="date" 
+                            value={inst.dueDate} 
+                            onChange={(e) => {
+                              const updated = [...dynamicInstallments];
+                              updated[idx].dueDate = e.target.value;
+                              setDynamicInstallments(updated);
+                            }}
+                            className="bg-transparent text-[10px] text-white outline-none border-b border-zinc-800 focus:border-primary w-24 px-1"
+                          />
+                          <input 
+                            type="text" 
+                            value={inst.amount} 
+                            onChange={(e) => {
+                              const updated = [...dynamicInstallments];
+                              updated[idx].amount = e.target.value;
+                              setDynamicInstallments(updated);
+                            }}
+                            className="bg-transparent text-[10px] text-white font-mono outline-none border-b border-zinc-800 focus:border-primary flex-1 text-right px-1"
+                          />
+                        </div>
+                      ))}
+                   </div>
+                 )}
 
                  <div className="pt-4 flex gap-4">
                    <button type="button" onClick={() => setIsAccountModalOpen(false)} className="flex-1 py-4 rounded-2xl border border-zinc-800 text-zinc-500 font-black uppercase text-[10px] tracking-widest hover:bg-zinc-900 transition-all">Cancelar</button>
