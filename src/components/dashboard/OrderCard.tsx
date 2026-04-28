@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Calendar, ChevronRight, CheckCircle2, AlertTriangle, DollarSign, Layers, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { startOfDay, isBefore, parseISO, format } from 'date-fns';
+import { AvatarStack } from '@/components/ui/AvatarStack';
 
 export interface Order {
   id: string;
@@ -21,6 +22,10 @@ export interface Order {
   installments?: any[];
   updatedAt?: any;
   _origin?: 'MANUAL' | 'AUTO_DATA' | 'AMBOS';
+  assigned_to?: string[];
+  weekly_priority?: boolean;
+  lead_operator?: string;
+  observations?: string;
 }
 
 interface OrderCardProps {
@@ -230,6 +235,12 @@ export const OrderCard = memo(({ order, onClick, onDelete, index = 0 }: OrderCar
                 <span className="text-[8px] font-mono text-zinc-700 font-bold">{financialStats.progress}%</span>
               </div>
 
+              {/* ── Equipe Atribuída (Avatares) ───────────────────── */}
+              <div className="flex items-center justify-between">
+                <AvatarStack employeeIds={order.assigned_to || []} max={4} size="sm" showEmpty={false} />
+                <span className="text-[8px] font-mono text-zinc-700 font-bold">{financialStats.progress > 0 ? `${financialStats.progress}%` : ''}</span>
+              </div>
+
               {/* ── Progress Bar com animação de entrada ─────────── */}
               <div className="h-[3px] w-full bg-zinc-900 rounded-full overflow-hidden">
                 <motion.div
@@ -250,15 +261,27 @@ export const OrderCard = memo(({ order, onClick, onDelete, index = 0 }: OrderCar
     </motion.div>
   );
 }, (prev, next) => {
+  // Otimização de Performance Extrema:
+  // Evitar ao máximo JSON.stringify() ou avaliações de arrays inteiros em cada ciclo de render.
+  
+  // 1. Snapshot Timestamp (Mais rápido impossível se o Backend fornecer updatedAt)
+  const prevTime = prev.order.updatedAt?.toMillis ? prev.order.updatedAt.toMillis() : prev.order.updatedAt?.seconds;
+  const nextTime = next.order.updatedAt?.toMillis ? next.order.updatedAt.toMillis() : next.order.updatedAt?.seconds;
+  
+  if (prevTime !== nextTime) return false;
+
+  // 2. Verificação Atômica Fallback (Caso updatedAt local ainda seja null no optimistic UI)
   return (
     prev.order.id === next.order.id &&
     prev.order.status === next.order.status &&
-    (prev.order.delivery_date === next.order.delivery_date || prev.order.deliveryDate === next.order.deliveryDate) &&
-    (prev.order.amount_paid === next.order.amount_paid || prev.order.amountPaid === next.order.amountPaid) &&
-    (prev.order.total_value === next.order.total_value || prev.order.totalValue === next.order.totalValue) &&
-    prev.order.client === next.order.client &&
-    prev.index === next.index &&
-    JSON.stringify(prev.order.installments) === JSON.stringify(next.order.installments)
+    prev.order.delivery_date === next.order.delivery_date && 
+    prev.order.deliveryDate === next.order.deliveryDate &&
+    prev.order.weekly_priority === next.order.weekly_priority &&
+    prev.order.amount_paid === next.order.amount_paid && 
+    prev.order.amountPaid === next.order.amountPaid &&
+    prev.order.total_value === next.order.total_value && 
+    prev.order.totalValue === next.order.totalValue &&
+    prev.index === next.index
   );
 });
 

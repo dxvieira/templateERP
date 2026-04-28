@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Target, ChevronLeft, Trophy, Search, X, Loader2, Plus, 
   CheckCircle2, AlertTriangle, LayoutGrid, Calendar as CalendarIcon,
-  Flag, Zap
+  Flag, Zap, Users
 } from 'lucide-react';
 import { useFirestore, useUser } from '@/firebase';
 import { query, collection, where, doc, updateDoc, onSnapshot } from 'firebase/firestore';
@@ -14,8 +14,11 @@ import { OrderCard } from '@/components/dashboard/OrderCard';
 import { Button } from '@/components/ui/button';
 import { OrderFormModal } from '@/components/dashboard/OrderFormModal';
 import { useToast } from '@/hooks/use-toast';
-import { startOfWeek, endOfWeek, format } from 'date-fns';
+import { startOfWeek, endOfWeek, format, parseISO, isValid } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { SquadSelector } from '@/components/dashboard/SquadSelector';
+import { AvatarStack } from '@/components/ui/AvatarStack';
 
 /**
  * Utilitário de Data (Segunda a Domingo)
@@ -457,6 +460,7 @@ function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
   const [search, setSearch] = useState('');
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [squadTarget, setSquadTarget] = useState<any>(null);
 
   useEffect(() => {
     if (!firestore || !user || !isOpen) return;
@@ -494,82 +498,193 @@ function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md">
       <motion.div 
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="bg-[#09090b] w-full max-w-2xl border border-zinc-800 rounded-[2.5rem] shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
+        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        className="bg-[#09090b] w-full max-w-6xl border border-white/5 rounded-[3rem] shadow-[0_0_100px_rgba(0,0,0,0.8)] flex flex-col max-h-[90vh] overflow-hidden"
       >
-        <div className="p-6 border-b border-zinc-800 bg-zinc-900/30 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-black text-white uppercase tracking-tighter">Gerenciar Produção</h2>
-            <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Selecione pedidos para prioridade semanal</p>
+        <div className="p-8 border-b border-white/5 bg-zinc-900/20 backdrop-blur-xl flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-[0_0_30px_rgba(255,95,31,0.15)]">
+              <LayoutGrid size={24} className="text-primary" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight flex items-center gap-3">
+                Gerenciar Produção
+                <span className="text-[10px] bg-white/5 border border-white/10 px-3 py-1 rounded-full text-zinc-500 font-bold tracking-widest">
+                  {filtered.length} Ativos
+                </span>
+              </h2>
+              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.3em] mt-1">Status em Tempo Real • Atribuição Estratégica de Equipes</p>
+            </div>
           </div>
-          <button onClick={onClose} className="p-2 text-zinc-500 hover:text-white bg-white/5 rounded-full"><X size={20}/></button>
+          <button onClick={onClose} className="p-3 text-zinc-500 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-all border border-white/5">
+            <X size={24}/>
+          </button>
         </div>
 
-        <div className="p-6 space-y-6 flex-1 overflow-hidden flex flex-col">
+        <div className="p-8 space-y-8 flex-1 overflow-hidden flex flex-col">
           <div className="relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-primary transition-colors" size={18} />
+            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-primary transition-colors" size={20} />
             <input 
               type="text" 
-              placeholder="Buscar Cliente ou OS..." 
+              placeholder="Pesquisar por ID, Cliente ou Especificação do Serviço..." 
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl py-4 pl-12 pr-4 text-white text-sm focus:border-primary/50 outline-none transition-all"
+              className="w-full bg-zinc-950 border border-white/5 rounded-3xl py-5 pl-16 pr-6 text-white text-base focus:border-primary/40 focus:ring-4 focus:ring-primary/5 outline-none transition-all shadow-inner"
             />
           </div>
 
-          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2">
+          <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar space-y-4">
             {loading ? (
-              <div className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-zinc-700" /></div>
+              <div className="py-20 text-center">
+                <Loader2 className="animate-spin mx-auto text-primary w-12 h-12 opacity-20" />
+                <p className="text-[10px] text-zinc-700 font-black uppercase tracking-widest mt-4">Sincronizando Dados...</p>
+              </div>
             ) : filtered.length > 0 ? filtered.map(order => {
               const isPriority = order.weekly_priority === true;
+              const deadline = order.delivery_date || order.deliveryDate;
+
               return (
-                <div 
+                <motion.div 
+                  layout
                   key={order.id} 
                   className={cn(
-                    "flex items-center justify-between p-4 rounded-2xl border transition-all group",
-                    isPriority ? "bg-primary/5 border-primary/20" : "bg-zinc-900/30 border-zinc-800 hover:border-zinc-700"
+                    "flex items-center gap-6 p-6 rounded-[2rem] border transition-all duration-300 group relative overflow-hidden",
+                    isPriority 
+                      ? "bg-primary/[0.03] border-primary/20 shadow-[0_10px_40px_rgba(255,95,31,0.05)]" 
+                      : "bg-[#0c0c0e] border-white/5 hover:border-white/10 hover:bg-[#111114]"
                   )}
                 >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono font-bold text-zinc-500">#{order.id.slice(-6)}</span>
-                      <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">{order.status}</span>
+                  {/* Status Indicator */}
+                  <div className={cn(
+                    "w-1.5 h-12 rounded-full shrink-0",
+                    isPriority ? "bg-primary shadow-[0_0_15px_#FF5F1F]" : "bg-zinc-800"
+                  )} />
+
+                  <div className="flex-1 min-w-0 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                    {/* Primary Info */}
+                    <div className="lg:col-span-4 min-w-0">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-[10px] font-mono font-bold text-zinc-500 bg-zinc-900 border border-white/5 px-2 py-0.5 rounded uppercase tracking-tighter">
+                          #{order.id.slice(-6)}
+                        </span>
+                        <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-white/5 text-zinc-400 border border-white/5">
+                          {order.status}
+                        </span>
+                      </div>
+                      <h4 className="text-lg font-black text-white uppercase truncate tracking-tight group-hover:text-primary transition-colors">
+                        {order.client}
+                      </h4>
                     </div>
-                    <h4 className="text-sm font-bold text-white uppercase truncate mt-0.5">{order.client}</h4>
+
+                    {/* Description Block */}
+                    <div className="lg:col-span-4 min-w-0 border-l border-white/5 pl-6">
+                      <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-2 opacity-50">Especificação dos Itens</p>
+                      {order.items && order.items.length > 0 ? (
+                        <div className="space-y-2.5">
+                          {order.items.slice(0, 2).map((item: any, idx: number) => {
+                            const itemName = item.desc || item.name || item.descricao || "Item sem descrição";
+                            const itemDetails = item.observation || item.notes || item.observacao || item.details;
+                            
+                            return (
+                              <div key={idx} className="min-w-0 border-l-2 border-zinc-800 pl-3">
+                                <p className="text-[11px] font-black text-white uppercase truncate flex items-center gap-1.5">
+                                  {itemName}
+                                  {item.quantity && <span className="bg-zinc-800 text-zinc-400 px-1 py-0.5 rounded text-[8px]">x{item.quantity}</span>}
+                                </p>
+                                {itemDetails && (
+                                  <p className="text-[10px] text-zinc-400 line-clamp-1 italic mt-0.5 leading-relaxed">
+                                    {itemDetails}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {order.items.length > 2 && (
+                            <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-1">+ {order.items.length - 2} iten(s) adicionais</p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-zinc-500 italic font-medium leading-relaxed">
+                          Nenhum detalhamento técnico fornecido para o serviço.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Deadline & Team */}
+                    <div className="lg:col-span-4 flex items-center justify-between pl-6 border-l border-white/5">
+                      <div className="flex flex-col gap-1">
+                        <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest opacity-50">Prazo de Entrega</p>
+                        <div className="flex items-center gap-2 text-white text-xs font-bold">
+                          <CalendarIcon size={12} className="text-primary" />
+                          {deadline && isValid(parseISO(deadline)) ? format(parseISO(deadline), "dd 'de' MMMM", { locale: ptBR }) : 'A Definir'}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                        <div className="flex flex-col items-end gap-1">
+                          <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest opacity-50">Squad</p>
+                          <AvatarStack employeeIds={order.assigned_to || []} max={3} size="sm" />
+                        </div>
+                        
+                        <button
+                          onClick={() => setSquadTarget(order)}
+                          className={cn(
+                            "w-10 h-10 rounded-xl border flex items-center justify-center transition-all",
+                            (order.assigned_to?.length > 0)
+                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-white"
+                              : "bg-zinc-900 border-white/5 text-zinc-500 hover:border-primary/50 hover:text-primary"
+                          )}
+                          title="Gerenciar Equipe"
+                        >
+                          <Users size={16} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  
-                  <button 
-                    onClick={() => togglePriority(order)}
-                    className={cn(
-                      "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
-                      isPriority 
-                        ? "bg-primary text-black shadow-[0_0_15px_rgba(255,95,31,0.3)]" 
-                        : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white"
-                    )}
-                  >
-                    {isPriority ? 'Prioridade' : 'Adicionar'}
-                  </button>
-                </div>
+
+                  <div className="shrink-0 flex items-center gap-3">
+                    <button 
+                      onClick={() => togglePriority(order)}
+                      className={cn(
+                        "px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all",
+                        isPriority 
+                          ? "bg-primary text-black shadow-[0_0_30px_rgba(255,95,31,0.35)] scale-105" 
+                          : "bg-zinc-900 text-zinc-500 border border-white/5 hover:border-white/20 hover:text-white"
+                      )}
+                    >
+                      {isPriority ? 'Em Produção' : 'Adicionar'}
+                    </button>
+                  </div>
+                </motion.div>
               );
             }) : (
-              <div className="py-20 text-center text-zinc-600">
-                <AlertTriangle size={32} className="mx-auto mb-3 opacity-20" />
-                <p className="text-[10px] font-black uppercase tracking-widest">Nenhum pedido ativo encontrado</p>
+              <div className="py-20 text-center text-zinc-800 border-2 border-dashed border-white/5 rounded-[3rem]">
+                <AlertTriangle size={64} className="mx-auto mb-6 opacity-5" />
+                <p className="text-xs font-black uppercase tracking-[0.5em]">Nenhum pedido encontrado no sistema</p>
               </div>
             )}
           </div>
         </div>
 
-        <div className="p-6 border-t border-zinc-800 bg-zinc-900/30 text-center">
+        <div className="p-8 border-t border-white/5 bg-zinc-900/30 text-center">
           <button 
             onClick={onClose} 
-            className="w-full py-4 bg-white text-black font-black uppercase text-[10px] tracking-widest rounded-2xl hover:bg-primary transition-all active:scale-95"
+            className="w-full py-5 bg-white text-black font-black uppercase text-[11px] tracking-[0.5em] rounded-3xl hover:bg-primary transition-all active:scale-[0.98] shadow-2xl"
           >
-            Concluir Ajustes
+            Concluir Ajustes de Pauta
           </button>
         </div>
       </motion.div>
+
+      {/* Squad Selector Modal */}
+      {squadTarget && (
+        <SquadSelector
+          order={squadTarget}
+          isOpen={!!squadTarget}
+          onClose={() => setSquadTarget(null)}
+        />
+      )}
     </div>
   );
 }

@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, Box, ChevronDown, Activity, Loader2, Calendar } from 'lucide-react';
+import { X, Save, Box, ChevronDown, Activity, Loader2, Calendar, Users, Crown } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useOrders } from '@/hooks/use-orders';
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO, isValid } from 'date-fns';
+import { getEmployeeById } from '@/services/squadService';
 
 const PRODUCTION_STAGES = ['Arte', 'Serralheria', 'Impressão', 'Acabamento', 'Instalação', 'Concluído'];
 
@@ -126,6 +127,50 @@ const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | nul
                 <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: currentColor }} size={24} strokeWidth={3} />
               </div>
             </div>
+
+            {/* DESTAQUE DA EQUIPE ALOCADA COM NOMES */}
+            {order?.assigned_to && order.assigned_to.length > 0 && (
+              <div className="bg-[#09090b] border border-white/5 rounded-[2rem] p-5 shadow-inner">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                      <Users size={16} className="text-emerald-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-[10px] font-black text-white uppercase tracking-widest">Squad de Produção</h3>
+                      <p className="text-[8px] text-zinc-500 font-bold uppercase mt-0.5 tracking-wider">{order.assigned_to.length} Responsável(is)</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {order.assigned_to.map((id: string) => {
+                    const emp = getEmployeeById(id);
+                    if (!emp) return null;
+                    const isLead = order.lead_operator === emp.id;
+
+                    return (
+                      <div
+                        key={emp.id}
+                        className="flex items-center gap-2 pr-3 pl-1 py-1 rounded-xl shadow-inner border border-white/5"
+                        style={{ backgroundColor: `${emp.color}15` }}
+                      >
+                        <div
+                          className="w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-[8px] font-black"
+                          style={{ backgroundColor: emp.color, color: '#000' }}
+                        >
+                          {emp.initials}
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: emp.color }}>
+                          {emp.name}
+                        </span>
+                        {isLead && <Crown size={12} className="text-yellow-500 fill-yellow-500 ml-1" />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* CAMPO CLIENTE - MELHORADO PARA QUEBRA DE LINHA */}
