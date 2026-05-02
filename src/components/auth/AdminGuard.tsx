@@ -34,8 +34,7 @@ interface AdminGuardProps {
           const userRef = doc(firestore, 'authorized_users', user.email || '');
           const userSnap = await getDoc(userRef);
           
-          const role = userSnap.data().role;
-          if (userSnap.exists() && (role === 'admin' || role === 'modofuncionario')) {
+          if (userSnap.exists() && userSnap.data().role === 'admin') {
             setIsAdmin(true);
           } else {
             setIsAdmin(false);

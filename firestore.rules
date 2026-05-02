@@ -21,14 +21,18 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Regras Específicas para Finanças e Relatórios
+    // Regras Específicas: Acesso restrito apenas para Administradores
     match /accounts_payable/{doc} {
-      allow read, write: if isAuthorized();
-      allow delete: if isAdmin();
+      allow read, write: if isAdmin();
     }
     match /cashflow_manual/{doc} {
-      allow read, write: if isAuthorized();
-      allow delete: if isAdmin();
+      allow read, write: if isAdmin();
+    }
+    match /clients/{doc} {
+      allow read, write: if isAdmin();
+    }
+    match /suppliers/{doc} {
+      allow read, write: if isAdmin();
     }
   }
 }
