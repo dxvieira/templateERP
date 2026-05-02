@@ -23,10 +23,12 @@ service cloud.firestore {
 
     // Regras Específicas para Finanças e Relatórios
     match /accounts_payable/{doc} {
-      allow read, write: if isAdmin();
+      allow read, write: if isAuthorized();
+      allow delete: if isAdmin();
     }
     match /cashflow_manual/{doc} {
-      allow read, write: if isAdmin();
+      allow read, write: if isAuthorized();
+      allow delete: if isAdmin();
     }
   }
 }
