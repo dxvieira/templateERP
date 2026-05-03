@@ -244,13 +244,8 @@ export function OrderPaymentModal({ order, isOpen, onClose }: OrderPaymentModalP
 
               {/* Assinatura Visual Discreta */}
               <div className="mt-8 flex justify-center opacity-10 hover:opacity-30 transition-opacity grayscale brightness-200">
-                <div className="relative w-24 h-6">
-                  <Image 
-                    src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd"
-                    alt="Logo IMPACTO"
-                    fill
-                    className="object-contain"
-                  />
+                <div className="relative w-24 h-6 flex items-center justify-center border border-white/10 bg-white/5 rounded">
+                  <span className="text-white/50 text-[8px] font-black tracking-widest">LOGO</span>
                 </div>
               </div>
             </div>

@@ -90,14 +90,8 @@ const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | nul
         <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-zinc-900/30">
           <div className="flex flex-col">
             <h2 className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.3em] mb-1.5">{order ? 'Ajustar Pedido' : 'Detalhes do Pedido'}</h2>
-            <div className="relative w-32 h-8">
-              <Image 
-                src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd"
-                alt="Logo IMPACTO"
-                fill
-                className="object-contain object-left"
-                priority
-              />
+            <div className="relative w-32 h-8 flex items-center justify-center border border-white/10 bg-white/5 rounded-lg">
+              <span className="text-white/50 text-[10px] font-black tracking-widest">LOGO</span>
             </div>
           </div>
           

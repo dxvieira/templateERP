@@ -2,37 +2,40 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Função auxiliar para verificar se o usuário está na Whitelist
+    // Verifica se o usuário existe na lista autorizada
     function isAuthorized() {
       return request.auth != null && 
              exists(/databases/$(database)/documents/authorized_users/$(request.auth.token.email));
     }
 
-    // Função auxiliar para verificar se o usuário é Administrador
-    function isAdmin() {
-      return isAuthorized() && 
-             get(/databases/$(database)/documents/authorized_users/$(request.auth.token.email)).data.role == 'admin';
+    // Pega os dados do usuário logado
+    function getUserData() {
+      return get(/databases/$(database)/documents/authorized_users/$(request.auth.token.email)).data;
     }
 
-    // Regra Global: Precisa estar na Whitelist para ver o app
+    // Nível: Administrador (Poder total)
+    function isAdmin() {
+      return isAuthorized() && getUserData().role == 'admin';
+    }
+
+    // Nível: Funcionário (Poder limitado)
+    function isEmployee() {
+      return isAuthorized() && (getUserData().role == 'modofuncionario' || getUserData().role == 'admin');
+    }
+
+    // Regras Gerais (Pedidos, Materiais, etc)
     match /{document=**} {
-      allow read, write: if isAuthorized();
-      // Apenas Admins podem DELETAR qualquer coisa no sistema
+      // Funcionários e Admins podem ler e criar/editar
+      allow read, write: if isEmployee();
+      // Apenas Admins podem deletar registros
       allow delete: if isAdmin();
     }
 
-    // Regras Específicas: Acesso restrito apenas para Administradores
-    match /accounts_payable/{doc} {
-      allow read, write: if isAdmin();
-    }
-    match /cashflow_manual/{doc} {
-      allow read, write: if isAdmin();
-    }
-    match /clients/{doc} {
-      allow read, write: if isAdmin();
-    }
-    match /suppliers/{doc} {
-      allow read, write: if isAdmin();
-    }
+    // ÁREAS RESTRITAS (Apenas Administrador pode ver ou mexer)
+    match /accounts_payable/{doc} { allow read, write: if isAdmin(); }
+    match /cashflow_manual/{doc} { allow read, write: if isAdmin(); }
+    match /clients/{doc} { allow read, write: if isAdmin(); }
+    match /suppliers/{doc} { allow read, write: if isAdmin(); }
+    match /authorized_users/{doc} { allow read, write: if isAdmin(); }
   }
 }

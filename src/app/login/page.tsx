@@ -91,14 +91,8 @@ export default function LoginPage() {
       >
         {/* Logo (static, orange glow only) */}
         <div className="flex flex-col items-center mb-12 gap-6">
-          <div className="relative w-60 h-16">
-            <Image
-              src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd"
-              alt="Logo IMPACTO"
-              fill
-              className="object-contain drop-shadow-[0_0_20px_rgba(255,95,31,0.25)]"
-              priority
-            />
+          <div className="relative w-60 h-16 flex items-center justify-center border border-white/10 bg-white/5 rounded-xl">
+            <span className="text-white/50 text-sm font-black tracking-[0.3em]">LOGO CLIENTE</span>
           </div>
           <p className="text-[9px] text-primary/40 uppercase tracking-[0.5em] font-black">
             Infraestrutura Digital Industrial

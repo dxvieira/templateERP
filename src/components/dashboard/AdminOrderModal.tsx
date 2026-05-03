@@ -220,7 +220,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const logoUrl = 'https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd';
+    const logoUrl = ''; // Insira a URL do logo aqui
     const now = format(new Date(), "dd/MM/yyyy, HH:mm:ss");
 
     const html = `

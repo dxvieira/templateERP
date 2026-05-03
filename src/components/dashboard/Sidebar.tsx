@@ -56,14 +56,8 @@ export const DashboardSidebar = memo(() => {
   return (
     <>
       <header className="fixed top-0 left-0 right-0 z-[110] h-14 md:hidden bg-[#0A0A0A]/80 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between print:hidden">
-        <div className="relative w-32 h-8">
-          <Image 
-            src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd"
-            alt="Logo IMPACTO"
-            fill
-            className="object-contain object-left"
-            priority
-          />
+        <div className="relative w-32 h-8 flex items-center justify-center border border-white/10 bg-white/5 rounded-lg">
+          <span className="text-white/50 text-[10px] font-black tracking-widest">LOGO</span>
         </div>
         <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(!isMobileOpen)}>
           {isMobileOpen ? <X className="text-primary w-5 h-5" /> : <Menu className="text-primary w-5 h-5" />}
@@ -81,14 +75,8 @@ export const DashboardSidebar = memo(() => {
       )}>
         <div className="flex flex-col h-full p-4 overflow-x-hidden">
           <div className="mb-10 px-2 flex flex-col items-center">
-            <div className="relative w-44 h-12 mb-4">
-              <Image 
-                src="https://firebasestorage.googleapis.com/v0/b/studio-8015019704-68176.firebasestorage.app/o/logo%20IMPACTO.png?alt=media&token=c481fc0a-08b9-4613-bb67-d4052b3a39dd"
-                alt="Logo IMPACTO"
-                fill
-                className="object-contain"
-                priority
-              />
+            <div className="relative w-44 h-12 mb-4 flex items-center justify-center border border-white/10 bg-white/5 rounded-xl">
+              <span className="text-white/50 text-xs font-black tracking-[0.2em]">LOGO CLIENTE</span>
             </div>
             <div className="w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
           </div>
