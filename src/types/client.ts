@@ -5,4 +5,6 @@ export interface Client {
   email?: string;
   defaultTechnicalNote?: string;
   pricingTier?: 'standard' | 'premium' | 'vip';
+  /** Criado automaticamente via pedido — cadastro ainda precisa ser completado */
+  isIncomplete?: boolean;
 }

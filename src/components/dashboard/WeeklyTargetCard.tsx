@@ -28,10 +28,10 @@ export function WeeklyTargetCard({ pendingCount }: WeeklyTargetCardProps) {
 
       {/* ── Header ── */}
       <div className="relative z-10">
-        <p className="text-[9px] font-black uppercase tracking-[0.35em] text-zinc-600 mb-2">
+        <p className="text-[9px] font-black uppercase tracking-[0.35em] text-muted-foreground mb-2">
           Objetivo Ativo
         </p>
-        <h2 className="text-3xl font-black text-white uppercase leading-[0.9] tracking-tight">
+        <h2 className="text-3xl font-black text-foreground uppercase leading-[0.9] tracking-tight">
           Meta da{' '}
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-500">
             Semana
@@ -46,14 +46,14 @@ export function WeeklyTargetCard({ pendingCount }: WeeklyTargetCardProps) {
         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
         className="flex flex-row items-baseline gap-3 my-auto relative z-10"
       >
-        <span className="text-7xl font-black text-white tracking-tighter leading-none">
+        <span className="text-7xl font-black text-foreground tracking-tighter leading-none">
           {pendingCount}
         </span>
         <div className="flex flex-col">
-          <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider leading-none">
+          <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wider leading-none">
             Pedidos
           </span>
-          <span className="text-[10px] font-black text-zinc-600 uppercase tracking-wider leading-none mt-0.5">
+          <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wider leading-none mt-0.5">
             Pendentes
           </span>
         </div>
@@ -65,7 +65,7 @@ export function WeeklyTargetCard({ pendingCount }: WeeklyTargetCardProps) {
         className="
           group w-full mt-4 py-3.5 rounded-xl border border-white/8
           bg-white/[0.02] hover:bg-primary/10 hover:border-primary/30
-          text-zinc-500 hover:text-primary
+          text-muted-foreground hover:text-primary
           font-black text-[10px] uppercase tracking-[0.2em]
           transition-all duration-300 ease-out
           relative z-10 flex items-center justify-center gap-2

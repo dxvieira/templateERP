@@ -16,17 +16,17 @@ import { OrderFormModal } from '@/components/dashboard/OrderFormModal';
 /** Skeleton shimmer para cards durante carregamento */
 function OrderCardSkeleton() {
   return (
-    <div className="w-full bg-[#0d0d0f] border border-white/5 rounded-xl p-5 space-y-4 overflow-hidden relative">
+    <div className="w-full bg-card border border-border rounded-xl p-5 space-y-4 overflow-hidden relative">
       <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_infinite]
         bg-gradient-to-r from-transparent via-white/[0.03] to-transparent" />
       <div className="flex items-center gap-2.5">
-        <div className="w-16 h-4 bg-zinc-900 rounded-md" />
-        <div className="w-20 h-3 bg-zinc-900 rounded-full" />
+        <div className="w-16 h-4 bg-secondary rounded-md" />
+        <div className="w-20 h-3 bg-secondary rounded-full" />
       </div>
-      <div className="w-2/3 h-4 bg-zinc-900 rounded-md" />
-      <div className="pt-3 border-t border-white/5 space-y-2">
-        <div className="w-1/2 h-2 bg-zinc-900 rounded-full" />
-        <div className="w-full h-[3px] bg-zinc-900 rounded-full" />
+      <div className="w-2/3 h-4 bg-secondary rounded-md" />
+      <div className="pt-3 border-t border-border space-y-2">
+        <div className="w-1/2 h-2 bg-secondary rounded-full" />
+        <div className="w-full h-[3px] bg-secondary rounded-full" />
       </div>
     </div>
   );
@@ -37,7 +37,7 @@ function SectionHeader({
   icon: Icon,
   label,
   count,
-  color = 'text-zinc-500',
+  color = 'text-muted-foreground',
   dotColor = '#FF5F1F',
 }: {
   icon: React.ElementType;
@@ -47,7 +47,7 @@ function SectionHeader({
   dotColor?: string;
 }) {
   return (
-    <div className="flex items-center gap-3 px-1 pb-5 border-b border-white/5">
+    <div className="flex items-center gap-3 px-1 pb-5 border-b border-border">
       <div
         className="w-1.5 h-1.5 rounded-full"
         style={{ backgroundColor: dotColor, boxShadow: `0 0 6px ${dotColor}60` }}
@@ -115,11 +115,11 @@ export default function DashboardPage() {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         className="grid grid-cols-1 lg:grid-cols-12 gap-5"
       >
-        <div className="lg:col-span-8 bg-[#0d0d0f] border border-white/5 rounded-2xl p-8 relative overflow-hidden
+        <div className="lg:col-span-8 bg-card border border-border rounded-2xl p-8 relative overflow-hidden
           hover:border-white/8 transition-colors duration-300">
           <ProductionHub stats={stats} />
         </div>
-        <div className="lg:col-span-4 bg-[#0d0d0f] border border-white/5 rounded-2xl p-8 flex flex-col
+        <div className="lg:col-span-4 bg-card border border-border rounded-2xl p-8 flex flex-col
           justify-between relative overflow-hidden group hover:border-white/8 transition-colors duration-300">
           <WeeklyTargetCard pendingCount={stats.weeklyGoalCount} />
         </div>
@@ -131,7 +131,7 @@ export default function DashboardPage() {
           icon={Layers}
           label="Fluxo de Produção"
           count={activeOrders.length}
-          color="text-zinc-400"
+          color="text-muted-foreground"
           dotColor="#FF5F1F"
         />
 
@@ -144,8 +144,8 @@ export default function DashboardPage() {
               <OrderCard key={order.id} order={order} index={i} onClick={handleEditOrder} />
             ))
           ) : (
-            <div className="col-span-full py-16 text-center border border-dashed border-white/5 rounded-2xl">
-              <p className="text-[9px] text-zinc-700 font-black uppercase tracking-[0.4em]">
+            <div className="col-span-full py-16 text-center border border-dashed border-border rounded-2xl">
+              <p className="text-[9px] text-muted-foreground font-black uppercase tracking-[0.4em]">
                 Fila Nominal Desimpedida
               </p>
             </div>
@@ -160,7 +160,7 @@ export default function DashboardPage() {
             icon={CheckCircle2}
             label="Concluídos"
             count={completedOrders.length}
-            color="text-zinc-600"
+            color="text-muted-foreground"
             dotColor="#4ade80"
           />
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-5">

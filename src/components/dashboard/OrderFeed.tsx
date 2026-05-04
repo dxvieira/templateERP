@@ -20,10 +20,10 @@ export function OrderFeed() {
   const { data: orders, isLoading } = useCollection(feedQuery);
 
   return (
-    <Card className="glass border-white/5">
+    <Card className="glass border-border">
       <CardHeader className="flex flex-row items-center justify-between pb-6">
         <CardTitle className="text-sm font-semibold text-primary uppercase tracking-widest">Feed de Produção Cloud</CardTitle>
-        <button className="p-1 hover:bg-white/5 rounded">
+        <button className="p-1 hover:bg-secondary rounded">
           <MoreHorizontal className="w-5 h-5 text-muted-foreground" />
         </button>
       </CardHeader>
@@ -35,7 +35,7 @@ export function OrderFeed() {
         )}
         
         {orders?.map((order) => (
-          <div key={order.id} className="flex flex-col md:flex-row items-start md:items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 gap-4 group transition-all duration-300">
+          <div key={order.id} className="flex flex-col md:flex-row items-start md:items-center justify-between p-4 rounded-2xl bg-secondary border border-border gap-4 group transition-all duration-300">
             <div className="flex items-center gap-4 w-full md:w-auto">
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-xs border border-primary/20">
                 #{order.id.slice(-4).toUpperCase()}
@@ -55,7 +55,7 @@ export function OrderFeed() {
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.totalValue || 0)}
                 </p>
               </div>
-              <button className="p-2 bg-white/5 hover:bg-primary hover:text-white rounded-lg transition-colors">
+              <button className="p-2 bg-secondary hover:bg-primary hover:text-foreground rounded-lg transition-colors">
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

@@ -84,7 +84,7 @@ export function ProductionChart({ orders = [] }: ProductionChartProps) {
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
 
-  if (!mounted) return <div className="h-[300px] w-full bg-white/5 animate-pulse rounded-xl" />;
+  if (!mounted) return <div className="h-[300px] w-full bg-secondary animate-pulse rounded-xl" />;
 
   return (
     <div className="flex flex-col h-full bg-transparent">
@@ -143,17 +143,17 @@ export function ProductionChart({ orders = [] }: ProductionChartProps) {
               >
                 {chartData[activeIndex].name}
               </span>
-              <div className="text-5xl font-black text-white leading-none my-1 tracking-tighter">
+              <div className="text-5xl font-black text-foreground leading-none my-1 tracking-tighter">
                 {chartData[activeIndex].value}
               </div>
-              <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">
+              <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">
                 {totalOrders > 0 ? Math.round((chartData[activeIndex].value / totalOrders) * 100) : 0}% do Fluxo
               </span>
             </div>
           ) : (
             <div className="animate-in fade-in duration-500">
-              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">Total</span>
-              <div className="text-6xl font-black text-white leading-none my-1 tracking-tighter">
+              <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em]">Total</span>
+              <div className="text-6xl font-black text-foreground leading-none my-1 tracking-tighter">
                 {totalOrders}
               </div>
               <span className="text-[9px] text-primary font-black uppercase tracking-[0.2em] flex items-center justify-center gap-1">
@@ -173,7 +173,7 @@ export function ProductionChart({ orders = [] }: ProductionChartProps) {
             style={{ opacity: activeIndex === index || activeIndex === null ? 1 : 0.4 }}
           >
             <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.color, boxShadow: `0 0 8px ${item.color}` }} />
-            <span className="text-[8px] uppercase font-black text-zinc-500 tracking-widest">
+            <span className="text-[8px] uppercase font-black text-muted-foreground tracking-widest">
               {item.name}
             </span>
           </div>

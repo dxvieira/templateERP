@@ -23,7 +23,7 @@ export function DeleteConfirmationModal({ isOpen, onClose, onConfirm, orderId }:
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            className="absolute inset-0 bg-background/80 backdrop-blur-sm"
           />
 
           {/* Janela do Modal */}
@@ -31,12 +31,12 @@ export function DeleteConfirmationModal({ isOpen, onClose, onConfirm, orderId }:
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="relative w-full max-w-md bg-[#1E1E1E] border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl transition-all duration-300 hover:border-destructive hover:shadow-[0_0_30px_rgba(255,0,0,0.2)]"
+            className="relative w-full max-w-md bg-card border border-border rounded-3xl overflow-hidden shadow-2xl transition-all duration-300 hover:border-destructive hover:shadow-[0_0_30px_rgba(255,0,0,0.2)]"
           >
             {/* Botão Fechar */}
             <button
               onClick={onClose}
-              className="absolute right-4 top-4 p-2 text-zinc-500 hover:text-white transition-colors"
+              className="absolute right-4 top-4 p-2 text-muted-foreground hover:text-foreground transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -48,11 +48,11 @@ export function DeleteConfirmationModal({ isOpen, onClose, onConfirm, orderId }:
               </div>
 
               {/* Textos */}
-              <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-2">
+              <h2 className="text-xl font-black text-foreground uppercase tracking-tighter mb-2">
                 Excluir Protocolo?
               </h2>
-              <p className="text-xs text-zinc-400 uppercase tracking-widest leading-relaxed mb-8">
-                Você tem certeza que deseja remover a OS <span className="text-white font-bold">#{orderId}</span>? 
+              <p className="text-xs text-muted-foreground uppercase tracking-widest leading-relaxed mb-8">
+                Você tem certeza que deseja remover a OS <span className="text-foreground font-bold">#{orderId}</span>? 
                 <br />Essa ação é irreversível.
               </p>
 
@@ -60,14 +60,14 @@ export function DeleteConfirmationModal({ isOpen, onClose, onConfirm, orderId }:
               <div className="flex flex-col w-full gap-3">
                 <Button
                   onClick={onConfirm}
-                  className="w-full h-14 bg-destructive text-white hover:bg-destructive/90 font-black uppercase tracking-widest rounded-2xl shadow-[0_0_15px_rgba(255,0,0,0.3)]"
+                  className="w-full h-14 bg-destructive text-foreground hover:bg-destructive/90 font-black uppercase tracking-widest rounded-2xl shadow-[0_0_15px_rgba(255,0,0,0.3)]"
                 >
                   Confirmar Exclusão
                 </Button>
                 <Button
                   variant="ghost"
                   onClick={onClose}
-                  className="w-full h-12 text-zinc-400 hover:text-white hover:bg-white/5 font-black uppercase tracking-widest rounded-2xl"
+                  className="w-full h-12 text-muted-foreground hover:text-foreground hover:bg-secondary font-black uppercase tracking-widest rounded-2xl"
                 >
                   Cancelar
                 </Button>

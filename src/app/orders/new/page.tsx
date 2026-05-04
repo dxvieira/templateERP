@@ -16,7 +16,7 @@ export default function LegacyNewOrderPage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+    <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(255,95,31,0.5)]" />
     </div>
   );

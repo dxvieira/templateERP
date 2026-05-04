@@ -31,7 +31,7 @@ export default function LoginPage() {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       await signInWithPopup(auth, provider);
-      toast({ title: 'Identidade Verificada', description: 'Bem-vindo ao Terminal de Comando Impacto.' });
+      toast({ title: 'Identidade Verificada', description: 'Bem-vindo ao Terminal de Comando ERP.' });
       router.replace('/');
     } catch (error: any) {
       console.error("[AUTH] Erro no Google Login:", error);
@@ -45,14 +45,14 @@ export default function LoginPage() {
 
   if (isUserLoading) {
     return (
-      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-10 h-10 text-primary animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#020202] flex flex-col items-center justify-center p-4 overflow-hidden relative">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 overflow-hidden relative">
       
       {/* Background: Blueprint Grid */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -91,8 +91,8 @@ export default function LoginPage() {
       >
         {/* Logo (static, orange glow only) */}
         <div className="flex flex-col items-center mb-12 gap-6">
-          <div className="relative w-60 h-16 flex items-center justify-center border border-white/10 bg-white/5 rounded-xl">
-            <span className="text-white/50 text-sm font-black tracking-[0.3em]">LOGO CLIENTE</span>
+          <div className="relative w-60 h-16 flex items-center justify-center border border-border bg-secondary rounded-xl">
+            <span className="text-muted-foreground text-sm font-black tracking-[0.3em]">LOGO CLIENTE</span>
           </div>
           <p className="text-[9px] text-primary/40 uppercase tracking-[0.5em] font-black">
             Infraestrutura Digital Industrial
@@ -114,7 +114,7 @@ export default function LoginPage() {
             />
           </div>
 
-          <Card className="relative bg-[#0A0A0A] border-none rounded-3xl overflow-hidden z-10">
+          <Card className="relative bg-card border-none rounded-3xl overflow-hidden z-10">
             {/* Shimmer sweep */}
             <motion.div
               animate={{ x: ['-200%', '200%'] }}
@@ -123,7 +123,7 @@ export default function LoginPage() {
             />
 
             <CardHeader className="text-center pb-8 pt-12 relative z-20">
-              <CardTitle className="text-2xl font-black text-white uppercase tracking-tight leading-tight">
+              <CardTitle className="text-2xl font-black text-foreground uppercase tracking-tight leading-tight">
                 TERMINAL DE{' '}
                 <motion.span
                   animate={{ opacity: [1, 0.6, 1] }}
@@ -134,8 +134,8 @@ export default function LoginPage() {
                 </motion.span>
               </CardTitle>
               <div className="w-10 h-[2px] bg-primary/60 mx-auto mt-3 mb-2" />
-              <CardDescription className="text-[8px] text-zinc-600 uppercase tracking-[0.25em] font-black max-w-[220px] mx-auto leading-relaxed">
-                Controle de Acesso Corporativo<br />Impacto Cloud Gestão
+              <CardDescription className="text-[8px] text-muted-foreground uppercase tracking-[0.25em] font-black max-w-[220px] mx-auto leading-relaxed">
+                Controle de Acesso Corporativo<br />Gestão Cloud
               </CardDescription>
             </CardHeader>
 
@@ -144,7 +144,7 @@ export default function LoginPage() {
               <button
                 onClick={handleGoogleLogin}
                 disabled={loading}
-                className="w-full h-14 flex items-center justify-center gap-3 bg-[#111111] border border-zinc-800 hover:border-primary/50 text-white font-black uppercase tracking-[0.15em] text-[10px] rounded-xl transition-all duration-300 active:scale-[0.97] disabled:opacity-50 hover:shadow-[0_0_20px_rgba(255,95,31,0.15)]"
+                className="w-full h-14 flex items-center justify-center gap-3 bg-secondary border border-border hover:border-primary/50 text-foreground font-black uppercase tracking-[0.15em] text-[10px] rounded-xl transition-all duration-300 active:scale-[0.97] disabled:opacity-50 hover:shadow-[0_0_20px_rgba(255,95,31,0.15)]"
               >
                 {loading ? (
                   <Loader2 className="animate-spin w-4 h-4 text-primary" />
@@ -158,12 +158,12 @@ export default function LoginPage() {
                         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                       </svg>
                     </div>
-                    ENTRAR COM IMPACTO ID
+                    ENTRAR NO SISTEMA
                   </>
                 )}
               </button>
 
-              <div className="flex items-center justify-center gap-2 opacity-25 font-black uppercase text-[7px] tracking-[0.4em] text-zinc-500">
+              <div className="flex items-center justify-center gap-2 opacity-25 font-black uppercase text-[7px] tracking-[0.4em] text-muted-foreground">
                 <ShieldCheck size={12} className="text-primary" />
                 AUTH PROTOCOL v4.0
               </div>

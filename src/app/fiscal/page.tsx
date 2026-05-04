@@ -49,7 +49,7 @@ function FiscalCenterContent() {
 
   return (
     <div className="p-4 md:p-8 space-y-8 mt-14 md:mt-0 pb-24">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-white/5 pb-8">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-border pb-8">
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -67,14 +67,14 @@ function FiscalCenterContent() {
                 repeat: Infinity,
                 ease: "easeInOut"
               }}
-              className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-900/50 border border-white/5 backdrop-blur-sm overflow-hidden group"
+              className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-secondary/50 border border-border backdrop-blur-sm overflow-hidden group"
             >
               <motion.div 
                 animate={{ rotate: 360 }}
                 transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
                 className="absolute inset-[-50%] bg-[conic-gradient(from_0deg,transparent_70%,#60A5FA_100%)] opacity-40 group-hover:opacity-100 transition-opacity"
               />
-              <div className="absolute inset-[1px] bg-[#0A0A0A] rounded-[15px] z-10 flex items-center justify-center">
+              <div className="absolute inset-[1px] bg-background rounded-[15px] z-10 flex items-center justify-center">
                 <FileText className="text-blue-400 w-6 h-6" />
               </div>
             </motion.div>
@@ -82,7 +82,7 @@ function FiscalCenterContent() {
             {/* Title with Blue Shimmering Gradient */}
             <div className="flex flex-col">
               <motion.h1 
-                className="text-4xl font-black text-white tracking-tighter uppercase leading-none flex items-center gap-2"
+                className="text-4xl font-black text-foreground tracking-tighter uppercase leading-none flex items-center gap-2"
               >
                 <span>CENTRAL</span>
                 <motion.span 
@@ -121,18 +121,18 @@ function FiscalCenterContent() {
         <KPICard label="Erros / Rejeições" value={kpis.errorCount} color="text-red-500" icon={AlertCircle} isCurrency={false} />
       </section>
 
-      <div className="bg-[#09090b] border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl">
+      <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-2xl">
         <div className="divide-y divide-white/5">
           {filteredList.map((order) => (
-            <div key={order.id} className="flex items-center justify-between p-4 hover:bg-white/5">
+            <div key={order.id} className="flex items-center justify-between p-4 hover:bg-secondary">
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center text-blue-400 font-black text-xs">#{order.id.slice(-4)}</div>
-                <div><p className="text-sm font-bold text-white uppercase">{order.client}</p><p className="text-[9px] text-zinc-500">Protocolo: {order.id}</p></div>
+                <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center text-blue-400 font-black text-xs">#{order.id.slice(-4)}</div>
+                <div><p className="text-sm font-bold text-foreground uppercase">{order.client}</p><p className="text-[9px] text-muted-foreground">Protocolo: {order.id}</p></div>
               </div>
               <div className="flex items-center gap-6">
                 <div className={cn("px-3 py-1 rounded-full text-[8px] font-black uppercase", order.nfe_status === 'issued' ? "bg-emerald-500/10 text-emerald-500" : "bg-yellow-500/10 text-yellow-500")}>{order.nfe_status}</div>
-                <p className="text-sm font-black text-white">{Number(order.total_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                <button onClick={() => handleResetNote(order.id)} className="p-2 text-zinc-600 hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
+                <p className="text-sm font-black text-foreground">{Number(order.total_value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                <button onClick={() => handleResetNote(order.id)} className="p-2 text-muted-foreground hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
               </div>
             </div>
           ))}
@@ -143,7 +143,7 @@ function FiscalCenterContent() {
 }
 
 function KPICard({ label, value, color, icon: Icon, isCurrency = true }: any) {
-  return <div className="bg-[#09090b] border border-zinc-800 p-5 rounded-2xl"><div className="flex justify-between items-start mb-2"><span className="text-[9px] font-black text-zinc-500 uppercase">{label}</span><Icon size={14} className={color} /></div><p className={cn("text-xl font-black font-mono", color)}>{isCurrency ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : value}</p></div>;
+  return <div className="bg-card border border-border p-5 rounded-2xl"><div className="flex justify-between items-start mb-2"><span className="text-[9px] font-black text-muted-foreground uppercase">{label}</span><Icon size={14} className={color} /></div><p className={cn("text-xl font-black font-mono", color)}>{isCurrency ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : value}</p></div>;
 }
 
 export default function FiscalCenterPage() {

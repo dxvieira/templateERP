@@ -41,7 +41,7 @@ export function AvatarStack({ employeeIds, max = 3, size = 'sm', showEmpty = fal
     if (!showEmpty) return null;
     return (
       <span className={cn(
-        'rounded border border-zinc-800 bg-zinc-900/50 text-zinc-600 font-black uppercase tracking-widest',
+        'rounded border border-border bg-secondary/50 text-muted-foreground font-black uppercase tracking-widest',
         styles.badge
       )}>
         Sem equipe
@@ -61,7 +61,7 @@ export function AvatarStack({ employeeIds, max = 3, size = 'sm', showEmpty = fal
           className={cn(
             styles.circle,
             idx > 0 && styles.overlap,
-            'rounded-full flex items-center justify-center font-black border-2 border-[#0d0d0f] ring-1 ring-white/10 transition-transform hover:scale-110 hover:z-10 cursor-default select-none'
+            'rounded-full flex items-center justify-center font-black border-2 border-[var(--border)] ring-1 ring-white/10 transition-transform hover:scale-110 hover:z-10 cursor-default select-none'
           )}
           style={{
             backgroundColor: `${emp.color}20`,
@@ -78,7 +78,7 @@ export function AvatarStack({ employeeIds, max = 3, size = 'sm', showEmpty = fal
           className={cn(
             styles.circle,
             styles.overlap,
-            'rounded-full flex items-center justify-center font-black bg-zinc-800 text-zinc-400 border-2 border-[#0d0d0f]'
+            'rounded-full flex items-center justify-center font-black bg-secondary text-muted-foreground border-2 border-[var(--border)]'
           )}
           style={{ zIndex: 0 }}
         >

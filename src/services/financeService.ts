@@ -1,5 +1,5 @@
 // services/financeService.ts
-// Motor de Faturamento Industrial — Impacto Digital
+// Motor de Faturamento Industrial
 // Utiliza Firestore Transactions para garantir integridade ACID
 
 import {

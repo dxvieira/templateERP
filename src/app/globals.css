@@ -4,11 +4,34 @@
 
 @layer base {
   :root {
-    --background: 240 10% 3.9%;
+    --background: 0 0% 98%; /* Quase branco puro */
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%; /* Branco puro */
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 18 100% 56%; /* Laranja Neon */
+    --primary-foreground: 0 0% 100%; /* Branco no laranja */
+    --secondary: 240 4.8% 95.9%; /* Cinza muito claro */
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 18 100% 56%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 0 0% 4%; /* #0A0A0A */
     --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
+    --card: 240 7% 5%; /* #0d0d0f */
     --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
+    --popover: 240 7% 5%;
     --popover-foreground: 0 0% 98%;
     --primary: 18 100% 56%; /* #FF5F1F Laranja Neon */
     --primary-foreground: 0 0% 0%;
@@ -16,14 +39,13 @@
     --secondary-foreground: 0 0% 98%;
     --muted: 240 3.7% 15.9%;
     --muted-foreground: 240 5% 64.9%;
-    --accent: 18 100% 56%;
+    --accent: 240 3.7% 15.9%;
     --accent-foreground: 0 0% 98%;
-    --destructive: 0 100% 50%; /* #FF0000 Vermelho Neon */
+    --destructive: 0 100% 50%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
+    --border: 0 0% 15%; /* Substitui border-white/5 e white/10 */
     --input: 240 3.7% 15.9%;
     --ring: 18 100% 56%;
-    --radius: 0.75rem;
   }
 }
 
@@ -34,7 +56,7 @@
   
   /* BLINDAGEM ESTRUTURAL DE VIEWPORT */
   html, body {
-    @apply bg-[#0A0A0A] text-foreground font-body antialiased;
+    @apply bg-background text-foreground font-body antialiased;
     width: 100vw;
     height: 100vh;
     overflow: hidden !important;
@@ -51,14 +73,14 @@
   }
 
   ::-webkit-scrollbar-track {
-    background: #0A0A0A;
+    @apply bg-background;
     border-radius: 10px;
   }
 
   ::-webkit-scrollbar-thumb {
-    background-color: #FF5F1F;
+    @apply bg-primary/80;
     border-radius: 20px;
-    border: 2px solid #0A0A0A;
+    border: 2px solid transparent;
     background-clip: content-box;
   }
 
@@ -66,10 +88,9 @@
     background-color: #ff7a45;
   }
 
-  /* Firefox Support */
   * {
     scrollbar-width: thin;
-    scrollbar-color: #FF5F1F #0A0A0A;
+    scrollbar-color: hsl(var(--primary)) transparent;
   }
 }
 
@@ -123,7 +144,7 @@
 
 /* Glassmorphism utility */
 .glass-card {
-  @apply bg-white/5 border border-white/10 shadow-2xl;
+  @apply bg-card/50 border border-border shadow-2xl;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
 }

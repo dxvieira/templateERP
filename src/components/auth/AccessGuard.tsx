@@ -64,7 +64,7 @@ export function AccessGuard({ children }: AccessGuardProps) {
 
   if (isUserLoading || checking) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-[#0A0A0A]">
+      <div className="h-screen w-full flex items-center justify-center bg-background">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </div>
     );
@@ -73,7 +73,7 @@ export function AccessGuard({ children }: AccessGuardProps) {
   // Se não tem acesso, mostra a tela de bloqueio premium
   if (!hasAccess && user) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-[#020202] p-6 text-center overflow-hidden relative">
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-background p-6 text-center overflow-hidden relative">
         {/* Background red atmosphere */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-red-600/8 blur-[180px] pointer-events-none" />
         
@@ -102,7 +102,7 @@ export function AccessGuard({ children }: AccessGuardProps) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.6 }}
-          className="text-4xl font-black text-white uppercase tracking-tighter mb-2"
+          className="text-4xl font-black text-foreground uppercase tracking-tighter mb-2"
         >
           ACESSO{' '}
           <motion.span
@@ -131,23 +131,23 @@ export function AccessGuard({ children }: AccessGuardProps) {
           className="w-full max-w-md"
         >
           <div className="relative rounded-2xl p-[1px] bg-gradient-to-b from-red-500/30 to-red-500/5">
-            <div className="bg-[#0A0A0A] rounded-2xl p-8">
+            <div className="bg-background rounded-2xl p-8">
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <ShieldAlert size={18} className="text-red-500" />
                 </div>
                 <div className="text-left">
-                  <p className="text-[10px] text-zinc-600 uppercase tracking-[0.2em] font-black mb-3">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] font-black mb-3">
                     Identidade Rejeitada
                   </p>
-                  <p className="text-sm text-zinc-400 leading-relaxed">
+                  <p className="text-sm text-muted-foreground leading-relaxed">
                     O e-mail{' '}
-                    <span className="text-white font-black bg-red-500/10 px-2 py-0.5 rounded-md border border-red-500/20">
+                    <span className="text-foreground font-black bg-red-500/10 px-2 py-0.5 rounded-md border border-red-500/20">
                       {user.email}
                     </span>{' '}
-                    não consta na lista de usuários permitidos pela <span className="text-white font-black">IMPACTO</span>.
+                    não consta na lista de usuários permitidos.
                   </p>
-                  <p className="text-[10px] text-zinc-700 mt-4 leading-relaxed">
+                  <p className="text-[10px] text-muted-foreground mt-4 leading-relaxed">
                     Se você acredita que isso é um erro, entre em contato com o administrador do sistema.
                   </p>
                 </div>
@@ -165,7 +165,7 @@ export function AccessGuard({ children }: AccessGuardProps) {
         >
           <button
             onClick={handleLogout}
-            className="h-11 px-8 flex items-center gap-3 bg-[#111111] border border-zinc-800 hover:border-red-500/40 text-zinc-400 hover:text-white font-black uppercase tracking-[0.15em] text-[9px] rounded-xl transition-all duration-300 active:scale-[0.97] hover:shadow-[0_0_20px_rgba(239,68,68,0.1)]"
+            className="h-11 px-8 flex items-center gap-3 bg-secondary border border-border hover:border-red-500/40 text-muted-foreground hover:text-foreground font-black uppercase tracking-[0.15em] text-[9px] rounded-xl transition-all duration-300 active:scale-[0.97] hover:shadow-[0_0_20px_rgba(239,68,68,0.1)]"
           >
             <LogOut size={14} />
             TROCAR DE CONTA

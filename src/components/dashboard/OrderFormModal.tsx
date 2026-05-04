@@ -85,38 +85,38 @@ const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | nul
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" onClick={onClose}>
-      <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }} onClick={(e) => e.stopPropagation()} className="bg-[#09090b] w-full max-w-2xl border border-zinc-800 rounded-3xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden">
-        <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-zinc-900/30">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm" onClick={onClose}>
+      <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }} onClick={(e) => e.stopPropagation()} className="bg-card w-full max-w-2xl border border-border rounded-3xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden">
+        <div className="flex items-center justify-between p-5 border-b border-border bg-secondary/30">
           <div className="flex flex-col">
-            <h2 className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.3em] mb-1.5">{order ? 'Ajustar Pedido' : 'Detalhes do Pedido'}</h2>
-            <div className="relative w-32 h-8 flex items-center justify-center border border-white/10 bg-white/5 rounded-lg">
-              <span className="text-white/50 text-[10px] font-black tracking-widest">LOGO</span>
+            <h2 className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.3em] mb-1.5">{order ? 'Ajustar Pedido' : 'Detalhes do Pedido'}</h2>
+            <div className="relative w-32 h-8 flex items-center justify-center border border-border bg-secondary rounded-lg">
+              <span className="text-muted-foreground text-[10px] font-black tracking-widest">LOGO</span>
             </div>
           </div>
           
-          <div className="hidden sm:flex items-center gap-3 bg-zinc-950 border border-zinc-800 px-4 py-2 rounded-2xl ml-auto mr-6">
-            <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest">OS</span>
-            <span className="text-lg font-black text-white">#{order?.id?.slice(-6) || 'NOVA'}</span>
+          <div className="hidden sm:flex items-center gap-3 bg-background border border-border px-4 py-2 rounded-2xl ml-auto mr-6">
+            <span className="text-[9px] text-muted-foreground font-black uppercase tracking-widest">OS</span>
+            <span className="text-lg font-black text-foreground">#{order?.id?.slice(-6) || 'NOVA'}</span>
           </div>
 
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-zinc-800 text-zinc-500 hover:text-white transition-colors"><X size={20} /></button>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"><X size={20} /></button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar bg-[#050505]">
+        <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar bg-background">
           <form id="orderForm" onSubmit={handleSave} className="space-y-8">
             <div className="space-y-3">
-              <label className="text-[10px] text-zinc-500 uppercase font-black tracking-[0.3em] flex items-center gap-2 ml-1">
+              <label className="text-[10px] text-muted-foreground uppercase font-black tracking-[0.3em] flex items-center gap-2 ml-1">
                 <Activity size={12} className="animate-pulse" /> Etapa da Produção
               </label>
               <div className="relative group">
                 <select 
                   value={formData.status} 
                   onChange={(e) => handleFieldChange('status', e.target.value)} 
-                  className="w-full appearance-none bg-black border-2 rounded-2xl py-4 pl-6 pr-12 text-xl font-black uppercase tracking-widest outline-none transition-all" 
+                  className="w-full appearance-none bg-secondary/50 border-2 rounded-2xl py-4 pl-6 pr-12 text-xl font-black uppercase tracking-widest outline-none transition-all" 
                   style={{ borderColor: currentColor, color: currentColor, boxShadow: `0 0 30px -10px ${currentColor}40` }}
                 >
-                  {PRODUCTION_STAGES.map(s => <option key={s} value={s} className="bg-zinc-950 text-white font-bold text-sm">{s}</option>)}
+                  {PRODUCTION_STAGES.map(s => <option key={s} value={s} className="bg-background text-foreground font-bold text-sm">{s}</option>)}
                 </select>
                 <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: currentColor }} size={24} strokeWidth={3} />
               </div>
@@ -124,15 +124,15 @@ const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | nul
 
             {/* DESTAQUE DA EQUIPE ALOCADA COM NOMES */}
             {order?.assigned_to && order.assigned_to.length > 0 && (
-              <div className="bg-[#09090b] border border-white/5 rounded-[2rem] p-5 shadow-inner">
+              <div className="bg-card border border-border rounded-[2rem] p-5 shadow-inner">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
                       <Users size={16} className="text-emerald-500" />
                     </div>
                     <div>
-                      <h3 className="text-[10px] font-black text-white uppercase tracking-widest">Squad de Produção</h3>
-                      <p className="text-[8px] text-zinc-500 font-bold uppercase mt-0.5 tracking-wider">{order.assigned_to.length} Responsável(is)</p>
+                      <h3 className="text-[10px] font-black text-foreground uppercase tracking-widest">Squad de Produção</h3>
+                      <p className="text-[8px] text-muted-foreground font-bold uppercase mt-0.5 tracking-wider">{order.assigned_to.length} Responsável(is)</p>
                     </div>
                   </div>
                 </div>
@@ -146,7 +146,7 @@ const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | nul
                     return (
                       <div
                         key={emp.id}
-                        className="flex items-center gap-2 pr-3 pl-1 py-1 rounded-xl shadow-inner border border-white/5"
+                        className="flex items-center gap-2 pr-3 pl-1 py-1 rounded-xl shadow-inner border border-border"
                         style={{ backgroundColor: `${emp.color}15` }}
                       >
                         <div
@@ -169,60 +169,60 @@ const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | nul
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* CAMPO CLIENTE - MELHORADO PARA QUEBRA DE LINHA */}
               <div className="space-y-1.5">
-                <label className="text-[9px] text-zinc-500 uppercase font-black tracking-widest ml-1 block">Cliente / Projeto</label>
-                <div className="w-full min-h-[46px] bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-400 break-words leading-relaxed font-bold uppercase">
+                <label className="text-[9px] text-muted-foreground uppercase font-black tracking-widest ml-1 block">Cliente / Projeto</label>
+                <div className="w-full min-h-[46px] bg-secondary/50 border border-border rounded-xl p-3 text-sm text-muted-foreground break-words leading-relaxed font-bold uppercase">
                   {formData.client || 'NÃO IDENTIFICADO'}
                 </div>
               </div>
               
               {/* CAMPO PRAZO DE ENTREGA - FORMATADO PT-BR */}
               <div className="space-y-1.5">
-                <label className="text-[9px] text-zinc-500 uppercase font-black tracking-widest ml-1 block">Prazo de Entrega</label>
-                <div className="w-full min-h-[46px] bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 text-sm text-zinc-400 flex items-center gap-2 font-mono">
-                  <Calendar size={14} className="text-zinc-600" />
+                <label className="text-[9px] text-muted-foreground uppercase font-black tracking-widest ml-1 block">Prazo de Entrega</label>
+                <div className="w-full min-h-[46px] bg-secondary/50 border border-border rounded-xl p-3 text-sm text-muted-foreground flex items-center gap-2 font-mono">
+                  <Calendar size={14} className="text-muted-foreground" />
                   {formattedDeliveryDate}
                 </div>
               </div>
             </div>
 
             <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+              <div className="flex items-center justify-between border-b border-border pb-2">
                 <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.4em] flex items-center gap-2"><Box size={14} /> Ficha de Produção (Leitura)</h3>
-                <span className="text-[8px] font-black text-zinc-600 uppercase border border-zinc-800 px-2 py-1 rounded">Modo Visualização</span>
+                <span className="text-[8px] font-black text-muted-foreground uppercase border border-border px-2 py-1 rounded">Modo Visualização</span>
               </div>
               
               <div className="space-y-3 mt-4 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
                 {formData.items && formData.items.length > 0 ? (
                   formData.items.map((item, index) => (
-                    <div key={index} className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 transition-all hover:border-zinc-700/50">
+                    <div key={index} className="bg-secondary/40 border border-border rounded-xl p-4 transition-all hover:border-border/50">
                       <div className="flex justify-between items-start gap-4 mb-3">
                         <div className="flex-1">
-                          <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Material / Serviço</label>
-                          <p className="text-zinc-200 text-sm font-black uppercase mt-0.5">
+                          <label className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Material / Serviço</label>
+                          <p className="text-foreground text-sm font-black uppercase mt-0.5">
                             {item.desc || item.name || item.descricao || 'Item não especificado'}
                           </p>
                         </div>
                         <div className="w-16 flex flex-col items-center">
-                          <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Qtd.</label>
-                          <p className="text-zinc-300 text-sm font-black bg-zinc-800/80 px-3 py-1 rounded border border-zinc-700/50 mt-0.5">
+                          <label className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Qtd.</label>
+                          <p className="text-foreground text-sm font-black bg-secondary/80 px-3 py-1 rounded border border-border/50 mt-0.5">
                             {item.quantity || item.qtd || 1}
                           </p>
                         </div>
                       </div>
                       
-                      <div className="mt-2 pt-2 border-t border-zinc-800/50">
-                        <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                      <div className="mt-2 pt-2 border-t border-border/50">
+                        <label className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider flex items-center gap-1.5">
                           Notas Técnicas
                         </label>
-                        <p className="text-zinc-400 text-xs italic mt-1 leading-relaxed">
+                        <p className="text-muted-foreground text-xs italic mt-1 leading-relaxed">
                           {item.observation || item.notes || item.observacao || item.details || 'Nenhuma nota técnica atrelada a este item.'}
                         </p>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="text-center py-10 border-2 border-dashed border-zinc-800 rounded-3xl bg-zinc-900/10">
-                    <p className="text-zinc-600 font-black uppercase text-[10px] tracking-widest">Nenhum detalhamento técnico</p>
+                  <div className="text-center py-10 border-2 border-dashed border-border rounded-3xl bg-secondary/10">
+                    <p className="text-muted-foreground font-black uppercase text-[10px] tracking-widest">Nenhum detalhamento técnico</p>
                   </div>
                 )}
               </div>
@@ -230,9 +230,9 @@ const OrderFormModalComponent = ({ order, isOpen, onClose }: { order?: any | nul
           </form>
         </div>
 
-        <div className="p-5 border-t border-zinc-800 bg-zinc-900/30 flex flex-col sm:flex-row justify-end gap-4">
-          <button type="button" onClick={onClose} className="w-full sm:w-auto px-6 py-3 rounded-xl border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-colors">Fechar</button>
-          <button form="orderForm" type="submit" disabled={loading} className="w-full sm:w-auto px-10 py-3 rounded-xl bg-primary text-black text-[10px] font-black uppercase tracking-widest shadow-[0_0_25px_-5px_rgba(255,95,31,0.5)] flex items-center justify-center gap-2 transition-all active:scale-95">
+        <div className="p-5 border-t border-border bg-secondary/30 flex flex-col sm:flex-row justify-end gap-4">
+          <button type="button" onClick={onClose} className="w-full sm:w-auto px-6 py-3 rounded-xl border border-border text-muted-foreground text-[10px] font-black uppercase tracking-widest hover:bg-secondary transition-colors">Fechar</button>
+          <button form="orderForm" type="submit" disabled={loading} className="w-full sm:w-auto px-10 py-3 rounded-xl bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest shadow-[0_0_25px_-5px_rgba(255,95,31,0.5)] flex items-center justify-center gap-2 transition-all active:scale-95">
             {loading ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> Salvar Etapa</>}
           </button>
         </div>

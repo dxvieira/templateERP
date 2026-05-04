@@ -112,8 +112,8 @@ export const OrderCard = memo(({ order, onClick, onDelete, index = 0 }: OrderCar
       <div
         onClick={() => onClick?.(order)}
         className={cn(
-          'group relative w-full cursor-pointer bg-[#0d0d0f] border border-white/5 rounded-xl overflow-hidden transition-all duration-200 ease-out',
-          'hover:border-white/10 hover:bg-[#111114] hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)]',
+          'group relative w-full cursor-pointer bg-card border border-border rounded-xl overflow-hidden transition-all duration-200 ease-out',
+          'hover:border-border hover:bg-accent hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)]',
           isDone && 'opacity-80',
         )}
       >
@@ -135,7 +135,7 @@ export const OrderCard = memo(({ order, onClick, onDelete, index = 0 }: OrderCar
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
               <div className="min-w-0 space-y-1">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-[11px] font-mono font-bold text-zinc-400 bg-zinc-900/80 px-2 py-0.5 rounded-md border border-white/5 uppercase tracking-tight shrink-0">
+                  <span className="text-[11px] font-mono font-bold text-muted-foreground bg-secondary/80 px-2 py-0.5 rounded-md border border-border uppercase tracking-tight shrink-0">
                     #{order.id}
                   </span>
                   <div className="flex items-center gap-1.5 min-w-0">
@@ -152,33 +152,33 @@ export const OrderCard = memo(({ order, onClick, onDelete, index = 0 }: OrderCar
                   </div>
                 </div>
 
-                <h3 className="text-sm font-black text-white truncate uppercase tracking-tight group-hover:text-primary transition-colors duration-200">
+                <h3 className="text-sm font-black text-foreground truncate uppercase tracking-tight group-hover:text-primary transition-colors duration-200">
                   {order.client}
                 </h3>
               </div>
 
               {/* ── Deadline Badge ────────────────────────────────── */}
-              <div className="flex items-center gap-4 shrink-0 border-t sm:border-t-0 border-white/5 pt-2 sm:pt-0">
+              <div className="flex items-center gap-4 shrink-0 border-t sm:border-t-0 border-border pt-2 sm:pt-0">
                 <div className={cn(
                   'flex flex-col items-end px-2.5 py-1 rounded-lg border transition-colors min-w-[65px]',
                   dateInfo.isLate || dateInfo.isToday
                     ? 'bg-red-500/10 border-red-500/20'
                     : isDone
                       ? 'bg-emerald-500/10 border-emerald-500/20'
-                      : 'bg-zinc-900/60 border-white/5',
+                      : 'bg-secondary/60 border-border',
                 )}>
-                  <span className="text-[7px] text-zinc-600 uppercase font-black tracking-[0.2em]">
+                  <span className="text-[7px] text-muted-foreground uppercase font-black tracking-[0.2em]">
                     {isDone ? 'Finalizado' : 'Deadline'}
                   </span>
                   <div className={cn(
                     'flex items-center gap-1 font-mono font-bold text-xs',
-                    (dateInfo.isLate || dateInfo.isToday) ? 'text-red-400' : isDone ? 'text-emerald-400' : 'text-white',
+                    (dateInfo.isLate || dateInfo.isToday) ? 'text-red-400' : isDone ? 'text-emerald-400' : 'text-foreground',
                   )}>
                     {(dateInfo.isLate || dateInfo.isToday)
                       ? <AlertTriangle size={10} />
                       : isDone
                         ? <CheckCircle2 size={10} className="text-emerald-400" />
-                        : <Calendar size={10} className="text-zinc-600" />
+                        : <Calendar size={10} className="text-muted-foreground" />
                     }
                     {dateInfo.formatted}
                   </div>
@@ -187,7 +187,7 @@ export const OrderCard = memo(({ order, onClick, onDelete, index = 0 }: OrderCar
                 {onDelete && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onDelete(order); }}
-                    className="p-2 text-zinc-700 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all duration-200"
+                    className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all duration-200"
                     title="Excluir Pedido"
                   >
                     <Trash2 size={16} />
@@ -195,20 +195,20 @@ export const OrderCard = memo(({ order, onClick, onDelete, index = 0 }: OrderCar
                 )}
 
                 <ChevronRight
-                  className="text-zinc-700 group-hover:text-zinc-400 group-hover:translate-x-1 transition-all duration-200"
+                  className="text-muted-foreground group-hover:text-muted-foreground group-hover:translate-x-1 transition-all duration-200"
                   size={16}
                 />
               </div>
             </div>
 
             {/* ── Footer: Financeiro ────────────────────────────────── */}
-            <div className="pt-3 border-t border-white/5 space-y-2">
+            <div className="pt-3 border-t border-border space-y-2">
               <div className="flex justify-between items-end">
                 <div className="flex flex-col gap-0.5">
                   <div className="flex items-center gap-1.5">
                     {financialStats.hasOverdue
                       ? <AlertTriangle size={10} className="text-red-400" />
-                      : <DollarSign size={10} className={financialStats.isFullyPaid ? 'text-emerald-400' : 'text-zinc-600'} />
+                      : <DollarSign size={10} className={financialStats.isFullyPaid ? 'text-emerald-400' : 'text-muted-foreground'} />
                     }
                     <span className={cn(
                       'text-[8px] font-black uppercase tracking-widest',
@@ -216,7 +216,7 @@ export const OrderCard = memo(({ order, onClick, onDelete, index = 0 }: OrderCar
                         ? 'text-emerald-400'
                         : financialStats.hasOverdue
                           ? 'text-red-400'
-                          : 'text-zinc-600',
+                          : 'text-muted-foreground',
                     )}>
                       {financialStats.isFullyPaid
                         ? 'Quitado'
@@ -226,23 +226,23 @@ export const OrderCard = memo(({ order, onClick, onDelete, index = 0 }: OrderCar
                     </span>
                   </div>
                   {financialStats.instCount > 0 && (
-                    <div className="flex items-center gap-1 text-[7px] font-bold text-zinc-700 uppercase tracking-widest ml-4">
+                    <div className="flex items-center gap-1 text-[7px] font-bold text-muted-foreground uppercase tracking-widest ml-4">
                       <Layers size={8} />
                       <span>{financialStats.paidCount}/{financialStats.instCount} faturas</span>
                     </div>
                   )}
                 </div>
-                <span className="text-[8px] font-mono text-zinc-700 font-bold">{financialStats.progress}%</span>
+                <span className="text-[8px] font-mono text-muted-foreground font-bold">{financialStats.progress}%</span>
               </div>
 
               {/* ── Equipe Atribuída (Avatares) ───────────────────── */}
               <div className="flex items-center justify-between">
                 <AvatarStack employeeIds={order.assigned_to || []} max={4} size="sm" showEmpty={false} />
-                <span className="text-[8px] font-mono text-zinc-700 font-bold">{financialStats.progress > 0 ? `${financialStats.progress}%` : ''}</span>
+                <span className="text-[8px] font-mono text-muted-foreground font-bold">{financialStats.progress > 0 ? `${financialStats.progress}%` : ''}</span>
               </div>
 
               {/* ── Progress Bar com animação de entrada ─────────── */}
-              <div className="h-[3px] w-full bg-zinc-900 rounded-full overflow-hidden">
+              <div className="h-[3px] w-full bg-secondary rounded-full overflow-hidden">
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${financialStats.progress}%` }}

@@ -61,10 +61,10 @@ export function ProductionHub({ stats }: ProductionHubProps) {
       {/* ── Header limpo — sem logo, sem badge piscante ── */}
       <div className="flex justify-between items-start mb-8 relative z-10">
         <div className="space-y-0.5">
-          <p className="text-[9px] font-black uppercase tracking-[0.35em] text-zinc-600">
+          <p className="text-[9px] font-black uppercase tracking-[0.35em] text-muted-foreground">
             Fluxo Operacional
           </p>
-          <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter leading-none">
+          <h2 className="text-2xl md:text-3xl font-black text-foreground uppercase tracking-tighter leading-none">
             Reator de{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-zinc-300 to-zinc-600">
               Produção
@@ -73,9 +73,9 @@ export function ProductionHub({ stats }: ProductionHubProps) {
         </div>
 
         {/* Status pill — simples, não invasivo */}
-        <div className="flex items-center gap-1.5 bg-white/[0.03] border border-white/5 px-3 py-1.5 rounded-full">
+        <div className="flex items-center gap-1.5 bg-white/[0.03] border border-border px-3 py-1.5 rounded-full">
           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-[8px] font-black uppercase tracking-[0.25em] text-zinc-500">
+          <span className="text-[8px] font-black uppercase tracking-[0.25em] text-muted-foreground">
             Online
           </span>
         </div>
@@ -85,7 +85,7 @@ export function ProductionHub({ stats }: ProductionHubProps) {
         {/* ── Gráfico Radial (preservado — já é Tier-1) ── */}
         <div className="relative w-[220px] h-[220px] md:w-[260px] md:h-[260px] shrink-0 flex items-center justify-center">
           <svg viewBox="0 0 240 240" className="w-full h-full -rotate-90 transform overflow-visible">
-            <circle cx="120" cy="120" r={radius} stroke="#1a1a1a" strokeWidth="10" fill="transparent" />
+            <circle cx="120" cy="120" r={radius} stroke="var(--secondary)" strokeWidth="10" fill="transparent" />
 
             {stageData.map((item, index) => {
               const percentage = (item.value / totalValue) * 100;
@@ -136,11 +136,11 @@ export function ProductionHub({ stats }: ProductionHubProps) {
                 >
                   {activeIndex !== null ? stageData[activeIndex]?.label : 'Total Ativo'}
                 </span>
-                <span className="text-5xl md:text-6xl font-black text-white tracking-tighter leading-none">
+                <span className="text-5xl md:text-6xl font-black text-foreground tracking-tighter leading-none">
                   {activeIndex !== null ? stageData[activeIndex]?.value : totalValue}
                 </span>
                 {activeIndex === null && (
-                  <div className="mt-3 flex items-center gap-1 bg-[#FF5F1F]/8 px-2.5 py-1 rounded-full border border-[#FF5F1F]/15">
+                  <div className="mt-3 flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-full border border-[#FF5F1F]/15">
                     <Zap size={8} className="text-[#FF5F1F]" fill="#FF5F1F" />
                     <span className="text-[7px] text-[#FF5F1F] font-black font-mono uppercase tracking-widest">
                       em produção
@@ -182,11 +182,11 @@ export function ProductionHub({ stats }: ProductionHubProps) {
                   <div className="flex flex-col">
                     <span className={cn(
                       'text-[10px] font-bold uppercase tracking-wider transition-colors duration-150',
-                      isActive ? 'text-white' : 'text-zinc-500',
+                      isActive ? 'text-foreground' : 'text-muted-foreground',
                     )}>
                       {item.label}
                     </span>
-                    <div className="h-[2px] w-20 bg-zinc-900 rounded-full mt-1.5 overflow-hidden">
+                    <div className="h-[2px] w-20 bg-secondary rounded-full mt-1.5 overflow-hidden">
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${(item.value / totalValue) * 100}%` }}
@@ -199,7 +199,7 @@ export function ProductionHub({ stats }: ProductionHubProps) {
                 </div>
                 <span className={cn(
                   'text-lg font-mono font-black transition-colors duration-150',
-                  isActive ? 'text-white' : 'text-zinc-700',
+                  isActive ? 'text-foreground' : 'text-muted-foreground',
                 )}>
                   {item.value}
                 </span>

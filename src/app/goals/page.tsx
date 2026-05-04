@@ -133,12 +133,12 @@ export default function WeeklyGoalsPage() {
         <Button 
           variant="ghost" 
           onClick={() => router.push('/')} 
-          className="text-zinc-500 uppercase text-[9px] font-black hover:text-white p-0 h-auto"
+          className="text-muted-foreground uppercase text-[9px] font-black hover:text-foreground p-0 h-auto"
         >
           <ChevronLeft size={12} /> Voltar ao Terminal
         </Button>
 
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-white/5 pb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-border pb-8">
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -156,14 +156,14 @@ export default function WeeklyGoalsPage() {
                   repeat: Infinity,
                   ease: "easeInOut"
                 }}
-                className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-900/50 border border-white/5 backdrop-blur-sm overflow-hidden group"
+                className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-secondary/50 border border-border backdrop-blur-sm overflow-hidden group"
               >
                 <motion.div 
                   animate={{ rotate: 360 }}
                   transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
                   className="absolute inset-[-50%] bg-[conic-gradient(from_0deg,transparent_70%,#FF5F1F_100%)] opacity-40 group-hover:opacity-100 transition-opacity"
                 />
-                <div className="absolute inset-[1px] bg-[#0A0A0A] rounded-[15px] z-10 flex items-center justify-center">
+                <div className="absolute inset-[1px] bg-background rounded-[15px] z-10 flex items-center justify-center">
                   <Target className="text-primary w-6 h-6" />
                 </div>
               </motion.div>
@@ -171,7 +171,7 @@ export default function WeeklyGoalsPage() {
               {/* Title with Shimmering Gradient */}
               <div className="flex flex-col">
                 <motion.h1 
-                  className="text-4xl font-black text-white tracking-tighter uppercase leading-none flex flex-wrap items-center gap-2"
+                  className="text-4xl font-black text-foreground tracking-tighter uppercase leading-none flex flex-wrap items-center gap-2"
                 >
                   <span>META DA</span>
                   <motion.span 
@@ -201,7 +201,7 @@ export default function WeeklyGoalsPage() {
 
           <Button 
             onClick={() => setIsManageModalOpen(true)} 
-            className="bg-primary text-black font-black px-8 h-14 rounded-2xl uppercase text-[10px] tracking-widest shadow-[0_0_25px_rgba(255,95,31,0.4)] transition-all hover:scale-105 active:scale-95"
+            className="bg-primary text-primary-foreground font-black px-8 h-14 rounded-2xl uppercase text-[10px] tracking-widest shadow-[0_0_25px_rgba(255,95,31,0.4)] transition-all hover:scale-105 active:scale-95"
           >
             <LayoutGrid size={16} className="mr-2" /> Gerenciar Lista
           </Button>
@@ -238,7 +238,7 @@ export default function WeeklyGoalsPage() {
 
             <div className={cn(
               "relative rounded-[2.5rem] p-8 overflow-hidden z-10",
-              isVictory ? "bg-[#060D08]" : "bg-[#0A0A0A]"
+              isVictory ? "bg-emerald-500/10" : "bg-background"
             )}>
               {/* Background watermark */}
               <div className={cn("absolute top-0 right-0 p-8", isVictory ? "opacity-[0.06]" : "opacity-[0.03]")}>
@@ -282,7 +282,7 @@ export default function WeeklyGoalsPage() {
                       Meta da Semana Concluída
                     </motion.p>
                   ) : (
-                    <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.4em] mb-2 flex items-center gap-2">
+                    <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.4em] mb-2 flex items-center gap-2">
                       <motion.span animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 2, repeat: Infinity }}>
                         <Zap size={12} className={accentFill} />
                       </motion.span>
@@ -295,12 +295,12 @@ export default function WeeklyGoalsPage() {
                       initial={{ opacity: 0, scale: 0.5 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: 0.4, duration: 0.5, type: 'spring' }}
-                      className={cn("text-7xl font-black tracking-tighter", isVictory ? "text-emerald-400" : "text-white")}
+                      className={cn("text-7xl font-black tracking-tighter", isVictory ? "text-emerald-400" : "text-foreground")}
                     >
                       {completedOrders.length}
                     </motion.span>
-                    <span className="text-3xl text-zinc-700 font-black">/ {totalOrdersCount}</span>
-                    <span className={cn("text-[10px] font-bold uppercase tracking-widest ml-2 mb-2", isVictory ? "text-emerald-600" : "text-zinc-500")}>
+                    <span className="text-3xl text-muted-foreground font-black">/ {totalOrdersCount}</span>
+                    <span className={cn("text-[10px] font-bold uppercase tracking-widest ml-2 mb-2", isVictory ? "text-emerald-600" : "text-muted-foreground")}>
                       {isVictory ? 'Todos os Objetivos Completos' : 'Objetivos Concluídos'}
                     </span>
                   </div>
@@ -325,7 +325,7 @@ export default function WeeklyGoalsPage() {
                       {progress}%
                     </motion.span>
                   </div>
-                  <p className={cn("text-[10px] font-black uppercase tracking-widest", isVictory ? "text-emerald-600" : "text-zinc-500")}>
+                  <p className={cn("text-[10px] font-black uppercase tracking-widest", isVictory ? "text-emerald-600" : "text-muted-foreground")}>
                     {isVictory ? 'Produção Máxima' : 'Eficiência de Produção'}
                   </p>
                 </motion.div>
@@ -334,7 +334,7 @@ export default function WeeklyGoalsPage() {
               {/* Progress Bar */}
               <div className={cn(
                 "relative h-5 w-full rounded-full p-1 overflow-hidden shadow-inner",
-                isVictory ? "bg-emerald-950/40 border border-emerald-800/30" : "bg-black/60 border border-zinc-800"
+                isVictory ? "bg-emerald-950/40 border border-emerald-800/30" : "bg-background/60 border border-border"
               )}>
                 <motion.div 
                   initial={{ width: 0 }} 
@@ -368,7 +368,7 @@ export default function WeeklyGoalsPage() {
       <div className="space-y-6">
         <div className="flex items-center gap-3 px-2">
           <Flag size={14} className="text-primary" />
-          <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em]">Pauta em Aberto ({pendingOrders.length})</h3>
+          <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em]">Pauta em Aberto ({pendingOrders.length})</h3>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -398,15 +398,15 @@ export default function WeeklyGoalsPage() {
 
                 <button 
                   onClick={(e) => handleRemoveFromGoal(e, order.id)} 
-                  className="absolute -top-2 -right-2 p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-500 hover:text-red-500 opacity-0 group-hover/card:opacity-100 transition-all hover:scale-110 shadow-xl z-10"
+                  className="absolute -top-2 -right-2 p-2 bg-secondary border border-border rounded-xl text-muted-foreground hover:text-red-500 opacity-0 group-hover/card:opacity-100 transition-all hover:scale-110 shadow-xl z-10"
                 >
                   <X size={14} strokeWidth={3} />
                 </button>
               </motion.div>
             )) : !isLoading && (
-              <div className="col-span-full py-20 text-center border-2 border-dashed border-zinc-800 rounded-[2.5rem] bg-zinc-900/10">
+              <div className="col-span-full py-20 text-center border-2 border-dashed border-border rounded-[2.5rem] bg-secondary/10">
                 <CheckCircle2 size={48} className="mx-auto mb-4 text-emerald-500/20" />
-                <p className="text-[10px] text-zinc-600 font-black uppercase tracking-[0.4em]">Nenhuma missão ativa para o momento</p>
+                <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.4em]">Nenhuma missão ativa para o momento</p>
               </div>
             )}
           </AnimatePresence>
@@ -418,7 +418,7 @@ export default function WeeklyGoalsPage() {
         <div className="pt-12 space-y-8">
           <div className="flex items-center gap-4">
             <div className="h-px flex-1 bg-gradient-to-r from-transparent to-zinc-800" />
-            <span className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.5em] whitespace-nowrap">Missões Concluídas</span>
+            <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.5em] whitespace-nowrap">Missões Concluídas</span>
             <div className="h-px flex-1 bg-gradient-to-l from-transparent to-zinc-800" />
           </div>
 
@@ -496,41 +496,41 @@ function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md">
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-background/95 backdrop-blur-md">
       <motion.div 
         initial={{ scale: 0.95, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
-        className="bg-[#09090b] w-full max-w-6xl border border-white/5 rounded-[3rem] shadow-[0_0_100px_rgba(0,0,0,0.8)] flex flex-col max-h-[90vh] overflow-hidden"
+        className="bg-card w-full max-w-6xl border border-border rounded-[3rem] shadow-[0_0_100px_rgba(0,0,0,0.8)] flex flex-col max-h-[90vh] overflow-hidden"
       >
-        <div className="p-8 border-b border-white/5 bg-zinc-900/20 backdrop-blur-xl flex items-center justify-between">
+        <div className="p-8 border-b border-border bg-secondary/20 backdrop-blur-xl flex items-center justify-between">
           <div className="flex items-center gap-6">
             <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-[0_0_30px_rgba(255,95,31,0.15)]">
               <LayoutGrid size={24} className="text-primary" />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight flex items-center gap-3">
+              <h2 className="text-2xl font-black text-foreground uppercase tracking-tighter leading-tight flex items-center gap-3">
                 Gerenciar Produção
-                <span className="text-[10px] bg-white/5 border border-white/10 px-3 py-1 rounded-full text-zinc-500 font-bold tracking-widest">
+                <span className="text-[10px] bg-secondary border border-border px-3 py-1 rounded-full text-muted-foreground font-bold tracking-widest">
                   {filtered.length} Ativos
                 </span>
               </h2>
-              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.3em] mt-1">Status em Tempo Real • Atribuição Estratégica de Equipes</p>
+              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-[0.3em] mt-1">Status em Tempo Real • Atribuição Estratégica de Equipes</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-3 text-zinc-500 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-all border border-white/5">
+          <button onClick={onClose} className="p-3 text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary rounded-full transition-all border border-border">
             <X size={24}/>
           </button>
         </div>
 
         <div className="p-8 space-y-8 flex-1 overflow-hidden flex flex-col">
           <div className="relative group">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-primary transition-colors" size={20} />
+            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={20} />
             <input 
               type="text" 
               placeholder="Pesquisar por ID, Cliente ou Especificação do Serviço..." 
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full bg-zinc-950 border border-white/5 rounded-3xl py-5 pl-16 pr-6 text-white text-base focus:border-primary/40 focus:ring-4 focus:ring-primary/5 outline-none transition-all shadow-inner"
+              className="w-full bg-background border border-border rounded-3xl py-5 pl-16 pr-6 text-foreground text-base focus:border-primary/40 focus:ring-4 focus:ring-primary/5 outline-none transition-all shadow-inner"
             />
           </div>
 
@@ -538,7 +538,7 @@ function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
             {loading ? (
               <div className="py-20 text-center">
                 <Loader2 className="animate-spin mx-auto text-primary w-12 h-12 opacity-20" />
-                <p className="text-[10px] text-zinc-700 font-black uppercase tracking-widest mt-4">Sincronizando Dados...</p>
+                <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mt-4">Sincronizando Dados...</p>
               </div>
             ) : filtered.length > 0 ? filtered.map(order => {
               const isPriority = order.weekly_priority === true;
@@ -552,34 +552,34 @@ function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
                     "flex items-center gap-6 p-6 rounded-[2rem] border transition-all duration-300 group relative overflow-hidden",
                     isPriority 
                       ? "bg-primary/[0.03] border-primary/20 shadow-[0_10px_40px_rgba(255,95,31,0.05)]" 
-                      : "bg-[#0c0c0e] border-white/5 hover:border-white/10 hover:bg-[#111114]"
+                      : "bg-secondary border-border hover:border-border hover:bg-accent"
                   )}
                 >
                   {/* Status Indicator */}
                   <div className={cn(
                     "w-1.5 h-12 rounded-full shrink-0",
-                    isPriority ? "bg-primary shadow-[0_0_15px_#FF5F1F]" : "bg-zinc-800"
+                    isPriority ? "bg-primary shadow-[0_0_15px_#FF5F1F]" : "bg-secondary"
                   )} />
 
                   <div className="flex-1 min-w-0 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
                     {/* Primary Info */}
                     <div className="lg:col-span-4 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
-                        <span className="text-[10px] font-mono font-bold text-zinc-500 bg-zinc-900 border border-white/5 px-2 py-0.5 rounded uppercase tracking-tighter">
+                        <span className="text-[10px] font-mono font-bold text-muted-foreground bg-secondary border border-border px-2 py-0.5 rounded uppercase tracking-tighter">
                           #{order.id.slice(-6)}
                         </span>
-                        <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-white/5 text-zinc-400 border border-white/5">
+                        <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-secondary text-muted-foreground border border-border">
                           {order.status}
                         </span>
                       </div>
-                      <h4 className="text-lg font-black text-white uppercase truncate tracking-tight group-hover:text-primary transition-colors">
+                      <h4 className="text-lg font-black text-foreground uppercase truncate tracking-tight group-hover:text-primary transition-colors">
                         {order.client}
                       </h4>
                     </div>
 
                     {/* Description Block */}
-                    <div className="lg:col-span-4 min-w-0 border-l border-white/5 pl-6">
-                      <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-2 opacity-50">Especificação dos Itens</p>
+                    <div className="lg:col-span-4 min-w-0 border-l border-border pl-6">
+                      <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest mb-2 opacity-50">Especificação dos Itens</p>
                       {order.items && order.items.length > 0 ? (
                         <div className="space-y-2.5">
                           {order.items.slice(0, 2).map((item: any, idx: number) => {
@@ -587,13 +587,13 @@ function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
                             const itemDetails = item.observation || item.notes || item.observacao || item.details;
                             
                             return (
-                              <div key={idx} className="min-w-0 border-l-2 border-zinc-800 pl-3">
-                                <p className="text-[11px] font-black text-white uppercase truncate flex items-center gap-1.5">
+                              <div key={idx} className="min-w-0 border-l-2 border-border pl-3">
+                                <p className="text-[11px] font-black text-foreground uppercase truncate flex items-center gap-1.5">
                                   {itemName}
-                                  {item.quantity && <span className="bg-zinc-800 text-zinc-400 px-1 py-0.5 rounded text-[8px]">x{item.quantity}</span>}
+                                  {item.quantity && <span className="bg-secondary text-muted-foreground px-1 py-0.5 rounded text-[8px]">x{item.quantity}</span>}
                                 </p>
                                 {itemDetails && (
-                                  <p className="text-[10px] text-zinc-400 line-clamp-1 italic mt-0.5 leading-relaxed">
+                                  <p className="text-[10px] text-muted-foreground line-clamp-1 italic mt-0.5 leading-relaxed">
                                     {itemDetails}
                                   </p>
                                 )}
@@ -601,21 +601,21 @@ function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
                             );
                           })}
                           {order.items.length > 2 && (
-                            <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-1">+ {order.items.length - 2} iten(s) adicionais</p>
+                            <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest mt-1">+ {order.items.length - 2} iten(s) adicionais</p>
                           )}
                         </div>
                       ) : (
-                        <p className="text-[11px] text-zinc-500 italic font-medium leading-relaxed">
+                        <p className="text-[11px] text-muted-foreground italic font-medium leading-relaxed">
                           Nenhum detalhamento técnico fornecido para o serviço.
                         </p>
                       )}
                     </div>
 
                     {/* Deadline & Team */}
-                    <div className="lg:col-span-4 flex items-center justify-between pl-6 border-l border-white/5">
+                    <div className="lg:col-span-4 flex items-center justify-between pl-6 border-l border-border">
                       <div className="flex flex-col gap-1">
-                        <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest opacity-50">Prazo de Entrega</p>
-                        <div className="flex items-center gap-2 text-white text-xs font-bold">
+                        <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest opacity-50">Prazo de Entrega</p>
+                        <div className="flex items-center gap-2 text-foreground text-xs font-bold">
                           <CalendarIcon size={12} className="text-primary" />
                           {deadline && isValid(parseISO(deadline)) ? format(parseISO(deadline), "dd 'de' MMMM", { locale: ptBR }) : 'A Definir'}
                         </div>
@@ -623,7 +623,7 @@ function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
 
                       <div className="flex items-center gap-4">
                         <div className="flex flex-col items-end gap-1">
-                          <p className="text-[9px] text-zinc-500 font-black uppercase tracking-widest opacity-50">Squad</p>
+                          <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest opacity-50">Squad</p>
                           <AvatarStack employeeIds={order.assigned_to || []} max={3} size="sm" />
                         </div>
                         
@@ -632,8 +632,8 @@ function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
                           className={cn(
                             "w-10 h-10 rounded-xl border flex items-center justify-center transition-all",
                             (order.assigned_to?.length > 0)
-                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-white"
-                              : "bg-zinc-900 border-white/5 text-zinc-500 hover:border-primary/50 hover:text-primary"
+                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-foreground"
+                              : "bg-secondary border-border text-muted-foreground hover:border-primary/50 hover:text-primary"
                           )}
                           title="Gerenciar Equipe"
                         >
@@ -649,8 +649,8 @@ function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
                       className={cn(
                         "px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all",
                         isPriority 
-                          ? "bg-primary text-black shadow-[0_0_30px_rgba(255,95,31,0.35)] scale-105" 
-                          : "bg-zinc-900 text-zinc-500 border border-white/5 hover:border-white/20 hover:text-white"
+                          ? "bg-primary text-primary-foreground shadow-[0_0_30px_rgba(255,95,31,0.35)] scale-105" 
+                          : "bg-secondary text-muted-foreground border border-border hover:border-white/20 hover:text-foreground"
                       )}
                     >
                       {isPriority ? 'Em Produção' : 'Adicionar'}
@@ -659,7 +659,7 @@ function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
                 </motion.div>
               );
             }) : (
-              <div className="py-20 text-center text-zinc-800 border-2 border-dashed border-white/5 rounded-[3rem]">
+              <div className="py-20 text-center text-zinc-800 border-2 border-dashed border-border rounded-[3rem]">
                 <AlertTriangle size={64} className="mx-auto mb-6 opacity-5" />
                 <p className="text-xs font-black uppercase tracking-[0.5em]">Nenhum pedido encontrado no sistema</p>
               </div>
@@ -667,10 +667,10 @@ function ManageGoalsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
           </div>
         </div>
 
-        <div className="p-8 border-t border-white/5 bg-zinc-900/30 text-center">
+        <div className="p-8 border-t border-border bg-secondary/30 text-center">
           <button 
             onClick={onClose} 
-            className="w-full py-5 bg-white text-black font-black uppercase text-[11px] tracking-[0.5em] rounded-3xl hover:bg-primary transition-all active:scale-[0.98] shadow-2xl"
+            className="w-full py-5 bg-white text-primary-foreground font-black uppercase text-[11px] tracking-[0.5em] rounded-3xl hover:bg-primary transition-all active:scale-[0.98] shadow-2xl"
           >
             Concluir Ajustes de Pauta
           </button>

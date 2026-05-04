@@ -80,7 +80,7 @@ function OrdersManagerContent() {
 
   return (
     <div className="p-4 md:p-6 space-y-6 mt-14 md:mt-0 pb-20">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-white/5 pb-8">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-border pb-8">
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -98,14 +98,14 @@ function OrdersManagerContent() {
                 repeat: Infinity,
                 ease: "easeInOut"
               }}
-              className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-zinc-900/50 border border-white/5 backdrop-blur-sm overflow-hidden group"
+              className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-secondary/50 border border-border backdrop-blur-sm overflow-hidden group"
             >
               <motion.div 
                 animate={{ rotate: 360 }}
                 transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
                 className="absolute inset-[-50%] bg-[conic-gradient(from_0deg,transparent_70%,#10B981_100%)] opacity-40 group-hover:opacity-100 transition-opacity"
               />
-              <div className="absolute inset-[1px] bg-[#0A0A0A] rounded-[15px] z-10 flex items-center justify-center">
+              <div className="absolute inset-[1px] bg-background rounded-[15px] z-10 flex items-center justify-center">
                 <ClipboardList className="text-emerald-400 w-6 h-6" />
               </div>
             </motion.div>
@@ -113,7 +113,7 @@ function OrdersManagerContent() {
             {/* Title with Emerald Shimmering Gradient */}
             <div className="flex flex-col">
               <motion.h1 
-                className="text-4xl font-black text-white tracking-tighter uppercase leading-none flex items-center gap-2"
+                className="text-4xl font-black text-foreground tracking-tighter uppercase leading-none flex items-center gap-2"
               >
                 <span>GESTÃO DE</span>
                 <motion.span 
@@ -148,20 +148,20 @@ function OrdersManagerContent() {
               type="month" 
               value={selectedMonth} 
               onChange={(e) => setSelectedMonth(e.target.value)} 
-              className="bg-zinc-900 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white text-xs font-black outline-none focus:border-emerald-500 transition-all cursor-pointer h-14" 
+              className="bg-secondary border border-border rounded-xl py-3 pl-10 pr-4 text-foreground text-xs font-black outline-none focus:border-emerald-500 transition-all cursor-pointer h-14" 
             />
           </div>
-          <Button onClick={() => { setEditingOrder(null); setIsModalOpen(true); }} className="bg-emerald-500 text-black font-black h-14 px-8 rounded-2xl uppercase tracking-widest text-[10px] shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:bg-white transition-all hover:scale-105 active:scale-95"><Plus size={16} strokeWidth={3} className="mr-2" /> Nova OS</Button>
+          <Button onClick={() => { setEditingOrder(null); setIsModalOpen(true); }} className="bg-emerald-500 text-primary-foreground font-black h-14 px-8 rounded-2xl uppercase tracking-widest text-[10px] shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:bg-white transition-all hover:scale-105 active:scale-95"><Plus size={16} strokeWidth={3} className="mr-2" /> Nova OS</Button>
         </div>
       </header>
 
-      <div className="sticky top-2 z-40 bg-[#09090b]/95 backdrop-blur-xl border border-zinc-800/80 rounded-2xl p-3 shadow-xl">
+      <div className="sticky top-2 z-40 bg-card/95 backdrop-blur-xl border border-border/80 rounded-2xl p-3 shadow-xl">
         <div className="flex flex-col lg:flex-row gap-3 items-center">
           <div className="relative w-full lg:w-1/3 group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
-            <input type="text" placeholder="Buscar Cliente ou OS..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-emerald-500/50" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+            <input type="text" placeholder="Buscar Cliente ou OS..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-secondary/50 border border-border/50 rounded-lg py-2 pl-10 pr-3 text-foreground text-sm focus:border-emerald-500/50" />
           </div>
-          <div className="hidden lg:block w-px h-6 bg-zinc-800" />
+          <div className="hidden lg:block w-px h-6 bg-secondary" />
           <div className="w-full lg:flex-1">
             <div className="hidden md:flex flex-wrap items-center gap-1.5">
               {PRODUCTION_STAGES.map((stage) => (
@@ -170,7 +170,7 @@ function OrdersManagerContent() {
                   onClick={() => setStatusFilter(stage)} 
                   className={cn(
                     "px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wide transition-all border",
-                    statusFilter === stage ? 'bg-emerald-500 text-black border-emerald-500' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:border-zinc-600 hover:text-white'
+                    statusFilter === stage ? 'bg-emerald-500 text-primary-foreground border-emerald-500' : 'bg-secondary text-muted-foreground border-border hover:border-zinc-600 hover:text-foreground'
                   )}
                 >
                   {stage}
@@ -182,7 +182,7 @@ function OrdersManagerContent() {
       </div>
 
       <section className="space-y-4">
-        <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-2">Operações Ativas ({activeOrders.length})</h3>
+        <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-2">Operações Ativas ({activeOrders.length})</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           <AnimatePresence mode='popLayout'>
             {activeOrders.length > 0 ? activeOrders.map((order) => (
@@ -190,8 +190,8 @@ function OrdersManagerContent() {
                 <OrderCard order={order} onClick={(o) => { setEditingOrder(o); setIsModalOpen(true); }} />
               </motion.div>
             )) : (
-              <div className="col-span-full py-12 text-center border border-dashed border-zinc-800 rounded-2xl bg-zinc-900/20">
-                <p className="text-[10px] text-zinc-600 font-black uppercase tracking-[0.4em]">Nenhuma operação pendente</p>
+              <div className="col-span-full py-12 text-center border border-dashed border-border rounded-2xl bg-secondary/20">
+                <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.4em]">Nenhuma operação pendente</p>
               </div>
             )}
           </AnimatePresence>

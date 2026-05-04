@@ -20,13 +20,13 @@ export function WarRoom({ orders = [] }: WarRoomProps) {
 
   return (
     <Card className="glass border-secondary/30 h-full overflow-hidden">
-      <CardHeader className="bg-secondary/10 pb-4 border-b border-white/5">
+      <CardHeader className="bg-secondary/10 pb-4 border-b border-border">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm font-semibold text-primary uppercase tracking-widest flex items-center gap-2 whitespace-nowrap min-w-0">
             <AlertCircle className="w-4 h-4 text-primary animate-pulse shrink-0" />
             <span className="truncate">War Room</span>
           </CardTitle>
-          <Badge variant="destructive" className="bg-primary text-black hover:bg-primary/80 rounded-full text-[9px] md:text-[10px] font-black whitespace-nowrap shrink-0 px-2.5 py-1">
+          <Badge variant="destructive" className="bg-primary text-primary-foreground hover:bg-primary/80 rounded-full text-[9px] md:text-[10px] font-black whitespace-nowrap shrink-0 px-2.5 py-1">
             {delayedOrders.length} CRÍTICOS
           </Badge>
         </div>
@@ -35,11 +35,11 @@ export function WarRoom({ orders = [] }: WarRoomProps) {
         <div className="divide-y divide-white/5">
           {delayedOrders.length > 0 ? (
             delayedOrders.map((order) => (
-              <div key={order.id} className="p-4 flex items-center justify-between group hover:bg-white/5 transition-colors gap-4">
+              <div key={order.id} className="p-4 flex items-center justify-between group hover:bg-secondary transition-colors gap-4">
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-sm tracking-tight whitespace-nowrap">#{order.id.slice(-4).toUpperCase()}</span>
-                    <span className="text-[9px] text-muted-foreground px-1.5 py-0.5 rounded bg-white/5 border border-white/10 uppercase whitespace-nowrap">{order.status}</span>
+                    <span className="text-[9px] text-muted-foreground px-1.5 py-0.5 rounded bg-secondary border border-border uppercase whitespace-nowrap">{order.status}</span>
                   </div>
                   <span className="text-xs text-muted-foreground truncate">{order.client}</span>
                 </div>

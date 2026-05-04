@@ -1,5 +1,5 @@
 // services/squadService.ts
-// Motor de Atribuição Inteligente — Impacto Digital
+// Motor de Atribuição Inteligente
 // Arquitetura Hexagonal: Application Service (depende apenas do Domain Layer)
 
 import { Employee, Squad, SkillCategory } from '../types/squad';

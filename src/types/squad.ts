@@ -1,5 +1,5 @@
 // types/squad.ts
-// Contrato de dados para o módulo ResourceSchedulerV2 — Impacto Digital
+// Contrato de dados para o módulo ResourceSchedulerV2
 // Arquitetura Hexagonal: Domain Layer (Zero dependências externas)
 
 /**
@@ -27,7 +27,7 @@ export type SkillCategory =
 export type EmployeeRole = 'lead' | 'operator' | 'apprentice';
 
 /**
- * Registro imutável de um colaborador da Impacto.
+ * Registro imutável de um colaborador.
  */
 export interface Employee {
   /** Identificador único (slug lowercase, ex: 'renan') */

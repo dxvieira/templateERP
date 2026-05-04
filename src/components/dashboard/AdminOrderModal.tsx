@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { doc, setDoc, serverTimestamp, updateDoc, onSnapshot, getDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, updateDoc, onSnapshot, getDoc, collection, query, where, getDocs, deleteDoc, addDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { useFirestore, useUser, useFunctions } from '@/firebase';
 import { 
@@ -130,15 +130,13 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
       if (isNew) {
         finalId = await dbService.getNextOrderNumber(firestore);
       } else if (order?.id && order.id.length !== 5) {
-        // Migração do pedido aberto (se o ID for legado/diferente de 5 dígitos)
-        // Isso atende ao pedido do usuário: "o pedido que já tem aberto, pode ser o 00001"
         oldId = order.id;
         finalId = await dbService.getNextOrderNumber(firestore);
       }
 
       const docRef = doc(firestore, 'orders', finalId);
 
-      // Payload robusto (snake_case para DB antigo, camelCase para compatibilidade)
+      // Payload robusto
       const payload = {
         id: finalId,
         client: client,
@@ -160,7 +158,30 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
         ...(isNew ? { createdAt: serverTimestamp() } : (order.createdAt ? { createdAt: order.createdAt } : {}))
       };
 
-      // Se for migração, precisamos criar o novo e deletar o antigo
+      // ── Cadastro automático de cliente novo ──────────────────────────────
+      // Se o cliente digitado não existir na coleção 'clients', cria um
+      // registro incompleto para ser completado depois na aba Clientes.
+      if (client.trim()) {
+        try {
+          const clientsRef = collection(firestore, 'clients');
+          const q = query(clientsRef, where('name', '==', client.trim().toUpperCase()));
+          const snap = await getDocs(q);
+          if (snap.empty) {
+            await addDoc(clientsRef, {
+              name: client.trim().toUpperCase(),
+              isIncomplete: true,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          }
+        } catch (clientErr) {
+          // Não bloqueia o salvamento do pedido se falhar
+          console.warn('[AdminOrderModal] Falha ao criar cliente automático:', clientErr);
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
+      // Se for migração, cria novo e deleta o antigo
       if (oldId) {
         await setDoc(docRef, payload);
         await deleteDoc(doc(firestore, 'orders', oldId));
@@ -168,7 +189,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           title: "Migração Concluída", 
           description: `OS #${oldId} migrada para a nova sequência: #${finalId}` 
         });
-        onClose(); // Fecha para evitar inconsistência de ID no snapshot
+        onClose();
       } else {
         await setDoc(docRef, payload, { merge: true });
         toast({ 
@@ -226,7 +247,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
     const html = `
       <html>
         <head>
-          <title>OP #${order.id.slice(-6)} - IMPACTO</title>
+          <title>OP #${order.id.slice(-6)} - SISTEMA</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
             @page { size: A4 portrait; margin: 15mm; }
@@ -360,7 +381,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </div>
 
           <div class="footer">
-            <span>Sistema Impacto • Cloud Gestão Industrial</span>
+            <span>Cloud Gestão Industrial</span>
             <span>Gerado em: ${now}</span>
           </div>
           </div><!-- end .page-container -->
@@ -426,49 +447,49 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
   if (!isOpen) return null;
 
   const canShowAdminData = isUnlocked || hasFiscalAccess;
-  const labelClass = "text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-1.5 ml-1 block";
-  const inputClass = "w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-primary outline-none transition-all";
+  const labelClass = "text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-1.5 ml-1 block";
+  const inputClass = "w-full bg-secondary border border-border rounded-xl p-3 text-sm text-foreground focus:border-primary outline-none transition-all";
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-md p-4">
-      <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-[#09090b] w-full max-w-5xl border border-zinc-800 rounded-3xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden">
-        <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-zinc-900/50">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background/80 backdrop-blur-md p-4">
+      <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-card w-full max-w-5xl border border-border rounded-3xl shadow-2xl flex flex-col max-h-[95vh] overflow-hidden">
+        <div className="flex items-center justify-between p-5 border-b border-border bg-secondary/50">
           <div className="flex items-center gap-4">
             <div className="bg-primary/10 text-primary p-2 rounded-xl border border-primary/20"><Calculator size={20} /></div>
             <div>
-              <h2 className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.3em] mb-1">IMPACTO DIGITAL</h2>
-              <p className="text-sm font-black text-white uppercase tracking-tight">OS #{order?.id || 'NOVA'}</p>
+              <h2 className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.3em] mb-1">GESTÃO INDUSTRIAL</h2>
+              <p className="text-sm font-black text-foreground uppercase tracking-tight">OS #{order?.id || 'NOVA'}</p>
             </div>
           </div>
           
           <div className="flex items-center gap-4">
              {canShowAdminData && (
-               <div className="flex items-center gap-6 border-r border-zinc-800 pr-6 mr-2">
-                 <button onClick={handleEmitNFe} disabled={loading} className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-xl hover:bg-blue-500 hover:text-white transition-all disabled:opacity-50">
+               <div className="flex items-center gap-6 border-r border-border pr-6 mr-2">
+                 <button onClick={handleEmitNFe} disabled={loading} className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-xl hover:bg-blue-500 hover:text-foreground transition-all disabled:opacity-50">
                    {loading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
                    <span className="text-[10px] font-black uppercase">Emitir NF-e</span>
                  </button>
                  <div className="text-right">
-                    <p className="text-[9px] text-zinc-500 uppercase font-black">Saldo de Contrato</p>
+                    <p className="text-[9px] text-muted-foreground uppercase font-black">Saldo de Contrato</p>
                     <p className={cn("text-lg font-black font-mono leading-none mt-1", balanceDue > 0 ? "text-red-500" : "text-emerald-500")}>
                       {balanceDue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </p>
                  </div>
                </div>
              )}
-             <button onClick={handlePrintOP} className="flex items-center gap-2 px-4 py-2 bg-zinc-800 text-zinc-300 rounded-xl hover:bg-white hover:text-black transition-all font-black text-[10px] uppercase">
+             <button onClick={handlePrintOP} className="flex items-center gap-2 px-4 py-2 bg-secondary text-foreground rounded-xl hover:bg-white hover:text-primary-foreground transition-all font-black text-[10px] uppercase">
                <Printer size={18} /> Imprimir OP
              </button>
-             <button onClick={onClose} className="p-2 text-zinc-500 hover:text-white transition-colors bg-white/5 rounded-full"><X size={20}/></button>
+             <button onClick={onClose} className="p-2 text-muted-foreground hover:text-foreground transition-colors bg-secondary rounded-full"><X size={20}/></button>
           </div>
         </div>
 
-        <div className="flex bg-zinc-900/30 border-b border-zinc-800">
-           <button onClick={() => setActiveTab('operacional')} className={cn("flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all border-b-2", activeTab === 'operacional' ? "border-primary text-primary bg-primary/5" : "border-transparent text-zinc-500")}>Produção e Arte</button>
-           <button onClick={() => setActiveTab('financeiro')} className={cn("flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all border-b-2", activeTab === 'financeiro' ? "border-primary text-primary bg-primary/5" : "border-transparent text-zinc-500")}>Financeiro e Parcelas</button>
+        <div className="flex bg-secondary/30 border-b border-border">
+           <button onClick={() => setActiveTab('operacional')} className={cn("flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all border-b-2", activeTab === 'operacional' ? "border-primary text-primary bg-primary/5" : "border-transparent text-muted-foreground")}>Produção e Arte</button>
+           <button onClick={() => setActiveTab('financeiro')} className={cn("flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all border-b-2", activeTab === 'financeiro' ? "border-primary text-primary bg-primary/5" : "border-transparent text-muted-foreground")}>Financeiro e Parcelas</button>
         </div>
 
-        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-[#050505]">
+        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-background">
           <form id="adminOrderForm" onSubmit={handleSave} className="space-y-8">
             {activeTab === 'operacional' ? (
               <div className="space-y-8">
@@ -478,6 +499,7 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                     <ClientSearchField 
                       initialValue={client}
                       onClientSelect={handleClientSelection}
+                      onFreeTextSelect={(name) => setClient(name)}
                       className={inputClass}
                     />
                     <input type="hidden" required value={client} />
@@ -495,21 +517,21 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
                 </section>
 
                 <section className="space-y-4">
-                   <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                   <div className="flex justify-between items-center border-b border-border pb-2">
                       <h3 className="text-[10px] text-primary font-black uppercase tracking-[0.2em] flex items-center gap-2"><Box size={14}/> Itens Técnicos</h3>
-                      <button type="button" onClick={() => setItems([...items, { desc: '', quantity: 1, unitValue: 0 }])} className="bg-zinc-800 text-white rounded-lg px-3 py-1.5 text-[9px] font-black uppercase transition-all flex items-center gap-1"><Plus size={12}/> Adicionar Material</button>
+                      <button type="button" onClick={() => setItems([...items, { desc: '', quantity: 1, unitValue: 0 }])} className="bg-secondary text-foreground rounded-lg px-3 py-1.5 text-[9px] font-black uppercase transition-all flex items-center gap-1"><Plus size={12}/> Adicionar Material</button>
                    </div>
                    <div className="space-y-3">
                       {items.map((item, index) => (
-                        <div key={index} className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-4 flex flex-col gap-3">
+                        <div key={index} className="bg-secondary/40 border border-border rounded-2xl p-4 flex flex-col gap-3">
                            <div className="grid grid-cols-1 md:grid-cols-12 items-center gap-3">
-                              <div className="md:col-span-6"><label className="text-[8px] text-zinc-600 uppercase font-black mb-1 block">Descrição do Serviço/Produto</label><input value={item.desc} onChange={e => { const n = [...items]; n[index].desc = e.target.value; setItems(n); }} className={`${inputClass} p-2 text-xs`} /></div>
-                              <div className="md:col-span-2"><label className="text-[8px] text-zinc-600 uppercase font-black mb-1 block">Qtd</label><input type="number" value={item.quantity} onChange={e => { const n = [...items]; n[index].quantity = Number(e.target.value); setItems(n); }} className={`${inputClass} p-2 text-center text-xs`} /></div>
-                              <div className="md:col-span-2"><label className="text-[8px] text-zinc-600 uppercase font-black mb-1 block">Unitário</label><input type="number" step="0.01" value={item.unitValue} onChange={e => { const n = [...items]; n[index].unitValue = Number(e.target.value); setItems(n); }} className={`${inputClass} p-2 text-right text-xs`} /></div>
-                              <div className="md:col-span-2 flex justify-end items-end h-full"><button type="button" onClick={() => setItems(items.filter((_, i) => i !== index))} className="p-2 text-zinc-700 hover:text-red-500 transition-colors"><Trash2 size={16}/></button></div>
+                              <div className="md:col-span-6"><label className="text-[8px] text-muted-foreground uppercase font-black mb-1 block">Descrição do Serviço/Produto</label><input value={item.desc} onChange={e => { const n = [...items]; n[index].desc = e.target.value; setItems(n); }} className={`${inputClass} p-2 text-xs`} /></div>
+                              <div className="md:col-span-2"><label className="text-[8px] text-muted-foreground uppercase font-black mb-1 block">Qtd</label><input type="number" value={item.quantity} onChange={e => { const n = [...items]; n[index].quantity = Number(e.target.value); setItems(n); }} className={`${inputClass} p-2 text-center text-xs`} /></div>
+                              <div className="md:col-span-2"><label className="text-[8px] text-muted-foreground uppercase font-black mb-1 block">Unitário</label><input type="number" step="0.01" value={item.unitValue} onChange={e => { const n = [...items]; n[index].unitValue = Number(e.target.value); setItems(n); }} className={`${inputClass} p-2 text-right text-xs`} /></div>
+                              <div className="md:col-span-2 flex justify-end items-end h-full"><button type="button" onClick={() => setItems(items.filter((_, i) => i !== index))} className="p-2 text-muted-foreground hover:text-red-500 transition-colors"><Trash2 size={16}/></button></div>
                            </div>
                            <div className="w-full">
-                              <label className="text-[8px] text-zinc-600 uppercase font-black mb-1 block">Observação Técnica / Detalhes</label>
+                              <label className="text-[8px] text-muted-foreground uppercase font-black mb-1 block">Observação Técnica / Detalhes</label>
                               <textarea value={item.observation || ''} onChange={e => { const n = [...items]; n[index].observation = e.target.value; setItems(n); }} className={`${inputClass} p-2 text-[10px] min-h-[60px]`} placeholder="Ex: Madeira nas laterais, Ilhós a cada 20cm..." />
                            </div>
                         </div>
@@ -524,16 +546,16 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
               </div>
             ) : (
               <div className="space-y-10">
-                <section className="bg-zinc-900/30 border border-zinc-800 rounded-3xl p-6 text-center">
-                   <p className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.3em] mb-4">Balancete do Protocolo</p>
+                <section className="bg-secondary/30 border border-border rounded-3xl p-6 text-center">
+                   <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.3em] mb-4">Balancete do Protocolo</p>
                    <div className="flex flex-wrap justify-center gap-12">
-                      <div><p className="text-[9px] text-zinc-600 uppercase font-black">Valor do Contrato</p><p className="text-3xl font-black text-white font-mono tracking-tighter">{totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div>
-                      <div><p className="text-[9px] text-zinc-600 uppercase font-black">Montante Liquidado</p><p className="text-3xl font-black text-emerald-500 font-mono tracking-tighter">{amountPaid.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div>
-                      <div><p className="text-[9px] text-zinc-600 uppercase font-black">Déficit de Receita</p><p className="text-3xl font-black text-red-500 font-mono tracking-tighter">{balanceDue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div>
+                      <div><p className="text-[9px] text-muted-foreground uppercase font-black">Valor do Contrato</p><p className="text-3xl font-black text-foreground font-mono tracking-tighter">{totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div>
+                      <div><p className="text-[9px] text-muted-foreground uppercase font-black">Montante Liquidado</p><p className="text-3xl font-black text-emerald-500 font-mono tracking-tighter">{amountPaid.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div>
+                      <div><p className="text-[9px] text-muted-foreground uppercase font-black">Déficit de Receita</p><p className="text-3xl font-black text-red-500 font-mono tracking-tighter">{balanceDue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div>
                    </div>
                 </section>
                 <section className="space-y-4">
-                   <h3 className="text-[10px] text-zinc-500 font-black uppercase tracking-[0.2em] border-b border-white/5 pb-2 flex items-center gap-2"><History size={14}/> Cronograma de Faturamento</h3>
+                   <h3 className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.2em] border-b border-border pb-2 flex items-center gap-2"><History size={14}/> Cronograma de Faturamento</h3>
                    <InstallmentManager
                      orderId={order?.id || null}
                      totalValue={totalValue}
@@ -547,28 +569,28 @@ export function AdminOrderModal({ order, isOpen, onClose }: AdminOrderModalProps
           </form>
         </div>
 
-        <div className="p-5 border-t border-zinc-800 bg-zinc-900/50 flex flex-col sm:flex-row justify-between items-center gap-3">
+        <div className="p-5 border-t border-border bg-secondary/50 flex flex-col sm:flex-row justify-between items-center gap-3">
            <div>
              {order?.id && (
-                <button type="button" onClick={() => setShowDeleteModal(true)} className="w-full sm:w-auto px-6 py-3 rounded-xl border border-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">Excluir Pedido</button>
+                <button type="button" onClick={() => setShowDeleteModal(true)} className="w-full sm:w-auto px-6 py-3 rounded-xl border border-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-foreground transition-all">Excluir Pedido</button>
              )}
            </div>
            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-             <button onClick={onClose} className="w-full sm:w-auto px-6 py-3 rounded-xl border border-zinc-800 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-all">Cancelar</button>
+             <button onClick={onClose} className="w-full sm:w-auto px-6 py-3 rounded-xl border border-border text-muted-foreground text-[10px] font-black uppercase tracking-widest hover:bg-secondary transition-all">Cancelar</button>
              <button 
                form="adminOrderForm" 
                type="submit" 
                disabled={loading} 
-               className="w-full sm:w-auto px-10 py-3 rounded-xl bg-primary text-black text-[10px] font-black uppercase tracking-widest shadow-[0_0_25px_-5px_rgba(255,95,31,0.5)] disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-95"
+               className="w-full sm:w-auto px-10 py-3 rounded-xl bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest shadow-[0_0_25px_-5px_rgba(255,95,31,0.5)] disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-95"
              >
                {loading ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> Gravar Registro Industrial</>}
              </button>
            </div>
         </div>
 
-        <div className="py-3 px-6 bg-black flex items-center justify-center gap-2 border-t border-white/5 opacity-30">
+        <div className="py-3 px-6 bg-secondary/50 flex items-center justify-center gap-2 border-t border-border opacity-30">
            <ShieldCheck size={12} className="text-primary" />
-           <span className="text-[8px] font-black text-zinc-500 uppercase tracking-[0.3em]">Protocolo de Integridade Firestore SDK v9 Ativo</span>
+           <span className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.3em]">Protocolo de Integridade Firestore SDK v9 Ativo</span>
         </div>
       </motion.div>
 

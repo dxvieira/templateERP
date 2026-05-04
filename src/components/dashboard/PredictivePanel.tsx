@@ -88,7 +88,7 @@ export function PredictivePanel({ orders = [] }: PredictivePanelProps) {
         <Button 
           onClick={handlePredict} 
           disabled={loading || !orders || orders.length === 0}
-          className="w-full bg-primary text-black hover:bg-primary/80 font-black uppercase tracking-widest text-[10px] h-12 rounded-xl"
+          className="w-full bg-primary text-primary-foreground hover:bg-primary/80 font-black uppercase tracking-widest text-[10px] h-12 rounded-xl"
         >
           {loading ? 'Analisando...' : 'Prever Atrasos'}
         </Button>

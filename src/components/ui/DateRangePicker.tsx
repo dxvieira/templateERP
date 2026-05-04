@@ -70,10 +70,10 @@ export function DateRangePicker({ value, onChange, onValidationError, className 
           max={value.endDate || undefined}
           onChange={(e) => handleChange('startDate', e.target.value)}
           className={cn(
-            'bg-zinc-900 border rounded-xl py-2.5 pl-9 pr-3 text-white text-xs font-black outline-none transition-all cursor-pointer',
+            'bg-secondary border rounded-xl py-2.5 pl-9 pr-3 text-foreground text-xs font-black outline-none transition-all cursor-pointer',
             isInverted
               ? 'border-red-500/60 focus:border-red-500'
-              : 'border-zinc-800 focus:border-primary',
+              : 'border-border focus:border-primary',
           )}
           title="Data de início"
         />
@@ -83,7 +83,7 @@ export function DateRangePicker({ value, onChange, onValidationError, className 
       {isInverted ? (
         <AlertTriangle size={14} className="text-red-500 shrink-0 animate-pulse" />
       ) : (
-        <ArrowRight size={14} className="text-zinc-600 shrink-0" />
+        <ArrowRight size={14} className="text-muted-foreground shrink-0" />
       )}
 
       {/* End Date */}
@@ -95,10 +95,10 @@ export function DateRangePicker({ value, onChange, onValidationError, className 
           min={value.startDate || undefined}
           onChange={(e) => handleChange('endDate', e.target.value)}
           className={cn(
-            'bg-zinc-900 border rounded-xl py-2.5 pl-9 pr-3 text-white text-xs font-black outline-none transition-all cursor-pointer',
+            'bg-secondary border rounded-xl py-2.5 pl-9 pr-3 text-foreground text-xs font-black outline-none transition-all cursor-pointer',
             isInverted
               ? 'border-red-500/60 focus:border-red-500'
-              : 'border-zinc-800 focus:border-primary',
+              : 'border-border focus:border-primary',
           )}
           title="Data de fim"
         />
